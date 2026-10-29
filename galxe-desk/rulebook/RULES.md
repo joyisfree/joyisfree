@@ -90,8 +90,9 @@ by some partners. help/9424571, DIGEST.
 §B9. **Quest types (VERIFIED, API):** Drop (NFT/standard), MysteryBox, Airdrop (token), Points, ExternalLink, Bounty.
 Reward types (DIGEST, help/9645630, help/11872447): points; OAT at the claim fee; NFT; token as an on-chain raffle
 (gas in G) or off-chain first-come-first-served; luck-based random split with at least $1 per winner; Mystery Box;
-off-chain custom (whitelist, mintlist, beta access, merchandise). No official typical-reward figure exists; the 2025
-review's 2,700+ raffles over 3.8M wallets is about 1,400 wallets a raffle.
+off-chain custom (whitelist, mintlist, beta access, merchandise). **Raffle winners have 15 days to claim** (help/9645630,
+DIGEST, RECHECK). No official typical-reward figure exists; the 2025 review's 2,700+ raffles over 3.8M wallets is
+about 1,400 wallets a raffle.
 
 §B10. **Earndrop** (Jan 2025) distributes a project's tokens to addresses the project chose, filtered by Passport and
 Score; projects can ban addresses and a ban is irreversible; a claim fee may apply; tokens "have no guaranteed

@@ -8,4 +8,4 @@
   2. On the Mac: the "Galxe desk" Brave profile; Leif signs in to the aged X account and the Galxe account there, creates the wallet, funds at most $25 of G on Gravity L1 (nothing on Alpha, which shuts 1 Nov); `account.json` filled from the real account.
   3. First Monday: scout, analyst, guardian; the first shortlist; the daily 10-minute pass starts; day 30 panel.
 - **Blocked:** nothing on Claude's side; the crawl waits on the network setting.
-- **Traps:** a flag ends the run by itself; Gigapot tickets void after 7 days; raffle claims after 15 days; G on Alpha fails a claim.
+- **Traps:** a flag ends the run by itself; Gigapot tickets void after 7 days; raffle claims close after 15 days (RECHECK); G on Alpha fails a claim; the gate refuses anything recorded as unknown, so the scout records facts, never guesses.

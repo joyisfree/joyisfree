@@ -66,5 +66,6 @@ test('validate refuses unknown actions, missing ids and a win without its deadli
   assert.throws(() => validate({ ts: '2026-11-01T00:00:00Z', action: 'entered' }), /quest id required/);
   assert.throws(() => validate({ ts: 'yesterday', quest: 'A', action: 'entered' }), /ISO date/);
   assert.throws(() => validate({ ts: '2026-11-01T00:00:00Z', quest: 'A', action: 'won' }), /claim deadline/);
+  assert.throws(() => validate({ ts: '2026-11-01T00:00:00Z', quest: 'A', action: 'won' }), /CLAIMING\.md/);
   assert.ok(validate({ ts: '2026-11-01T00:00:00Z', quest: 'A', action: 'won', deadline: '2026-11-16' }));
 });

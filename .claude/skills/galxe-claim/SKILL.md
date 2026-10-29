@@ -29,7 +29,8 @@ involvement" and flags scripted-looking activity even by hand. Everything below 
    Refuses any approval, Permit or unlimited-allowance prompt and says so.
 3. Record it at once:
    `node galxe-desk/scripts/ledger.mjs add --quest ID --space NAME --action entered --minutes N --fee 0.08`
-   A win: `--action won --amount USD --deadline YYYY-MM-DD` (raffle 15 days, Gigapot 7 days, Earndrop as announced).
+   A win: `--action won --amount USD --deadline YYYY-MM-DD`, the window taken from `rulebook/CLAIMING.md` section 2
+   (raffle 15 days per help/9645630, RECHECK until the crawl; Gigapot 7 days; Earndrop as announced).
    A claim: `--action claimed --fee USD --gas USD --minutes N`. Cash out: `--action realised --amount USD`.
 4. `npm run desk:status` prints claims due, anything OVERDUE, and the kill rule. An overdue claim is worked first.
 

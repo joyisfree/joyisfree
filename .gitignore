@@ -8,6 +8,9 @@ secrets/
 # Node
 node_modules/
 
+# The crawled pages are reference material, re-fetched by the crawl, never committed (INDEX.md and CHANGES.md are)
+galxe-desk/rulebook/pages/
+
 # Local scratch
 .DS_Store
 tmp/

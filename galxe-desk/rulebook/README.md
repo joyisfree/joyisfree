@@ -15,4 +15,6 @@ The crawl needs network access to galxe.com, docs.galxe.com, help.galxe.com, app
 28 Oct 2026 this cloud environment blocked them (Leif has said yes to allowing them); the Mac session can run the
 same command in the meantime.
 
-Saved pages are Galxe's and X's own text, kept privately as reference material for this desk. Not for redistribution.
+Saved pages (`pages/`) are Galxe's and X's own text, kept locally as reference material for this desk and never
+committed (`.gitignore`); the crawl re-fetches them anywhere in minutes. `INDEX.md`, with every URL, hash, read mark
+and note, and `CHANGES.md` are committed: they are the proof of what was read and what changed.

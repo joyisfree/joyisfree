@@ -11,13 +11,14 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 export const WORTHLESS_TYPES = new Set(['oat', 'points', 'gg', 'xp', 'badge', 'nft-no-floor', 'whitelist', 'role', 'none']);
-export const GENUINE_HOSTS = new Set(['app.galxe.com', 'galxe.com', 'www.galxe.com']);
+export const GENUINE_HOSTS = new Set(['app.galxe.com']); // quests live only here; the marketing site is not a quest page
 export const SPLITS = new Set(['even', 'raffle', 'luck', 'fcfs']);
 
 /** Expected value for one participant, in USD, after the haircut, fee and gas. Null when it cannot be valued. */
 export function expectedValue(c, haircut = 0.5) {
   const r = c.reward || {};
-  const n = Math.max(1, Number(c.participants || 0) + 1);
+  if (!Number.isFinite(Number(c.participants))) return null; // unknown participants cannot be valued
+  const n = Math.max(1, Number(c.participants) + 1);
   let gross;
   switch (r.split) {
     case 'even':
@@ -67,7 +68,17 @@ export function gate(c, account, now = Date.now()) {
   if (Number.isFinite(end) && now > end) reasons.push('NOT_OPEN: ended');
   if (Number(c.cap) > 0 && Number(c.participants) >= Number(c.cap)) reasons.push('NOT_OPEN: cap reached');
 
-  // 3. Our account must be eligible before a minute is spent.
+  // 3. Our account must be eligible before a minute is spent. Unknown counts as unmet: the gate fails closed.
+  if (!c.requirements || typeof c.requirements !== 'object' || Array.isArray(c.requirements)) {
+    reasons.push('INELIGIBLE: requirements not recorded');
+  }
+  for (const f of ['xAgeMonths', 'xFollowers', 'scoreHumanity']) {
+    if (f in q && (typeof q[f] !== 'number' || !Number.isFinite(q[f]))) reasons.push(`INELIGIBLE: ${f} unknown`);
+  }
+  for (const f of ['blueCheck', 'passport']) {
+    if (f in q && typeof q[f] !== 'boolean') reasons.push(`INELIGIBLE: ${f} unknown`);
+  }
+  if ('holdings' in q && !Array.isArray(q.holdings)) reasons.push('INELIGIBLE: holdings unknown');
   if (Number(q.xAgeMonths || 0) > Number(account.xAgeMonths || 0)) {
     reasons.push(`INELIGIBLE: X account ${q.xAgeMonths} months needed, have ${account.xAgeMonths || 0}`);
   }
@@ -96,23 +107,32 @@ export function gate(c, account, now = Date.now()) {
   const credible = c.spaceVerified === true || Number(p.fundingUsd || 0) >= 1_000_000 || p.tokenStatus === 'live';
   if (!credible) reasons.push('UNVERIFIED_PROJECT');
 
-  // 6. The expected value must clear the bar.
+  // 6. The expected value must clear the bar. Unknown participants or pool cannot be valued: refused.
   const ev = expectedValue(c, haircut);
-  if (!ev) reasons.push('LOW_EV: cannot value (split, pool or prize missing)');
+  if (!Number.isFinite(Number(c.participants))) reasons.push('LOW_EV: participants unknown');
+  else if (!ev) reasons.push('LOW_EV: cannot value (split, pool or prize missing)');
   else if (ev.net < threshold) reasons.push(`LOW_EV: $${ev.net.toFixed(2)} < $${threshold.toFixed(2)}`);
 
-  // 7. It must fit the day.
+  // 7. It must fit the day. Unknown minutes are refused, not assumed to be zero.
   const cap = Number(account.dailyMinutesCap ?? 10);
-  if (Number(c.minutes ?? 0) > cap) reasons.push(`TOO_SLOW: ${c.minutes} min > ${cap} min cap`);
+  if (!Number.isFinite(Number(c.minutes))) reasons.push('TOO_SLOW: minutes unknown');
+  else if (Number(c.minutes) > cap) reasons.push(`TOO_SLOW: ${c.minutes} min > ${cap} min cap`);
 
   return { id: c.id, space: c.space, url: c.url, pass: reasons.length === 0, reasons, ev: ev?.net ?? null, evGross: ev?.gross ?? null };
 }
 
+/** Metadata objects (every key starting with "_", e.g. the scout's _sourcesChecked) are not quests and are skipped. */
+export function isCandidate(c) {
+  return !!c && typeof c === 'object' && !Array.isArray(c) && Object.keys(c).some((k) => !k.startsWith('_'));
+}
+
 export function rank(candidates, account, now = Date.now()) {
-  const results = candidates.map((c) => gate(c, account, now));
+  const quests = candidates.filter(isCandidate);
+  const skipped = candidates.length - quests.length;
+  const results = quests.map((c) => gate(c, account, now));
   const passed = results.filter((x) => x.pass).sort((a, b) => b.ev - a.ev);
   const refused = results.filter((x) => !x.pass);
-  return { passed, refused, results };
+  return { passed, refused, results, skipped };
 }
 
 export function toMarkdown({ passed, refused }, when = new Date()) {

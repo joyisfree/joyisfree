@@ -75,7 +75,7 @@ export async function fetchWithDeadline(url, { timeoutMs = 20_000, retries = 3, 
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeoutMs);
     try {
-      const res = await fetchImpl(url, { signal: ac.signal, headers: { 'user-agent': 'joyisfree-galxe-desk/0.1 (rulebook crawl; contact leif@byjoyisfreestudio.com)' }, redirect: 'follow' });
+      const res = await fetchImpl(url, { signal: ac.signal, headers: { 'user-agent': 'joyisfree-galxe-desk/0.1 (rulebook crawl)' }, redirect: 'follow' });
       const text = await res.text();
       clearTimeout(timer);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

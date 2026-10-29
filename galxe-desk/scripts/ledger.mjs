@@ -3,7 +3,7 @@
 // the claims that are due, and the kill rule's verdict. One JSON line per event, appended, never edited.
 //
 //   node galxe-desk/scripts/ledger.mjs add --quest GCPnQtZ2uL --space AIW3 --action entered --minutes 8 --fee 0.08
-//   node galxe-desk/scripts/ledger.mjs add --quest GCPnQtZ2uL --action won --amount 16.5 --deadline 2026-11-12
+//   node galxe-desk/scripts/ledger.mjs add --quest GCPnQtZ2uL --action won --amount 16.5 --deadline 2026-11-12   # the deadline comes from CLAIMING.md section 2
 //   node galxe-desk/scripts/ledger.mjs add --quest GCPnQtZ2uL --action claimed --fee 0.08 --gas 0.02 --minutes 2
 //   node galxe-desk/scripts/ledger.mjs add --quest GCPnQtZ2uL --action realised --amount 14.9
 //   node galxe-desk/scripts/ledger.mjs status
@@ -29,7 +29,7 @@ export function validate(e) {
   if (!ACTIONS.has(e.action)) throw new Error(`unknown action ${e.action}`);
   if (!e.quest) throw new Error('quest id required');
   if (!e.ts || Number.isNaN(Date.parse(e.ts))) throw new Error('ts must be an ISO date');
-  if (e.action === 'won' && !e.deadline) throw new Error('a win needs its claim deadline (raffle 15 days, Gigapot 7 days)');
+  if (e.action === 'won' && !e.deadline) throw new Error('a win needs its claim deadline (the windows are in rulebook/CLAIMING.md section 2)');
   return e;
 }
 

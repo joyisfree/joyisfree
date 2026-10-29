@@ -11,12 +11,15 @@ make sure we **claim prizes**, not enter randoms and get rewarded worthless thin
    log of anyone earning more exists. Three scouts and three independent reviewers (desk lead, growth lead, risk
    officer) all said so.
 2. The automated "enters everything" account is the one certain loss: Galxe's bot system is built to catch it, a
-   flagged account can do tasks but cannot claim, some bans are permanent and non-appealable, and the public "Galxe
-   bots" sit in a category proven to steal keys. It is not built.
+   flagged account can do tasks but cannot claim on sybil-protected quests, the Rewards Hub or Gigapot (RULES §A2),
+   some bans are permanent and non-appealable, and the public "Galxe bots" sit in a category with documented
+   key-stealers. It is not built.
 3. Worthless rewards are the default (OATs, per-brand points, Galxe Gold, raffles shared by about 1,400 wallets). The
    2025 to 2026 money went to on-chain usage with capital, NFT holders and hand-picked communities.
-4. What is built: this desk. The team, the whole official rulebook, and a Prize Gate that refuses every quest whose
-   prize is not real, open, eligible, claimable and worth the minutes. It makes a small game precise, and it is reusable.
+4. What is built: this desk. The team, the official rulebook (a first pass now, complete once the crawl runs and
+   `npm run desk:check` says so), and a Prize Gate that refuses every quest whose prize is not real, open, eligible,
+   claimable and worth the minutes, and refuses anything it cannot verify. It makes a small game precise, and it is
+   reusable.
 5. The run: 90 days, by hand, 10 minutes a day, in the desk's own Brave profile with a throwaway wallet of at most
    $25, a ledger of minutes, fees and realised dollars, and kill rules. Decided by Leif on 28 Oct: Path 2, an existing
    aged personal X account (never the studio's), and the Galxe domains allowed in the cloud environment.

@@ -48,6 +48,16 @@ const refusals = [
   ['raffle too crowded', (c) => { c.reward = { ...c.reward, split: 'raffle', prizeUsd: 50, winners: 10, tokenLaunched: true }; c.participants = 6700; }, /LOW_EV: \$-?0\.0\d < \$2\.00/],
   ['cannot value', (c) => { c.reward.split = 'mystery'; }, /LOW_EV: cannot value/],
   ['too slow for the day', (c) => { c.minutes = 25; }, /TOO_SLOW: 25 min > 10 min cap/],
+  ['blue check required', (c) => { c.requirements.blueCheck = true; }, /INELIGIBLE: X blue check needed/],
+  ['the marketing site is not a quest page', (c) => { c.url = 'https://www.galxe.com/quest/x'; }, /LOOKALIKE_URL: www\.galxe\.com/],
+  // Unknown counts as unmet: the gate fails closed (found by the Verifier on 29 Oct 2026; it used to pass all of these).
+  ['requirements not recorded at all', (c) => { delete c.requirements; }, /INELIGIBLE: requirements not recorded/],
+  ['a requirement recorded as unknown', (c) => { c.requirements.xAgeMonths = 'unknown'; }, /INELIGIBLE: xAgeMonths unknown/],
+  ['a requirement recorded as null', (c) => { c.requirements.scoreHumanity = null; }, /INELIGIBLE: scoreHumanity unknown/],
+  ['passport recorded as a string', (c) => { c.requirements.passport = 'maybe'; }, /INELIGIBLE: passport unknown/],
+  ['holdings recorded as text', (c) => { c.requirements.holdings = 'some NFT'; }, /INELIGIBLE: holdings unknown/],
+  ['participants unknown', (c) => { delete c.participants; }, /LOW_EV: participants unknown/],
+  ['minutes unknown', (c) => { delete c.minutes; }, /TOO_SLOW: minutes unknown/],
 ];
 
 for (const [name, mutate, re] of refusals) {
@@ -74,6 +84,13 @@ test('expectedValue applies the haircut only to unlaunched or vesting tokens', (
   assert.equal(expectedValue(launched).net, 10);
   assert.equal(expectedValue(vesting).net, 5);
   assert.equal(expectedValue({ participants: 1, reward: { split: 'fcfs', prizeUsd: 5, slotsLeft: 0 } }).net, 0);
+});
+
+test('rank skips metadata objects such as the scout\'s _sourcesChecked', () => {
+  const r = rank([good(), { _sourcesChecked: [{ feed: 'DefiLlama', date: '2026-10-29' }] }], account, NOW);
+  assert.equal(r.skipped, 1);
+  assert.equal(r.results.length, 1);
+  assert.ok(!r.refused.some((x) => x.id === undefined), 'no bogus refusal for the metadata object');
 });
 
 test('rank sorts the shortlist by expected value and renders both lists', () => {

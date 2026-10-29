@@ -38,7 +38,7 @@ First pass, 28 Oct 2026, from RULES.md. Confirm each line against the live page 
 | Entered a quest with an X-age or follower gate the account fails | §C1 | The gate refuses it before any time is spent |
 | Account flagged by the bot system; tasks counted, claim refused | §A1, §A2 | No scripts on the account, human pace, one device; a flag stops the desk |
 | Multi-account pattern (shared IP, device, self-referral) | §A3, §B7 | One person, one account, no VPN |
-| Missed the claim window (15 days raffle, 7 days Gigapot) | §B5, section 2 | Every win is logged with its deadline; `npm run desk:status` shows due and OVERDUE first |
+| Missed the claim window (15 days raffle per help/9645630 RECHECK, 7 days Gigapot) | §B5, §B9, section 2 | Every win is logged with its deadline; `npm run desk:status` shows due and OVERDUE first |
 | G for gas on Gravity Alpha, claim fails | §D1 | Gas only on Gravity L1; nothing on Alpha |
 | Unbound the X account or a secondary wallet, rewards lost | §A7 | Nothing is unbound during the 90 days |
 | Claimed on a lookalike site, wallet drained | §E1, §E2 | Guardian veto: host must be exactly app.galxe.com; refuse approvals and Permits |
