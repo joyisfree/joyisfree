@@ -1,0 +1,17 @@
+{
+  "_comment": "Every official page the desk relies on. The crawler discovers docs pages from llms.txt, help-centre articles from the collections, blog posts from the index, and fetches the listed pages directly. Add a URL here, never a forum.",
+  "llms": ["https://docs.galxe.com/llms.txt"],
+  "helpCentres": ["https://help.galxe.com/en/"],
+  "blogs": [{ "index": "https://www.galxe.com/blog", "pathIncludes": "/blog/" }],
+  "pages": [
+    "https://docs.galxe.com/about/legal/terms-of-service",
+    "https://docs.galxe.com/about/legal/passport-terms-of-use",
+    "https://docs.galxe.com/about/legal/privacy-policy",
+    "https://docs.galxe.com/about/legal",
+    "https://help.x.com/en/rules-and-policies/x-automation",
+    "https://help.x.com/en/rules-and-policies/authenticity",
+    "https://help.x.com/en/rules-and-policies/x-contest-rules",
+    "https://help.x.com/en/using-x/x-follow-limit",
+    "https://docs.x.com/developer-terms/policy"
+  ]
+}

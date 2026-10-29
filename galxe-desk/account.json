@@ -1,0 +1,28 @@
+{
+  "_comment": [
+    "The desk's own account, as the Prize Gate sees it. No secrets here: no keys, no seed, no tokens.",
+    "Update the facts as they change (X account age grows by itself; Score and Passport only with Leif's yes).",
+    "Everything below is a placeholder until the accounts exist (plan section 8, item 2)."
+  ],
+  "xAgeMonths": 0,
+  "xFollowers": 0,
+  "blueCheck": false,
+  "scoreHumanity": 0,
+  "passport": false,
+  "holdings": [],
+  "chains": {
+    "Gravity L1": false,
+    "BNB Chain": false,
+    "Base": false,
+    "Ethereum": false
+  },
+  "dailyMinutesCap": 10,
+  "evThresholdUsd": 2,
+  "haircutUnlaunched": 0.5,
+  "walletCapUsd": 25,
+  "killRules": {
+    "day30MinRealisedUsd": 10,
+    "minNetUsdPerHour": 15,
+    "horizonDays": 90
+  }
+}

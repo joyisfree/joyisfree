@@ -1,0 +1,70 @@
+[
+  {
+    "id": "GCPnQtZ2uL",
+    "url": "https://app.galxe.com/quest/ck3c8enjXPDnduV3AiQoie/GCPnQtZ2uL",
+    "space": "AIW3",
+    "spaceVerified": true,
+    "status": "Active",
+    "startTime": "2026-07-21T00:00:00Z",
+    "endTime": "2026-07-27T23:59:59Z",
+    "cap": 0,
+    "participants": 3640,
+    "reward": {
+      "type": "token",
+      "token": "AIW3",
+      "split": "even",
+      "poolUsd": 60000,
+      "tokenLaunched": false,
+      "vesting": false,
+      "claimFeeUsd": 0.08,
+      "gasUsd": 0.02,
+      "claimChain": "Gravity L1",
+      "claimWindowDays": 15
+    },
+    "requirements": { "xAgeMonths": 0, "xFollowers": 0, "scoreHumanity": 0, "passport": false, "holdings": [] },
+    "project": { "fundingUsd": 0, "tokenStatus": "confirmed" },
+    "minutes": 8,
+    "_note": "The one 2026 pool the scouts found: 60,000 USDT in AIW3 tokens over about 3,640 participants, claimable after TGE."
+  },
+  {
+    "id": "oat-only-example",
+    "url": "https://app.galxe.com/quest/SomeSpace/OAT1",
+    "space": "SomeSpace",
+    "spaceVerified": true,
+    "status": "Active",
+    "cap": 0,
+    "participants": 12000,
+    "reward": { "type": "oat", "claimFeeUsd": 0.08, "claimChain": "Gravity L1", "claimWindowDays": 15 },
+    "requirements": {},
+    "project": { "fundingUsd": 0, "tokenStatus": "none" },
+    "minutes": 3
+  },
+  {
+    "id": "raffle-crowded",
+    "url": "https://app.galxe.com/quest/SomeSpace/RAF1",
+    "space": "SomeSpace",
+    "spaceVerified": true,
+    "status": "Active",
+    "cap": 0,
+    "participants": 6700,
+    "reward": { "type": "token", "split": "raffle", "prizeUsd": 50, "winners": 10, "tokenLaunched": true, "claimFeeUsd": 0.08, "claimChain": "Gravity L1", "claimWindowDays": 15 },
+    "requirements": { "xAgeMonths": 3 },
+    "project": { "fundingUsd": 5000000, "tokenStatus": "live" },
+    "minutes": 5,
+    "_note": "6,700 wallets for 10 slots: about 0.15% odds, the scraper example from the research."
+  },
+  {
+    "id": "lookalike",
+    "url": "https://galxe-claim.app/quest/x",
+    "space": "Galxe",
+    "spaceVerified": true,
+    "status": "Active",
+    "cap": 0,
+    "participants": 10,
+    "reward": { "type": "token", "split": "even", "poolUsd": 100000, "tokenLaunched": true, "claimFeeUsd": 0, "claimChain": "Gravity L1", "claimWindowDays": 15 },
+    "requirements": {},
+    "project": { "fundingUsd": 0, "tokenStatus": "live" },
+    "minutes": 2,
+    "_note": "A clone domain reported for phishing. Must be refused however good the numbers look."
+  }
+]

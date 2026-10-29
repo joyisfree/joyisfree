@@ -1,0 +1,145 @@
+# Galxe rules, as they bind one person with one account
+
+First pass, 28 Oct 2026. **Source kinds:** VERIFIED = official text read through the Context7 index of docs.galxe.com;
+DIGEST = search summary of an official page, to be confirmed against the live page (RECHECK). Help-centre articles
+are cited as help/ID = https://help.galxe.com/en/articles/ID and carry no visible date.
+
+## A. What is allowed, and what gets an account restricted
+
+§A1. **A bot is "any automated program designed to interact with Galxe quests without real human involvement."**
+The Bot Identification System uses behavioural signals (timing and sequence of actions across accounts) and on-chain
+signals (rapid address creation, entries from "seemingly unrelated" addresses), and it also flags unusual activity
+"even when done manually by individuals". Flagged accounts go to a security team; repeat or severe cases get temporary
+or permanent restrictions. help/11827806, DIGEST.
+
+§A2. **A flagged account can still do tasks but cannot claim** on quests with sybil prevention on, on the GG Rewards
+Hub and on Gigapot; it sees "Bot activity detected… requires human participation." help/11586930, help/11827806, DIGEST.
+This is the exact failure the desk exists to avoid: the prize is lost at the claim, after the work.
+
+§A3. **Most restrictions come from patterns that indicate multiple accounts**, a Terms violation; irregular IPs,
+device fingerprints and geographic inconsistencies also trigger review. Restrictions attach to behaviour, not wallets:
+a new wallet does not clear one. One appeal, through live chat, with new evidence; repeat appeals and alternative
+accounts do not help. Gigapot restrictions cannot be lifted. help/11925374, help/11424533, DIGEST.
+
+§A4. **Terms of Service, prohibited uses (VERIFIED):** "using unauthorized third-party applications"; using the
+services "under a different identifier if access was disabled"; leasing access to a wallet; sharing passwords or
+private keys; "Abusive Activity" (unreasonable or disproportionate load, interfering with systems or data,
+unauthorised access, using third-party accounts, transferring access rights). The list is "representative, not
+exhaustive" and can change without notice. https://docs.galxe.com/about/legal/terms-of-service (effective
+10 Sep 2025 per DIGEST).
+
+§A5. **Suspension and termination (VERIFIED):** Galxe may suspend, restrict, deactivate or cancel accounts on legal
+orders, suspected prohibited uses, pending investigations, partner limits, "circumvention of Galxe's controls",
+"abuse of promotions", or breach of the Terms; some decisions rest on "confidential criteria". Galxe may "limit the
+number of User Accounts or Digital Wallets you may link" and may block by location, IP or device. Same source;
+limits and blocking per DIGEST.
+
+§A6. **Eligibility decisions are final.** Earndrop participation acknowledges that "eligibility determinations are
+final"; the Terms call eligibility determinations, including algorithmic scoring, final and non-appealable.
+https://docs.galxe.com/about/legal (VERIFIED for Earndrop); Terms per DIGEST.
+
+§A7. **One social account binds to one Galxe account; the primary wallet cannot be changed or deleted; unbinding a
+social account or secondary wallet loses the rewards claimed through it.** help/9733866, DIGEST.
+
+§A8. **One Passport per identity**, verified by Sumsub with a government ID; a second cannot be minted with other
+documents; 30-day wait after revoking. help/9424571, DIGEST; Sumsub flow VERIFIED at
+https://docs.galxe.com/about/legal/passport-terms-of-use.
+
+§A9. **Using a VPN to evade access controls is barred.** Terms, DIGEST.
+
+**What the desk takes from A:** one person, one account, one device, no scripts on the account, no VPN, no bursts,
+human pace. The automation Leif first described (an account that "enters everything") is §A1 by definition and loses
+the prize by §A2. The "team" is on the judgement side, never on the clicking side.
+
+## B. What a quester can earn, and what it is worth
+
+§B1. **Space Loyalty Points are per brand**, claimed on-chain with gas (Gravity, Solana, Sui, Sei EVM), "not
+transferable"; no conversion to a token is published. Recurring quests pay loyalty points only. help/9733873,
+help/14963438, DIGEST. Worth only what that one brand later decides.
+
+§B2. **Galxe Gold (GG) "has no real-world currency value, is non-transferable, and cannot be treated as personal
+property or a medium of exchange"; Galxe may change how it is earned, valued or redeemed at any time without notice.**
+https://docs.galxe.com/about/legal (VERIFIED). GG is earned only on quests that carry the claim fee (+30 XP and
++30 GG per qualified claim), by Score mint (100 GG) and by a Smart Balance deposit over $100 (100 GG). help/13545714,
+help/12829115, DIGEST.
+
+§B3. **XP sets the Loyalty Level and expires after 30, 60 or 90 days.** +1 daily check-in, +3 per quest, +300 Score
+mint, +200 Galxe+ subscription. Levels L1 to L5 (one article) or L6 (another). help/13545714, DIGEST.
+
+§B4. **The claim fee is $0.08 base;** L1 and L2 pay full price, L3 and L4 get 38% off, L5 and L6 get 75% off; Galxe+
+credits apply first; GG pays the fee first and the shortfall comes out of a G reward (69 GG with a 60 G box yields
+59.80 G); Spaces can sponsor the fee and some quests are gasless. help/12829115, DIGEST.
+
+§B5. **Gigapot** is a weekly lottery at 50 GG a ticket or 300 GG for 10; the Grand Alpha takes 50% of the pot for one
+winner, the other 50% is split among 1,000 winners; **winners must flip their ticket within 7 days**; pool sizes are
+not published. help/11424533, DIGEST.
+
+§B6. **Mystery Boxes** pay USDT, ETH or G with odds set by the brand and not published; the Rewards Hub is a
+sweepstakes with a postcard "Alternate Method of Entry", one per entrant per year (VERIFIED, Terms). A 60 G prize was
+about $0.25 at G ≈ $0.004 (CoinGecko, Oct 2026); a 99 GG box costs about 3.3 claims, about $0.26 in L1 fees.
+Third-party box table, RECHECK.
+
+§B7. **Referral:** 80 GG to the referrer once the invitee completes 10 recommended quests; no XP. help/10373007,
+DIGEST. Self-referral is §A3.
+
+§B8. **Galxe Score:** $5 a year, five dimensions (Experience, Fame, Assets, Expertise, Humanity), refreshed weekly;
+Humanity L1 to L3 is chosen per quest by creators, L2 needs face verification; **the score can drop if the bot system
+flags you.** help/9699532, DIGEST. Passport: $5 ID fee, $1 per facial re-verification, optional for Galxe, required
+by some partners. help/9424571, DIGEST.
+
+§B9. **Quest types (VERIFIED, API):** Drop (NFT/standard), MysteryBox, Airdrop (token), Points, ExternalLink, Bounty.
+Reward types (DIGEST, help/9645630, help/11872447): points; OAT at the claim fee; NFT; token as an on-chain raffle
+(gas in G) or off-chain first-come-first-served; luck-based random split with at least $1 per winner; Mystery Box;
+off-chain custom (whitelist, mintlist, beta access, merchandise). No official typical-reward figure exists; the 2025
+review's 2,700+ raffles over 3.8M wallets is about 1,400 wallets a raffle.
+
+§B10. **Earndrop** (Jan 2025) distributes a project's tokens to addresses the project chose, filtered by Passport and
+Score; projects can ban addresses and a ban is irreversible; a claim fee may apply; tokens "have no guaranteed
+value". help/10899990 DIGEST; legal VERIFIED.
+
+**What the desk takes from B:** OATs, points, GG and XP are refused by the Prize Gate as worthless unless a Space
+publishes a dated points-to-token conversion. Only token, stablecoin, ETH and published-odds rewards are valued.
+
+## C. What a quest can require of our account (eligibility)
+
+§C1. **Creators can gate a quest by:** X account age (1, 3, 6 or 12 months), X followers (20, 50, 100 or 500), blue
+check; Humanity Score L1 to L3; Galxe+ tier; Passport; Gitcoin/Human Passport; TrustScan (60 or lower); Nomis;
+on-chain holdings or actions; loyalty-point thresholds; quests completed; surveys with proof; predictions; page
+visits; imported data (CSV, Sheets, API, GraphQL, contract query). With no gate set, "multiple or new accounts can
+participate freely" (which is why those quests are the most crowded). help/9729011, help/9728885, help/11586930,
+DIGEST.
+
+§C2. **The official eligibility query (VERIFIED):** `CheckUserEligibility(questId, address)` returns, per credential
+group, each condition's `eligible` flag and each reward's `eligible` flag, with `conditionRelation` ALL or ANY;
+"when `rewards.eligible` is true, user can claim rewards." Quest fields: `status` (NotStarted, Active, Expired,
+CapReached, Draft, Deleted), `startTime`, `endTime`, `cap`, `participantsCount`, `loyaltyPoints`, `gasType`, `chain`.
+https://docs.galxe.com/galxe-integration/guides/quests and /api-reference/quest.
+
+§C3. **API access (VERIFIED):** a token is generated in the dashboard under Settings → Server API, bound to the
+wallet that generates it, which must be owner or admin of a Space; free tier 10 QPS and 100,000 requests a month on
+the /query endpoint; quest listing is per Space (`spaceId`). Whether `quest(id)` answers for quests outside one's own
+Space is not stated: RECHECK by trying it with a free Joyisfree Space. https://docs.galxe.com/galxe-integration/getting-started/authentication,
+/resources/rate-limits, /api-reference/quest. No official feed (RSS, email, Telegram, push) for new quests exists. DIGEST.
+
+## D. The platform's state (why dates matter)
+
+§D1. **Gravity L1 mainnet is live (21 Jul 2026 per DIGEST); Gravity Alpha shuts 1 Nov 2026;** quest reward contracts
+moved to L1; **a direct-wallet claim fails if the G for gas sits on Alpha.** help/16010489, help/16305612, DIGEST.
+§D2. G staking pays no yield (a GG boost) and its dashboard is closing (26 Oct or 1 Nov 2026, sources conflict);
+Smart Savings became Smart Balance with no yield; **Starboard (InfoFi leaderboards) closed 3 Aug 2026.**
+help/9202640, help/8388133, help/11426659, DIGEST.
+§D3. **X revoked API access for apps that reward posting on 15 Jan 2026** (Kaito, Cookie); X's automation rules
+forbid bulk or aggressive following, duplicate posts across one's accounts and bulk, keyword or scheduled auto-likes;
+the authenticity policy forbids coordinated or compensated exchange of likes, reposts and follows and multi-account
+amplification, permanent at first detection in severe cases; follow cap 400 a day. https://help.x.com/en/rules-and-policies/x-automation,
+/authenticity, /x-follow-limit, https://www.theblock.co/post/385805 (15 Jan 2026). DIGEST.
+
+## E. Security
+
+§E1. Galxe's own advice: bookmark app.galxe.com, verify X and Discord handles, refuse approval pop-ups that appear on
+navigation, use a fresh low-balance wallet, never give keys or seeds to bots, treat every signature as a possible
+approval, revoke after anything odd, staff never DM. help/10078762, help/10345406, DIGEST.
+§E2. Lookalike claim pages (galxe-claim.app, airdrop-galxe.one) drain wallets; the Oct 2023 DNS hijack cost about
+$396K across about 980 users, refunded with 10%. help/8452958, The Block (Oct 2023). DIGEST.
+§E3. The public "Galxe bots" on GitHub sit in a category with documented key-stealers (SlowMist, Jul 2025; compromised
+@solana/web3.js, Dec 2024). Never run one. DIGEST.

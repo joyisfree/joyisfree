@@ -1,0 +1,18 @@
+{
+  "name": "joyisfree",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Joyisfree Studio: the Galxe Desk and other non-studio tracks. No dependencies on purpose.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test galxe-desk/scripts/*.test.mjs",
+    "desk:rank": "node galxe-desk/scripts/rank.mjs",
+    "desk:ledger": "node galxe-desk/scripts/ledger.mjs",
+    "desk:status": "node galxe-desk/scripts/ledger.mjs status",
+    "desk:crawl": "node galxe-desk/scripts/rulebook-crawl.mjs",
+    "desk:check": "node galxe-desk/scripts/rulebook-crawl.mjs --check"
+  }
+}

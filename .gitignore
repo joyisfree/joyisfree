@@ -1,0 +1,13 @@
+# Secrets never enter this repo. Keys, seeds and API tokens live only with Leif.
+.env
+.env.*
+*.secret
+*.secret.*
+secrets/
+
+# Node
+node_modules/
+
+# Local scratch
+.DS_Store
+tmp/
