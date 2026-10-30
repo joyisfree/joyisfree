@@ -130,6 +130,18 @@ test('an on-chain wording the word list once missed ("supply") still forces capi
   assert.ok(r.reasons.includes('TASK_COST_UNKNOWN: on-chain task without capital and gas recorded'), r.reasons.join('; '));
 });
 
+test('the watchlist view shows the top N by value and says how many more passed', () => {
+  const mk = (id, pool) => { const c = good(); c.id = id; c.reward.poolUsd = pool; return c; };
+  const r = rank([mk('A', 60000), mk('B', 120000), mk('C', 90000)], account, NOW);
+  assert.deepEqual(r.passed.map((x) => x.id), ['B', 'C', 'A'], 'sorted by value');
+  const top2 = toMarkdown(r, new Date(NOW), { top: 2 });
+  assert.match(top2, /\*\*AIW3 \/ B\*\*|\/ B\*\*/);
+  assert.match(top2, /and 1 more that pass, below the top 2 by value/);
+  assert.ok(!/\/ A\*\*/.test(top2), 'the third is not listed in a top-2 view');
+  // No --top means every pass is listed, as before.
+  assert.ok(!/more that pass/.test(toMarkdown(r, new Date(NOW))));
+});
+
 test('rank skips metadata objects such as the scout\'s _sourcesChecked', () => {
   const r = rank([good(), { _sourcesChecked: [{ feed: 'DefiLlama', date: '2026-10-29' }] }], account, NOW);
   assert.equal(r.skipped, 1);

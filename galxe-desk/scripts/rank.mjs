@@ -271,12 +271,15 @@ export function rank(candidates, account, now = Date.now()) {
   return { passed, refused, results, skipped, byReason };
 }
 
-export function toMarkdown({ passed, refused, byReason = {} }, when = new Date()) {
+export function toMarkdown({ passed, refused, byReason = {} }, when = new Date(), { top = 0 } = {}) {
   const lines = [`# Shortlist, ${when.toISOString().slice(0, 10)}`, ''];
   lines.push(`Entered only if listed under **Do**. ${passed.length} pass, ${refused.length} refused.`, '');
   lines.push('## Do: real prizes, claimable', '');
   if (passed.length === 0) lines.push('_Nothing clears the gate this week. That is a result, not a failure._', '');
-  for (const x of passed) lines.push(`- **${x.space} / ${x.id}**: EV $${x.ev.toFixed(2)} net ($${x.evGross.toFixed(2)} gross), ${x.option}, claim by ${x.claimBy ?? 'unknown'}. ${x.url}`);
+  // The watchlist view: the N best by expected value, for the weeks when many pass at once.
+  const shown = Number(top) > 0 ? passed.slice(0, Number(top)) : passed;
+  for (const x of shown) lines.push(`- **${x.space} / ${x.id}**: EV $${x.ev.toFixed(2)} net ($${x.evGross.toFixed(2)} gross), ${x.option}, claim by ${x.claimBy ?? 'unknown'}. ${x.url}`);
+  if (shown.length < passed.length) lines.push(`- _…and ${passed.length - shown.length} more that pass, below the top ${shown.length} by value._`);
   lines.push('', '## Refused, and why', '');
   const counts = Object.entries(byReason).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(', ');
   if (counts) lines.push(`By reason: ${counts}.`, '');
@@ -300,7 +303,7 @@ if (isMain) {
   const candidates = JSON.parse(readFileSync(candidatesPath, 'utf8'));
   const account = JSON.parse(readFileSync(accountPath, 'utf8'));
   const result = rank(candidates, account);
-  writeFileSync(out, toMarkdown(result));
+  writeFileSync(out, toMarkdown(result, new Date(), { top: Number(arg('top', 0)) }));
   writeFileSync(out.replace(/\.md$/, '.json'), JSON.stringify(result, null, 2));
   console.log(`read ${candidates.length} (${result.skipped} metadata), ${result.passed.length} pass, ${result.refused.length} refused -> ${out}`);
   console.log(`refused by reason: ${JSON.stringify(result.byReason)}`);

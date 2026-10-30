@@ -49,7 +49,7 @@ test('the card gives the exact URL, marks X clicks and on-chain signatures as hi
 });
 
 test('an empty week says so plainly', () => {
-  assert.match(doCard({ passed: [] }, {}, new Date(NOW)), /Nothing clears the gate this week/);
+  assert.match(doCard({ passed: [] }, {}, new Date(NOW)), /Nothing new clears the gate this week/);
 });
 
 // 30 Oct 2026, the adversarial review: a recorded flag (or any kill-rule stop) left the Do card building as
@@ -59,6 +59,33 @@ test('a kill-rule stop produces no Do card, only the stop notice', () => {
   assert.match(card, /stopped by its own kill rule: STOP_FLAG: Bot activity detected/);
   assert.doesNotMatch(card, /app\.galxe\.com/, 'no quest is listed while the desk is stopped');
   assert.match(card, /critic panel/);
+});
+
+// The claim clock: a prize already won and unclaimed outranks any new quest, and must survive a stopped desk.
+test('claims due and OVERDUE are shown first on the card', () => {
+  const card = doCard(shortlist(), { weeklyMinutesCap: 60, walletCapUsd: 100 }, new Date(NOW), {
+    due: [{ quest: 'W1', deadline: '2026-11-10' }],
+    overdue: [{ quest: 'W0', deadline: '2026-10-20' }],
+  });
+  assert.match(card, /## OVERDUE[\s\S]*W0[\s\S]*## Claim first[\s\S]*W1 \*\*: claim by 2026-11-10|## OVERDUE[\s\S]*W0[\s\S]*## Claim first[\s\S]*W1/);
+  // The clock comes before the week's quests.
+  assert.ok(card.indexOf('OVERDUE') < card.indexOf('Fourth L2'), 'the clock is above the quest list');
+});
+
+test('a stopped desk still shows the claim clock, because a won prize is not new questing', () => {
+  const card = doCard(shortlist(), { weeklyMinutesCap: 60, walletCapUsd: 100 }, new Date(NOW), {
+    kill: 'STOP_FLAG: Bot activity detected',
+    overdue: [{ quest: 'W0', deadline: '2026-10-20' }],
+  });
+  assert.match(card, /stopped by its own kill rule/);
+  assert.match(card, /## OVERDUE[\s\S]*W0/);
+  assert.doesNotMatch(card, /app\.galxe\.com/, 'still no new quests while stopped');
+});
+
+test('an empty clock adds nothing to the card', () => {
+  const card = doCard(shortlist(), { weeklyMinutesCap: 60, walletCapUsd: 100 }, new Date(NOW));
+  assert.doesNotMatch(card, /OVERDUE/);
+  assert.doesNotMatch(card, /Claim first/);
 });
 
 // A link in untrusted task text to anywhere but app.galxe.com is removed from the card.

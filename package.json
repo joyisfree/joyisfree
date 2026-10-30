@@ -15,6 +15,9 @@
     "desk:crawl": "node galxe-desk/scripts/rulebook-crawl.mjs",
     "desk:check": "node galxe-desk/scripts/rulebook-crawl.mjs --check",
     "desk:card": "node galxe-desk/scripts/do-card.mjs",
+    "desk:verify": "node galxe-desk/scripts/verify-link.mjs",
+    "desk:due": "node galxe-desk/scripts/ledger.mjs due",
+    "desk:gigapot": "node galxe-desk/scripts/gigapot.mjs",
     "desk:mutate": "node galxe-desk/scripts/mutate.mjs"
   }
 }

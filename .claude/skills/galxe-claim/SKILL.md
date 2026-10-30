@@ -19,21 +19,26 @@ connectors: `galxe-reader` once the session has it, otherwise `galxe-quest-scout
 
 ## Monday: the shortlist and the Do card (about 30 minutes of helpers, at most three)
 
-0. `npm run desk:status` first. If the kill rule is anything but CONTINUE (a flag, day-30 or hourly stop), there is
-   no shortlist and no Do card this week: the critic panel (the risk officer first) reviews before questing resumes.
-   The Do card builder enforces this too — it refuses to list quests while the desk is stopped — but the week starts
-   with the check, not with the scout.
+0. `npm run desk:status` first, then `npm run desk:due`. If the kill rule is anything but CONTINUE (a flag, day-30 or
+   hourly stop), there is no shortlist and no Do card this week: the critic panel (the risk officer first) reviews
+   before questing resumes. The Do card builder enforces this too — it refuses to list quests while the desk is
+   stopped — but the week starts with the check, not with the scout. Anything already won and unclaimed outranks
+   every new quest, and the Do card puts the claim clock above the week's list.
 1. `galxe-reader` reads the feeds and quest pages (no write tools, none of Leif's connectors); `galxe-quest-scout`
    takes its notes and records candidates in Galxe's official quest shape (`credentialGroups`, `participantsCount`,
    times, `requirements`, `project`, `capitalUsd`, `taskGasUsd`). A fact not in the reader's notes is written as
    `"unknown"`: the gate refuses unknowns, so a guess can only let a bad quest through.
 2. `galxe-prize-analyst` values the rewards from what the scout recorded (it does not browse) and runs the gate:
    `node galxe-desk/scripts/rank.mjs --candidates galxe-desk/candidates.json --account galxe-desk/account.json --out galxe-desk/shortlist.md`
-3. `galxe-security-guardian` checks every pass; a veto removes it, whatever its value.
+3. `galxe-security-guardian` checks every pass; a veto removes it, whatever its value. Every URL that will reach
+   Leif goes through `npm run desk:verify -- <url>` first: anything but GENUINE never appears on the card.
 4. `npm run desk:card -- --shortlist galxe-desk/shortlist.json` writes the Do card: the week's minutes filled with the
    quests that end before next week first, all inside the one wallet cap. It reads the ledger's kill state and writes
    a stop notice instead of a card if the desk is stopped.
 5. The main session shows Leif the Do card. Nothing else.
+6. The week's post is drafted from the same shortlist, following `galxe-desk/thread-format.md`: the picks with their
+   arithmetic and, more importantly, the refusals. Every link in it is checked with `desk:verify` before it goes out,
+   and Leif posts or approves the schedule — the account is his (`galxe-desk/persona.md`).
 
 ## Leif's one weekly pass (about 30 minutes, on the Mac)
 

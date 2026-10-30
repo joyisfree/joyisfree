@@ -44,8 +44,13 @@ The routine is the skill `galxe-claim`.
 
 - `rulebook/`: `sources.json`, the crawler's output (`pages/`, `INDEX.md`, `CHANGES.md`), and the desk's own
   `RULES.md` and `CLAIMING.md` (first pass seeded 28 Oct; complete once `npm run desk:check` says so).
-- `scripts/rank.mjs`: the Prize Gate. `scripts/ledger.mjs`: the ledger and the kill rule. `scripts/rulebook-crawl.mjs`:
-  the crawler. Tests beside them.
+- `scripts/rank.mjs`: the Prize Gate. `scripts/ledger.mjs`: the ledger, the kill rule and the claim clock.
+  `scripts/rulebook-crawl.mjs`: the crawler. `scripts/do-card.mjs`: the weekly card.
+  `scripts/verify-link.mjs`: the scam-link checker. `scripts/gigapot.mjs`: the lottery calculator.
+  `scripts/mutate.mjs`: removes each guard in turn to prove it bites. Tests beside them.
+- `persona.md`: the alias — one public pseudonymous account treated as the asset, and the five rules that are not
+  bent (public never private; renamed never bought; firewalled; no automation on the account).
+- `thread-format.md`: the weekly post, generated from the gate's own shortlist — the refusals are the product.
 - `account.json`: the desk's account as the gate sees it (placeholders until the accounts exist; no secrets).
 - `candidates.example.json`, `shortlist.example.md`: what the gate does with four real-shaped quests.
 - `ledger/ledger.jsonl`: one JSON line per event, appended, never edited.
@@ -62,7 +67,10 @@ npm run desk:ledger -- add --quest ID --action entered --minutes 8 --fee 0.08
 npm run desk:crawl        # fetch every official page (needs the hosts reachable)
 npm run desk:check        # is the rulebook complete: listed = fetched = read, missing 0, zero unconfirmed, files present
 npm run desk:card -- --shortlist galxe-desk/shortlist.json   # the weekly Do card (refuses to list quests while a flag stands)
-npm run desk:mutate       # remove each guard in turn and prove a test goes red (48 of 48)
+npm run desk:verify -- <url>  # the scam-link checker: GENUINE only for app.galxe.com, exit 1 for anything else
+npm run desk:due          # the claim clock on its own: what is won and unclaimed, what is already late
+npm run desk:gigapot      # is the GG lottery ever worth a ticket (it cannot be valued on public information)
+npm run desk:mutate       # remove each guard in turn and prove a test goes red (61 of 61)
 ```
 
 ## What is Leif's, and only this

@@ -1,7 +1,7 @@
 // The ledger's arithmetic, the claim deadlines and every kill rule, on fixtures.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseLedger, status, validate, format } from './ledger.mjs';
+import { parseLedger, status, validate, format, formatDue } from './ledger.mjs';
 
 const rules = { day30MinRealisedUsd: 10, minNetUsdPerHour: 15, horizonDays: 90 };
 const day = (n) => Date.parse('2026-11-01T00:00:00Z') + n * 86_400_000;
@@ -41,6 +41,13 @@ test('a won quest not yet claimed is due until its deadline, then OVERDUE', () =
   const after = status(fixture, rules, day(12));
   assert.deepEqual(after.overdue.map((d) => d.quest), ['B']);
   assert.match(format(after), /OVERDUE: B \(was 2026-11-10\)/);
+});
+
+test('the claim clock lists what is due, what is late, and says so plainly when nothing is', () => {
+  assert.match(formatDue(status(fixture, rules, day(8))), /^Due: B by 2026-11-10$/m);
+  const late = formatDue(status(fixture, rules, day(12)));
+  assert.match(late, /^OVERDUE \(claim window gone[^)]*\): B \(was 2026-11-10\)$/m);
+  assert.match(formatDue(status([], rules, day(1))), /No claim is waiting/);
 });
 
 test('kill rule: a flag stops the desk at once', () => {

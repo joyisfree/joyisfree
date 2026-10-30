@@ -88,6 +88,15 @@ export function status(entries, rules = {}, now = Date.now()) {
   };
 }
 
+/** The claim clock on its own: what must be claimed, and what is already late. A won prize unclaimed is a prize lost. */
+export function formatDue(s) {
+  const lines = [];
+  if (s.overdue.length) lines.push(`OVERDUE (claim window gone, check before anything else): ${s.overdue.map((d) => `${d.quest} (was ${d.deadline})`).join(', ')}`);
+  if (s.due.length) lines.push(`Due: ${s.due.map((d) => `${d.quest} by ${d.deadline}`).join(', ')}`);
+  if (!lines.length) lines.push('No claim is waiting. Nothing won is unclaimed.');
+  return lines.join('\n');
+}
+
 export function format(s) {
   const ph = s.netUsdPerHour == null ? 'n/a' : `$${s.netUsdPerHour.toFixed(2)}/h`;
   const lines = [
@@ -134,14 +143,19 @@ if (isMain) {
     mkdirSync(dirname(file), { recursive: true });
     appendFileSync(file, JSON.stringify(e) + '\n');
     console.log(`recorded ${e.action} for ${e.quest}`);
-  } else if (cmd === 'status') {
+  } else if (cmd === 'status' || cmd === 'due') {
     const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
     const rules = o.account ? JSON.parse(readFileSync(o.account, 'utf8')).killRules : JSON.parse(readFileSync('galxe-desk/account.json', 'utf8')).killRules;
     const s = status(parseLedger(text), rules);
-    console.log(format(s));
-    if (s.kill !== 'CONTINUE') process.exitCode = 2;
+    if (cmd === 'due') {
+      console.log(formatDue(s));
+      if (s.overdue.length) process.exitCode = 2;
+    } else {
+      console.log(format(s));
+      if (s.kill !== 'CONTINUE') process.exitCode = 2;
+    }
   } else {
-    console.error('usage: ledger.mjs add --quest ID --action entered|won|claimed|realised|lost|flag [--minutes N --fee USD --gas USD --amount USD --deadline DATE --note TEXT]\n       ledger.mjs status [--file PATH --account PATH]');
+    console.error('usage: ledger.mjs add --quest ID --action entered|won|claimed|realised|lost|flag [--minutes N --fee USD --gas USD --amount USD --deadline DATE --note TEXT]\n       ledger.mjs status [--file PATH --account PATH]\n       ledger.mjs due [--file PATH --account PATH]   # the claim clock only');
     process.exitCode = 1;
   }
 }
