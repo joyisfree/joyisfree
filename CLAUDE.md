@@ -12,7 +12,10 @@ Rules that hold in this repo:
   rulebook, the ledger), never the clicks on the account. Galxe defines a bot as a program acting "without real human
   involvement" and a flagged account cannot claim.
 - **Specialists are files** in `.claude/agents/` with an explicit `tools` list; none gets deploy, delete, database or
-  browser tools. The routine is `.claude/skills/galxe-claim/SKILL.md`.
+  browser tools. An agent that reads untrusted web text gets no write or code-execution tools, and no `memory: project`
+  (which in some builds silently grants Write/Edit): `galxe-reader` reads the feeds and pages, the prize analyst and
+  the scout hold no web tools, and the security guardian is read-only with no memory. The routine is
+  `.claude/skills/galxe-claim/SKILL.md`.
 - **Every claim answerable by a command:** `npm test` (the gate, the ledger and the crawler, with guards shown to
   fail), `npm run desk:check` (is the rulebook complete), `npm run desk:status` (the ledger and the kill rule).
 - **Nothing from here enters the studio repo.** The studio asserts that its app contacts only its own origin.

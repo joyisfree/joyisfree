@@ -8,9 +8,10 @@ Legend: first pass 28 Oct 2026, from RULES.md. Every line marked RECHECK is conf
    badges, roles and whitelists are refused (RULES §B1, §B2, §B6).
 2. **The quest is open:** `status` Active, now between `startTime` and `endTime`, `participantsCount` below `cap`
    when a cap exists (RULES §C2).
-3. **Every requirement is met by our account, by name:** X age, followers, blue check, Humanity level, Passport,
-   holdings, Galxe+ (RULES §C1). The desk's facts live in `galxe-desk/account.json`. A requirement we cannot verify
-   counts as unmet.
+3. **Every requirement the gate models is checked against our account by name, and any it does not model counts as
+   unmet (fail closed):** it models X age, followers, blue check, Humanity level, Passport, holdings, excluded
+   countries and project KYC (RULES §C1), from `galxe-desk/account.json`. A requirement the gate cannot model —
+   Galxe+, TrustScan, Nomis, a Gitcoin threshold — is refused as "not understood", never waved through.
 4. **The official check, when the API token works for the quest:** `CheckUserEligibility(questId, address)`;
    `rewards.eligible` true means the address can claim (RULES §C2). Run it before the tasks and again before the claim.
 5. **The claim path is known:** chain, window, fee, gas (section 2).
@@ -18,6 +19,13 @@ Legend: first pass 28 Oct 2026, from RULES.md. Every line marked RECHECK is conf
    (RULES §E1, §E2).
 7. **It is worth it:** expected value per participant above the bar after the haircut and fees; the Prize Gate
    (`scripts/rank.mjs`) does the arithmetic and writes the reason for every refusal.
+8. **Each task's own deadline is met, not only the quest's.** A credential "control[s] the time range of the
+   credential, prohibiting new verifications after the deadline" (VERIFIED), so a task done after its own window will
+   not verify even while the quest is still open.
+9. **On-chain tasks are chain-specific and Passport is wallet-specific.** An on-chain credential is checked live on
+   the one "blockchain network, contract address, and method" its creator set (VERIFIED), so the holding or action
+   must be on that chain; a Passport-gated quest checks only the Passport NFT "holding in your wallet" on BNB Chain
+   (VERIFIED), so it must be done from the wallet that holds the Passport.
 
 ## 2. The claim path by reward type
 

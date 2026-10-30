@@ -11,8 +11,9 @@
 // Actions: entered, won, claimed, realised, lost, flag. "flag" is any bot notice, odd approval prompt
 // or restriction, and it stops the desk by itself.
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 export const ACTIONS = new Set(['entered', 'won', 'claimed', 'realised', 'lost', 'flag']);
 const DAY = 86_400_000;
@@ -29,7 +30,9 @@ export function validate(e) {
   if (!ACTIONS.has(e.action)) throw new Error(`unknown action ${e.action}`);
   if (!e.quest) throw new Error('quest id required');
   if (!e.ts || Number.isNaN(Date.parse(e.ts))) throw new Error('ts must be an ISO date');
-  if (e.action === 'won' && !e.deadline) throw new Error('a win needs its claim deadline (the windows are in rulebook/CLAIMING.md section 2)');
+  // A win's deadline must be a real date: a non-date (or a bare `--deadline` that args() turns into "true")
+  // would give NaN, and `NaN < now` is false, so the claim would read as due for ever and never OVERDUE.
+  if (e.action === 'won' && (!e.deadline || Number.isNaN(Date.parse(e.deadline)))) throw new Error('a win needs its claim deadline as a date (the windows are in rulebook/CLAIMING.md section 2)');
   return e;
 }
 
@@ -110,7 +113,8 @@ function args() {
   return out;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+const isMain = (() => { try { return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href; } catch { return false; } })();
+if (isMain) {
   const cmd = process.argv[2];
   const o = args();
   const file = o.file || 'galxe-desk/ledger/ledger.jsonl';

@@ -9,9 +9,11 @@ import { join } from 'node:path';
 import { parseLlmsTxt, extractLinks, htmlToText, pagePath, fetchWithDeadline, crawl, check, parseIndex, renderIndex, counts } from './rulebook-crawl.mjs';
 
 let flakyHits = 0;
+let mutPhase = 'A'; // drives the /mut page: A, then 'missing' (an outage), then B (changed content)
 const server = createServer((req, res) => {
   const send = (code, type, body) => { res.writeHead(code, { 'content-type': type }); res.end(body); };
   switch (req.url) {
+    case '/mut': return mutPhase === 'missing' ? send(503, 'text/plain', 'down') : send(200, 'text/plain', `mut ${mutPhase}`);
     case '/llms.txt': return send(200, 'text/plain', '# Docs\n- [Terms](/legal/terms)\n- [Quest](/quest/intro.md)\n- [Elsewhere](https://other.example/x)\n');
     case '/legal/terms.md': return send(200, 'text/markdown', '# Terms\n\nNo bots.\n');
     case '/quest/intro.md': return send(404, 'text/plain', 'nope');
@@ -95,7 +97,10 @@ test('crawl discovers, saves with front-matter, fails closed on MISSING, and rec
   const changes2 = readFileSync(join(outDir, 'CHANGES.md'), 'utf8');
   assert.match(changes2, /GONE \| .*\/hang/);
   assert.ok(!/2026-10-29.*CHANGED/.test(changes2), 'same content is not a change');
-  assert.equal(check(outDir).complete, true, 'complete once every page is fetched and read');
+  // The rulebook is complete only when the rule and claim files exist with no unconfirmed line, too.
+  writeFileSync(join(outDir, 'RULES.md'), 'Legend: DIGEST\n§A1 confirmed. VERIFIED.\n');
+  writeFileSync(join(outDir, 'CLAIMING.md'), 'Legend: RECHECK\nwindows confirmed, fetched 2026-11-02.\n');
+  assert.equal(check(outDir).complete, true, 'complete once every page is fetched and read and the rule files are clean');
 });
 
 test('check reports no index as incomplete, and counts read pages', () => {
@@ -131,4 +136,39 @@ test('unconfirmed rule lines are counted, the legend is not, and check stays inc
   writeFileSync(join(dir, 'RULES.md'), 'Legend: DIGEST\n§A3 confirmed. VERIFIED.\n');
   writeFileSync(join(dir, 'CLAIMING.md'), 'Legend: RECHECK\nwindow 15 days, help/9645630, fetched 2026-11-02.\n');
   assert.equal(check(dir).complete, true);
+});
+
+// 30 Oct 2026, the adversarial review: three ways the completeness check used to pass when it should not.
+test('an empty index is not complete, CRLF rows still parse, and the rule files must exist', () => {
+  assert.equal(counts([]).complete, false, 'zero rows is never complete (a source that returned no links)');
+  const rows = [
+    { url: 'https://a/1', status: 'FETCHED', sha: 'a'.repeat(64), read: 'yes', note: 'n' },
+    { url: 'https://a/2', status: 'FETCHED', sha: 'b'.repeat(64), read: 'yes', note: 'm' },
+  ];
+  const crlf = renderIndex(rows, 'now').replace(/\n/g, '\r\n');
+  assert.equal(parseIndex(crlf).size, 2, 'CRLF line endings must not silently drop every row');
+  const dir = mkdtempSync(join(tmpdir(), 'rulebook-norules-'));
+  writeFileSync(join(dir, 'INDEX.md'), renderIndex([rows[0]], 'now'));
+  const c = check(dir);
+  assert.equal(c.complete, false, 'a read index without RULES.md and CLAIMING.md is not a read rulebook');
+  assert.match(c.note || '', /RULES\.md and CLAIMING\.md/);
+});
+
+test('a page that goes MISSING and then changes is still logged as CHANGED and marked unread', async () => {
+  const outDir = mkdtempSync(join(tmpdir(), 'rulebook-mut-'));
+  const sources = { pages: [`${base}/mut`] };
+  mutPhase = 'A';
+  await crawl(sources, { outDir, timeoutMs: 300, retries: 1, backoffMs: 5, now: new Date('2026-10-28T00:00:00Z') });
+  // The counsel reads it.
+  const idx = readFileSync(join(outDir, 'INDEX.md'), 'utf8').replace(/\| FETCHED \| ([0-9a-f]{64}) \|  \|  \|/, '| FETCHED | $1 | yes | noted |');
+  writeFileSync(join(outDir, 'INDEX.md'), idx);
+  mutPhase = 'missing';
+  const rMiss = await crawl(sources, { outDir, timeoutMs: 300, retries: 1, backoffMs: 5, now: new Date('2026-10-29T00:00:00Z') });
+  assert.equal(rMiss.rows.find((x) => x.url === `${base}/mut`).status, 'MISSING', 'the outage is recorded as MISSING');
+  mutPhase = 'B';
+  const rChanged = await crawl(sources, { outDir, timeoutMs: 300, retries: 1, backoffMs: 5, now: new Date('2026-10-30T00:00:00Z') });
+  const row = rChanged.rows.find((x) => x.url === `${base}/mut`);
+  assert.equal(row.status, 'FETCHED');
+  assert.equal(row.read, '', 'a page changed since the last good read is marked unread again');
+  assert.match(readFileSync(join(outDir, 'CHANGES.md'), 'utf8'), /2026-10-30T[\d:.Z]+ \| CHANGED \| .*\/mut/);
 });

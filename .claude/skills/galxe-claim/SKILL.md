@@ -19,22 +19,29 @@ connectors: `galxe-reader` once the session has it, otherwise `galxe-quest-scout
 
 ## Monday: the shortlist and the Do card (about 30 minutes of helpers, at most three)
 
-1. `galxe-quest-scout` records candidates in Galxe's official quest shape (`credentialGroups`, `participantsCount`,
-   times, `requirements`, `project`, `capitalUsd`, `taskGasUsd`). A fact it cannot find stays absent: the gate refuses
-   unknowns, so a guess can only let a bad quest through.
-2. `galxe-prize-analyst` prices the rewards and runs the gate:
+0. `npm run desk:status` first. If the kill rule is anything but CONTINUE (a flag, day-30 or hourly stop), there is
+   no shortlist and no Do card this week: the critic panel (the risk officer first) reviews before questing resumes.
+   The Do card builder enforces this too — it refuses to list quests while the desk is stopped — but the week starts
+   with the check, not with the scout.
+1. `galxe-reader` reads the feeds and quest pages (no write tools, none of Leif's connectors); `galxe-quest-scout`
+   takes its notes and records candidates in Galxe's official quest shape (`credentialGroups`, `participantsCount`,
+   times, `requirements`, `project`, `capitalUsd`, `taskGasUsd`). A fact not in the reader's notes is written as
+   `"unknown"`: the gate refuses unknowns, so a guess can only let a bad quest through.
+2. `galxe-prize-analyst` values the rewards from what the scout recorded (it does not browse) and runs the gate:
    `node galxe-desk/scripts/rank.mjs --candidates galxe-desk/candidates.json --account galxe-desk/account.json --out galxe-desk/shortlist.md`
 3. `galxe-security-guardian` checks every pass; a veto removes it, whatever its value.
 4. `npm run desk:card -- --shortlist galxe-desk/shortlist.json` writes the Do card: the week's minutes filled with the
-   quests that end before next week first, all inside the one wallet cap.
+   quests that end before next week first, all inside the one wallet cap. It reads the ledger's kill state and writes
+   a stop notice instead of a card if the desk is stopped.
 5. The main session shows Leif the Do card. Nothing else.
 
 ## Leif's one weekly pass (about 30 minutes, on the Mac)
 
 1. In the "Galxe desk" Brave profile (only the aged personal X account, the Galxe account and the throwaway wallet
    live there), he works the Do card top to bottom.
-2. He signs only a readable sign-in message or the exact claim or task transaction, with exact-amount approvals.
-   Any approval, Permit or unlimited-allowance prompt is refused and reported.
+2. He signs only a readable sign-in message, the exact claim, or the exact on-chain task transaction the guardian
+   noted; an exact-amount token approval only when a task needs one. Any unlimited allowance, blind Permit or
+   `setApprovalForAll` prompt is refused and reported.
 3. He tells Claude in one line what he did ("did 1 and 2"). Claude writes the ledger:
    `node galxe-desk/scripts/ledger.mjs add --quest ID --space NAME --action entered --minutes N --fee 0.08`;
    a win `--action won --amount USD --deadline YYYY-MM-DD` (window from `rulebook/CLAIMING.md` section 2);

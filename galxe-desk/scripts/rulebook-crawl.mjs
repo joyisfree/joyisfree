@@ -9,8 +9,9 @@
 // Needs network access to the hosts in sources.json. In a cloud session that blocks them, run it on the Mac.
 
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 // ---------- pure helpers (tested) ----------
 
@@ -92,7 +93,8 @@ export async function fetchWithDeadline(url, { timeoutMs = 20_000, retries = 3, 
 /** Parse an existing INDEX.md so read-status and notes survive a re-crawl. */
 export function parseIndex(text) {
   const map = new Map();
-  for (const line of text.split('\n')) {
+  for (const raw of text.split('\n')) {
+    const line = raw.replace(/\r$/, ''); // tolerate CRLF: a trailing \r would stop the row matching
     const m = line.match(/^\|\s*(https?:\/\/\S+)\s*\|\s*(\w+)\s*\|\s*([0-9a-f]{0,64})\s*\|\s*(\w*)\s*\|\s*(.*?)\s*\|$/);
     if (m) map.set(m[1], { status: m[2], sha: m[3], read: m[4] || '', note: m[5] || '' });
   }
@@ -118,7 +120,8 @@ export function counts(rows) {
   const fetched = rows.filter((r) => r.status === 'FETCHED').length;
   const missing = rows.filter((r) => r.status === 'MISSING').length;
   const read = rows.filter((r) => r.status === 'FETCHED' && /^y(es)?$/i.test(r.read || '')).length;
-  return { listed, fetched, missing, read, unread: fetched - read, complete: missing === 0 && fetched === listed && read === fetched };
+  // An empty index (no rows, e.g. a discovery source that answered 200 with no links) is never "complete".
+  return { listed, fetched, missing, read, unread: fetched - read, complete: listed > 0 && missing === 0 && fetched === listed && read === fetched };
 }
 
 // ---------- the crawl ----------
@@ -168,7 +171,9 @@ export async function crawl(sources, { outDir, timeoutMs = 20_000, retries = 3, 
   const changes = [];
   for (const url of [...urls].sort()) {
     const prev = previous.get(url);
-    let row = { url, status: 'MISSING', sha: '', read: prev?.read || '', note: prev?.note || '' };
+    // Carry the last known-good hash forward on a MISSING row, so the next successful fetch still compares
+    // against real content and a change after an outage is not lost.
+    let row = { url, status: 'MISSING', sha: prev?.sha || '', read: prev?.read || '', note: prev?.note || '' };
     try {
       let text;
       let title = url;
@@ -186,7 +191,7 @@ export async function crawl(sources, { outDir, timeoutMs = 20_000, retries = 3, 
       writeFileSync(file, `---\nurl: ${url}\ntitle: ${title.replace(/\n/g, ' ')}\nfetched: ${when}\nsha256: ${sha}\n---\n\n${text}\n`);
       row = { ...row, status: 'FETCHED', sha, title };
       if (!prev) changes.push(`${when} | NEW | ${url}`);
-      else if (prev.sha && prev.sha !== sha) changes.push(`${when} | CHANGED | ${url}`);
+      else if (prev.sha && prev.sha !== sha) { changes.push(`${when} | CHANGED | ${url}`); row.read = ''; } // a changed page must be re-read
     } catch (e) {
       changes.push(`${when} | MISSING | ${url} | ${e.message}`);
       log(`MISSING ${url}: ${e.message}`);
@@ -208,15 +213,18 @@ export function unconfirmedMarkers(text) {
 
 export function check(outDir) {
   let unconfirmed = 0;
+  const filesMissing = [];
   for (const f of ['RULES.md', 'CLAIMING.md']) {
     const p = join(outDir, f);
     if (existsSync(p)) unconfirmed += unconfirmedMarkers(readFileSync(p, 'utf8'));
+    else filesMissing.push(f); // the rulebook is not "read" without the rule and claim files
   }
   const idx = join(outDir, 'INDEX.md');
   if (!existsSync(idx)) return { listed: 0, fetched: 0, missing: 0, read: 0, unread: 0, unconfirmed, complete: false, note: 'no INDEX.md yet: the crawl has not run' };
   const rows = [...parseIndex(readFileSync(idx, 'utf8')).entries()].map(([url, r]) => ({ url, ...r }));
   const c = counts(rows);
-  return { ...c, unconfirmed, complete: c.complete && unconfirmed === 0 };
+  const note = filesMissing.length ? `missing ${filesMissing.join(' and ')}` : undefined;
+  return { ...c, unconfirmed, complete: c.complete && unconfirmed === 0 && filesMissing.length === 0, ...(note ? { note } : {}) };
 }
 
 function pagesOnDisk(outDir) {
@@ -228,7 +236,8 @@ function pagesOnDisk(outDir) {
   return n;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+const isMain = (() => { try { return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href; } catch { return false; } })();
+if (isMain) {
   const outDir = process.argv.includes('--out') ? process.argv[process.argv.indexOf('--out') + 1] : 'galxe-desk/rulebook';
   if (process.argv.includes('--check')) {
     const c = check(outDir);

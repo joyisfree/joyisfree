@@ -16,12 +16,15 @@
 // conditionRelation ALL|ANY, conditions and rewards {rewardType, rewardCount, eligible}) or the desk's flat `reward`.
 // Pure functions are exported so the tests can prove every guard refuses what it should.
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, realpathSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 export const WORTHLESS_TYPES = new Set(['oat', 'points', 'gg', 'xp', 'badge', 'nft-no-floor', 'whitelist', 'role', 'none', 'credential']);
 export const GENUINE_HOSTS = new Set(['app.galxe.com']); // quests live only here; the marketing site is not a quest page
 export const SPLITS = new Set(['even', 'raffle', 'luck', 'fcfs']);
-const ONCHAIN = /\b(swap|bridge|hold|holding|stake|staking|deposit|mint|trade|liquidity|lend|borrow|buy)\b/i;
+// A task is on-chain if it names a wallet action. The list errs wide on purpose: over-reading a task as
+// on-chain only forces its capital and gas to be recorded (fail closed), it never lets a cost slip through.
+const ONCHAIN = /\b(swap|swapped|bridge|bridged|hold|holding|held|stake|staked|staking|restake|unstake|deposit|deposited|mint|minted|trade|traded|transact|transaction|transactions|liquidity|lp|lend|borrow|buy|bought|purchase|supply|supplied|send|sent|transfer|lock|locked|balance|in your wallet)\b/i;
 const ON_X = /(twitter|x\.com|\bon x\b|\bfollow\b|retweet|repost|\blike\b|\bquote\b)/i;
 const DAY = 86_400_000;
 
@@ -44,7 +47,6 @@ export function toMs(t) {
   return Date.parse(t);
 }
 
-export const isUrl = (u) => { try { return /^https?:$/.test(new URL(u).protocol); } catch { return false; } };
 const participantsOf = (c) => c.participants ?? c.participantsCount;
 const spaceName = (c) => (c.space && typeof c.space === 'object' ? c.space.name : c.space);
 const spaceVerified = (c) => c.spaceVerified === true || (c.space && typeof c.space === 'object' && c.space.verified === true);
@@ -89,9 +91,12 @@ export function expectedValue(c, haircut = 0.5, reward = c.reward || {}) {
     case 'luck':
       gross = Number(r.poolUsd ?? NaN) / n;
       break;
-    case 'raffle':
-      gross = (Number(r.prizeUsd ?? NaN) * Number(r.winners ?? NaN)) / n;
+    case 'raffle': {
+      // One entry can win at most one prize, so the chance of winning is capped at 1.
+      const prize = Number(r.prizeUsd ?? NaN);
+      gross = prize * Math.min(1, Number(r.winners ?? NaN) / n);
       break;
+    }
     case 'fcfs':
       gross = Number(r.slotsLeft ?? 0) > 0 ? Number(r.prizeUsd ?? NaN) : 0;
       break;
@@ -104,8 +109,11 @@ export function expectedValue(c, haircut = 0.5, reward = c.reward || {}) {
   }
   if (!Number.isFinite(gross)) return null;
   let net = gross;
-  if (r.tokenLaunched === false || r.vesting === true) net *= haircut;
+  // Fail closed: only a token explicitly launched and not vesting escapes the haircut. Absent, "unknown" or
+  // the string "false" all keep the haircut, because the desk never values an uncertain token at face.
+  if (r.tokenLaunched !== true || r.vesting === true) net *= haircut;
   net -= Number(r.claimFeeUsd ?? 0) + Number(r.gasUsd ?? 0) + Number(c.taskGasUsd ?? 0);
+  if (!Number.isFinite(net)) return null; // a fee or gas written as "unknown" is NaN, not zero; refuse, do not pass
   return { gross, net };
 }
 
@@ -125,6 +133,9 @@ export function questReasons(c, account, now = Date.now()) {
 
   // Our account must be eligible before a minute is spent. Unknown counts as unmet.
   if (!c.requirements || typeof c.requirements !== 'object' || Array.isArray(c.requirements)) reasons.push('INELIGIBLE: requirements not recorded');
+  // A requirement the gate does not model cannot be checked against the account, so it is treated as unmet.
+  const KNOWN_REQ = new Set(['xAgeMonths', 'xFollowers', 'blueCheck', 'scoreHumanity', 'passport', 'holdings', 'excludedCountries', 'kyc']);
+  for (const k of Object.keys(q)) if (!KNOWN_REQ.has(k)) reasons.push(`INELIGIBLE: requirement ${k} not understood (fail closed)`);
   for (const f of ['xAgeMonths', 'xFollowers', 'scoreHumanity']) {
     if (f in q && (typeof q[f] !== 'number' || !Number.isFinite(q[f]))) reasons.push(`INELIGIBLE: ${f} unknown`);
   }
@@ -147,10 +158,11 @@ export function questReasons(c, account, now = Date.now()) {
   if ('kyc' in q && typeof q.kyc !== 'boolean') reasons.push('INELIGIBLE: kyc unknown');
   else if (q.kyc && !account.kycOk) reasons.push('INELIGIBLE: project KYC needed (Leif decides on KYC)');
 
-  // The page must be the genuine app and the project credible.
-  let host = null;
-  try { host = new URL(c.url).hostname; } catch { host = null; }
-  if (!host || !GENUINE_HOSTS.has(host)) reasons.push(`LOOKALIKE_URL: ${host || 'invalid url'}`);
+  // The page must be the genuine app, reached over http(s), and the project credible. A non-http scheme
+  // (javascript:, data:, ftp:) is refused outright, not waved through on a matching hostname.
+  const parsed = (() => { try { return new URL(c.url); } catch { return null; } })();
+  if (!parsed || !/^https?:$/.test(parsed.protocol)) reasons.push(`LOOKALIKE_URL: ${parsed ? `${parsed.protocol.replace(':', '')} not http` : 'invalid url'}`);
+  else if (!GENUINE_HOSTS.has(parsed.hostname)) reasons.push(`LOOKALIKE_URL: ${parsed.hostname}`);
   const credible = spaceVerified(c) || Number(p.fundingUsd || 0) >= 1_000_000 || p.tokenStatus === 'live';
   if (!credible) reasons.push('UNVERIFIED_PROJECT');
 
@@ -160,6 +172,8 @@ export function questReasons(c, account, now = Date.now()) {
   if (onChain && (c.capitalUsd == null || c.taskGasUsd == null)) reasons.push('TASK_COST_UNKNOWN: on-chain task without capital and gas recorded');
   if (c.capitalUsd != null && !Number.isFinite(Number(c.capitalUsd))) reasons.push('TASK_COST_UNKNOWN: capital');
   else if (Number(c.capitalUsd || 0) > cap) reasons.push(`CAPITAL_ABOVE_CAP: $${Number(c.capitalUsd)} > $${cap} wallet cap`);
+  // taskGasUsd is subtracted from every quest's value, so a non-numeric one would poison EV wherever it appears.
+  if (c.taskGasUsd != null && !Number.isFinite(Number(c.taskGasUsd))) reasons.push('TASK_COST_UNKNOWN: task gas');
 
   // It must fit the week. Unknown minutes are refused, not assumed to be zero.
   const mcap = Number(account.questMinutesCap ?? account.dailyMinutesCap ?? 15);
@@ -186,8 +200,9 @@ export function cashVerdict(o, c, account) {
 
   if (!r.claimChain) reasons.push('CLAIM_PATH_UNKNOWN: chain');
   else if (!(account.chains || {})[r.claimChain]) reasons.push(`CLAIM_PATH_UNKNOWN: no gas on ${r.claimChain}`);
-  if (r.claimWindowDays == null) reasons.push('CLAIM_PATH_UNKNOWN: window');
-  if (r.claimFeeUsd == null) reasons.push('CLAIM_PATH_UNKNOWN: fee');
+  if (r.claimWindowDays == null || !Number.isFinite(Number(r.claimWindowDays))) reasons.push('CLAIM_PATH_UNKNOWN: window');
+  if (r.claimFeeUsd == null || !Number.isFinite(Number(r.claimFeeUsd))) reasons.push('CLAIM_PATH_UNKNOWN: fee');
+  if (r.gasUsd != null && !Number.isFinite(Number(r.gasUsd))) reasons.push('CLAIM_PATH_UNKNOWN: claim gas');
 
   // First-come-first-served is a speed game bots win; a weekly pass enters only when at least half the slots are free.
   if (r.split === 'fcfs') {
@@ -275,7 +290,10 @@ function arg(name, fallback) {
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Resolve both sides to a real path before comparing, so the CLI still runs when the invocation path has a
+// space, a symlink or a non-ASCII character (a raw `file://${argv[1]}` would not match import.meta.url then).
+const isMain = (() => { try { return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href; } catch { return false; } })();
+if (isMain) {
   const candidatesPath = arg('candidates', 'galxe-desk/candidates.json');
   const accountPath = arg('account', 'galxe-desk/account.json');
   const out = arg('out', 'galxe-desk/shortlist.md');

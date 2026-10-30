@@ -6,10 +6,21 @@
 //
 //   node galxe-desk/scripts/do-card.mjs --shortlist galxe-desk/shortlist.json --account galxe-desk/account.json --out galxe-desk/do-card.md
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, realpathSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+import { parseLedger, status } from './ledger.mjs';
 
 const DAY = 86_400_000;
 const perMinute = (x) => (Number(x.ev) || 0) / Math.max(1, Number(x.minutes) || 1);
+
+// Task text is copied from the quest page and is untrusted. A link in it to anywhere but app.galxe.com is
+// removed, so the card can never hand Leif a lookalike claim page to click.
+export function safeTaskText(s) {
+  return String(s).replace(/https?:\/\/[^\s)]+/gi, (u) => {
+    try { if (new URL(u).hostname === 'app.galxe.com') return u; } catch { /* fall through */ }
+    return '[external link removed — open only app.galxe.com]';
+  });
+}
 
 export function plan(shortlist, account, now = Date.now()) {
   const cap = Number(account.weeklyMinutesCap ?? 30);
@@ -31,7 +42,16 @@ export function plan(shortlist, account, now = Date.now()) {
   return { picked, skipped, used, cap, capital, walletCap };
 }
 
-export function doCard(shortlist, account, when = new Date()) {
+export function doCard(shortlist, account, when = new Date(), { kill = 'CONTINUE' } = {}) {
+  // A recorded flag, or any other kill-rule stop, ends the questing: no Do card is produced until the panel clears it.
+  if (kill && kill !== 'CONTINUE') {
+    return [
+      `# Do card, week of ${when.toISOString().slice(0, 10)}`, '',
+      `The desk is stopped by its own kill rule: ${kill}`,
+      'There is no Do card this week. The critic panel (the risk officer first) reviews before any questing resumes;',
+      'a flag is cleared only after that review. Run `npm run desk:status` to see it.', '',
+    ].join('\n');
+  }
   const { picked, skipped, used, cap, capital, walletCap } = plan(shortlist, account, when.getTime());
   const lines = [`# Do card, week of ${when.toISOString().slice(0, 10)}`, ''];
   if (picked.length === 0) {
@@ -41,7 +61,7 @@ export function doCard(shortlist, account, when = new Date()) {
   lines.push(`One pass, about ${used} of your ${cap} minutes. Open the "Galxe desk" profile in Brave and go top to bottom.`);
   if (capital > 0) lines.push(`Money tied up at once: $${capital} of your $${walletCap} wallet cap.`);
   lines.push('The clicks are yours: X forbids scripted clicks, Galxe flags automated ones, and every signature is your key.');
-  lines.push('Sign only a readable sign-in message or the exact claim or task transaction. Refuse any approval, Permit or unlimited allowance, and tell Claude.', '');
+  lines.push('Sign only a readable sign-in message, the exact claim, or the exact on-chain task transaction the guardian noted; an exact-amount approval only if a task needs one. Refuse any unlimited allowance, blind Permit or setApprovalForAll, and tell Claude.', '');
   picked.forEach((x, i) => {
     const dates = [x.endsAt ? `ends ${x.endsAt}` : null, x.claimBy ? `claim by ${x.claimBy}` : null].filter(Boolean).join(', ');
     lines.push(`${i + 1}. **${x.space}${x.name ? ` / ${x.name}` : ''}** (worth about $${Number(x.ev).toFixed(2)} to you, about ${x.minutes} min${dates ? `, ${dates}` : ''})${x.urgent ? ' **ends before next week**' : ''}`);
@@ -50,7 +70,7 @@ export function doCard(shortlist, account, when = new Date()) {
       if (g.relation === 'ANY' && g.items.length > 1) lines.push('   Do one of:');
       for (const t of g.items) {
         const tags = [t.onX ? 'on X: your click' : null, t.onChain ? 'on-chain: sign only this exact transaction' : null, t.done ? 'already done' : null].filter(Boolean);
-        lines.push(`   - ${t.text}${tags.length ? ` (${tags.join('; ')})` : ''}`);
+        lines.push(`   - ${safeTaskText(t.text)}${tags.length ? ` (${tags.join('; ')})` : ''}`);
       }
     }
     lines.push('   Then press Verify on the quest page.', '');
@@ -69,11 +89,20 @@ function arg(name, fallback) {
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+const isMain = (() => { try { return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href; } catch { return false; } })();
+if (isMain) {
   const shortlist = JSON.parse(readFileSync(arg('shortlist', 'galxe-desk/shortlist.json'), 'utf8'));
   const account = JSON.parse(readFileSync(arg('account', 'galxe-desk/account.json'), 'utf8'));
   const out = arg('out', 'galxe-desk/do-card.md');
-  writeFileSync(out, doCard(shortlist, account));
-  const p = plan(shortlist, account);
-  console.log(`do card: ${p.picked.length} quests in ${p.used} of ${p.cap} min, $${p.capital} of $${p.walletCap} tied up, ${p.skipped.length} left for next week -> ${out}`);
+  // The ledger's kill state gates the card: a flag or a stop rule means no quests this week.
+  const ledgerPath = arg('ledger', 'galxe-desk/ledger/ledger.jsonl');
+  const entries = existsSync(ledgerPath) ? parseLedger(readFileSync(ledgerPath, 'utf8')) : [];
+  const kill = status(entries, account.killRules).kill;
+  writeFileSync(out, doCard(shortlist, account, new Date(), { kill }));
+  if (kill !== 'CONTINUE') {
+    console.log(`desk stopped (${kill}): no Do card -> ${out}`);
+  } else {
+    const p = plan(shortlist, account);
+    console.log(`do card: ${p.picked.length} quests in ${p.used} of ${p.cap} min, $${p.capital} of $${p.walletCap} tied up, ${p.skipped.length} left for next week -> ${out}`);
+  }
 }

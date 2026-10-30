@@ -1,7 +1,7 @@
 // The weekly Do card: fills Leif's minutes, ending-soon first, keeps all quests inside one wallet cap, marks his clicks.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { doCard, plan } from './do-card.mjs';
+import { doCard, plan, safeTaskText } from './do-card.mjs';
 
 const NOW = Date.parse('2026-11-02T00:00:00Z');
 const task = (text, onX = false, onChain = false, done = false) => ({ text, onX, onChain, done });
@@ -45,9 +45,28 @@ test('the card gives the exact URL, marks X clicks and on-chain signatures as hi
   assert.match(card, /Visit the docs page \(already done\)/);
   assert.match(card, /Do one of:\n   - Swap \$10 \(on-chain: sign only this exact transaction\)\n   - Hold \$10 for a week \(on-chain: sign only this exact transaction\)/);
   assert.match(card, /Other L2 \/ Bridge week \(about 12 min\): the \$25 wallet cap is already in use/);
-  assert.match(card, /Refuse any approval, Permit or unlimited allowance/);
+  assert.match(card, /Refuse any unlimited allowance, blind Permit or setApprovalForAll/);
 });
 
 test('an empty week says so plainly', () => {
   assert.match(doCard({ passed: [] }, {}, new Date(NOW)), /Nothing clears the gate this week/);
+});
+
+// 30 Oct 2026, the adversarial review: a recorded flag (or any kill-rule stop) left the Do card building as
+// usual, because nothing read the ledger. The card now refuses to list quests while the desk is stopped.
+test('a kill-rule stop produces no Do card, only the stop notice', () => {
+  const card = doCard(shortlist(), { weeklyMinutesCap: 60, walletCapUsd: 100 }, new Date(NOW), { kill: 'STOP_FLAG: Bot activity detected' });
+  assert.match(card, /stopped by its own kill rule: STOP_FLAG: Bot activity detected/);
+  assert.doesNotMatch(card, /app\.galxe\.com/, 'no quest is listed while the desk is stopped');
+  assert.match(card, /critic panel/);
+});
+
+// A link in untrusted task text to anywhere but app.galxe.com is removed from the card.
+test('task text cannot smuggle a non-Galxe link onto the card', () => {
+  assert.equal(safeTaskText('Claim at https://galxe-claim.app/drain now'), 'Claim at [external link removed — open only app.galxe.com] now');
+  assert.equal(safeTaskText('Verify on https://app.galxe.com/quest/x'), 'Verify on https://app.galxe.com/quest/x');
+  const evil = () => ({ passed: [{ id: 'E', space: 'S', url: 'https://app.galxe.com/quest/a/E', ev: 5, minutes: 3, endsAt: '2026-11-20', capitalUsd: 0, tasks: [{ relation: 'ALL', items: [task('Go to https://airdrop-galxe.one/claim')] }] }] });
+  const card = doCard(evil(), { weeklyMinutesCap: 60, walletCapUsd: 100 }, new Date(NOW));
+  assert.doesNotMatch(card, /airdrop-galxe\.one/);
+  assert.match(card, /external link removed/);
 });

@@ -67,6 +67,10 @@ test('validate refuses unknown actions, missing ids and a win without its deadli
   assert.throws(() => validate({ ts: 'yesterday', quest: 'A', action: 'entered' }), /ISO date/);
   assert.throws(() => validate({ ts: '2026-11-01T00:00:00Z', quest: 'A', action: 'won' }), /claim deadline/);
   assert.throws(() => validate({ ts: '2026-11-01T00:00:00Z', quest: 'A', action: 'won' }), /CLAIMING\.md/);
+  // 30 Oct 2026, the adversarial review: a non-date deadline (or a bare `--deadline` that args() turns into
+  // "true") used to be stored and then read as due for ever, never OVERDUE. It must be a real date.
+  assert.throws(() => validate({ ts: '2026-11-01T00:00:00Z', quest: 'A', action: 'won', deadline: 'soon' }), /deadline as a date/);
+  assert.throws(() => validate({ ts: '2026-11-01T00:00:00Z', quest: 'A', action: 'won', deadline: 'true' }), /deadline as a date/);
   assert.ok(validate({ ts: '2026-11-01T00:00:00Z', quest: 'A', action: 'won', deadline: '2026-11-16' }));
 });
 

@@ -58,6 +58,16 @@ const refusals = [
   ['holdings recorded as text', (c) => { c.requirements.holdings = 'some NFT'; }, /INELIGIBLE: holdings unknown/],
   ['participants unknown', (c) => { delete c.participants; }, /LOW_EV: participants unknown/],
   ['minutes unknown', (c) => { delete c.minutes; }, /TOO_SLOW: minutes unknown/],
+  // 30 Oct 2026, the adversarial review: a cost or window written as the string "unknown" used to make net EV
+  // NaN, and `NaN < threshold` is false, so the quest passed with no reasons. Non-numeric now fails closed.
+  ['claim fee written as "unknown"', (c) => { c.reward.claimFeeUsd = 'unknown'; }, /CLAIM_PATH_UNKNOWN: fee/],
+  ['claim window written as "unknown"', (c) => { c.reward.claimWindowDays = 'unknown'; }, /CLAIM_PATH_UNKNOWN: window/],
+  ['claim gas written as "unknown"', (c) => { c.reward.gasUsd = 'unknown'; }, /CLAIM_PATH_UNKNOWN: claim gas/],
+  ['task gas written as "unknown"', (c) => { c.taskGasUsd = 'unknown'; }, /TASK_COST_UNKNOWN: task gas/],
+  // A requirement the gate does not model cannot be checked, so it is unmet, not ignored.
+  ['a requirement the gate does not model', (c) => { c.requirements.galxePlus = 3; }, /INELIGIBLE: requirement galxePlus not understood/],
+  // A non-http scheme on a matching hostname used to pass the hostname check; it is refused now.
+  ['a non-http scheme', (c) => { c.url = 'ftp://app.galxe.com/quest/x'; }, /LOOKALIKE_URL: ftp not http/],
 ];
 
 for (const [name, mutate, re] of refusals) {
@@ -84,6 +94,40 @@ test('expectedValue applies the haircut only to unlaunched or vesting tokens', (
   assert.equal(expectedValue(launched).net, 10);
   assert.equal(expectedValue(vesting).net, 5);
   assert.equal(expectedValue({ participants: 1, reward: { split: 'fcfs', prizeUsd: 5, slotsLeft: 0 } }).net, 0);
+});
+
+test('the haircut applies unless a token is explicitly launched: unknown, absent and the string "false" all keep it', () => {
+  const base = (tl) => ({ participants: 99, reward: { split: 'even', poolUsd: 1000, tokenLaunched: tl, claimFeeUsd: 0 } });
+  assert.equal(expectedValue(base(true)).net, 10, 'explicitly launched: full value');
+  assert.equal(expectedValue(base(false)).net, 5, 'explicitly not launched: haircut');
+  assert.equal(expectedValue(base('unknown')).net, 5, 'unknown launch: haircut (passed at full value before the fix)');
+  assert.equal(expectedValue(base(undefined)).net, 5, 'absent launch: haircut (passed at full value before the fix)');
+  assert.equal(expectedValue(base('false')).net, 5, 'the string "false": haircut (passed at full value before the fix)');
+});
+
+test('expectedValue returns null, not a NaN that reads as cheap, when a cost is non-numeric', () => {
+  // cashVerdict also refuses this, but expectedValue is called directly too and must not hand back NaN.
+  assert.equal(expectedValue({ participants: 1, reward: { split: 'even', poolUsd: 100, tokenLaunched: true, claimFeeUsd: 'unknown' } }), null);
+});
+
+test('a raffle values one entry at most at one prize, even when winners outnumber entrants', () => {
+  // 10 winners and one entrant (us): n = 2, winners/n = 5, but one entry can win only one prize.
+  const c = { participants: 1, reward: { split: 'raffle', prizeUsd: 20, winners: 10, tokenLaunched: true, claimFeeUsd: 0 } };
+  assert.equal(expectedValue(c).net, 20); // was 20 x 10 / 2 = 100 before the fix
+});
+
+test('a cost or window written as "unknown" is refused, never valued as NaN that slips past the threshold', () => {
+  const c = good(); c.reward.claimFeeUsd = 'unknown';
+  const r = gate(c, account, NOW);
+  assert.equal(r.pass, false, r.reasons.join('; '));
+  assert.ok(r.reasons.includes('CLAIM_PATH_UNKNOWN: fee'), r.reasons.join('; '));
+});
+
+test('an on-chain wording the word list once missed ("supply") still forces capital and gas to be recorded', () => {
+  const c = official();
+  c.credentialGroups[0].conditions.push({ expression: 'Supply 10 USDC to the lending pool' });
+  const r = gate(c, acct2, NOW2);
+  assert.ok(r.reasons.includes('TASK_COST_UNKNOWN: on-chain task without capital and gas recorded'), r.reasons.join('; '));
 });
 
 test('rank skips metadata objects such as the scout\'s _sourcesChecked', () => {

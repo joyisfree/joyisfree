@@ -20,9 +20,10 @@ make sure we **claim prizes**, not enter randoms and get rewarded worthless thin
    `npm run desk:check` says so), and a Prize Gate that refuses every quest whose prize is not real, open, eligible,
    claimable and worth the minutes, and refuses anything it cannot verify. It makes a small game precise, and it is
    reusable.
-5. The run: 90 days, by hand, 10 minutes a day, in the desk's own Brave profile with a throwaway wallet of at most
-   $25, a ledger of minutes, fees and realised dollars, and kill rules. Decided by Leif on 28 Oct: Path 2, an existing
-   aged personal X account (never the studio's), and the Galxe domains allowed in the cloud environment.
+5. The run: about 90 days, by hand, one weekly pass of roughly 30 minutes (not a daily chore — the irreducible part
+   is human, but the cadence is weekly), in the desk's own Brave profile with a throwaway wallet of at most $25, a
+   ledger of minutes, fees and realised dollars, and kill rules. Decided by Leif on 28 Oct: Path 2, an existing aged
+   personal X account (never the studio's), and the Galxe domains allowed in the cloud environment.
 
 ## The team
 
@@ -30,8 +31,9 @@ make sure we **claim prizes**, not enter randoms and get rewarded worthless thin
 |---|---|---|
 | `galxe-rules-counsel` | Knowledge and Support, legal | The rulebook; allowed, eligible, claimable; rule changes |
 | `galxe-prize-analyst` | Data | Values every prize; runs the Prize Gate; the weekly shortlist |
-| `galxe-quest-scout` | Ecosystem and BD | Finds candidates across Galxe Explore and the research feeds |
-| `galxe-security-guardian` | The security team | Verifies links, Spaces, chains; wallet cap and signature rules; veto |
+| `galxe-quest-scout` | Ecosystem and BD | Writes the candidates file from `galxe-reader`'s notes (holds no web tools itself) |
+| `galxe-reader` | — (read-only researcher) | Reads the feeds, quest pages and docs; no write tools, none of Leif's connectors |
+| `galxe-security-guardian` | The security team | Verifies links, Spaces, chains; wallet cap and signature rules; veto (read-only, no memory) |
 | `crypto-desk-lead`, `web3-growth-lead`, `crypto-risk-officer` | The critic panel | Day 30, 60, 90 verdicts on the ledger |
 
 The existing roster (Scout, Guardian, Verifier, Builder, Error Scholar, Explore) is reused as is. At most three run at
@@ -58,7 +60,9 @@ npm run desk:rank -- --candidates galxe-desk/candidates.json --account galxe-des
 npm run desk:status       # entered, won, claimed, realised, $/hour, claims due, OVERDUE, kill rule
 npm run desk:ledger -- add --quest ID --action entered --minutes 8 --fee 0.08
 npm run desk:crawl        # fetch every official page (needs the hosts reachable)
-npm run desk:check        # is the rulebook complete: listed = fetched = read, missing 0
+npm run desk:check        # is the rulebook complete: listed = fetched = read, missing 0, zero unconfirmed, files present
+npm run desk:card -- --shortlist galxe-desk/shortlist.json   # the weekly Do card (refuses to list quests while a flag stands)
+npm run desk:mutate       # remove each guard in turn and prove a test goes red (48 of 48)
 ```
 
 ## What is Leif's, and only this
@@ -66,3 +70,9 @@ npm run desk:check        # is the rulebook complete: listed = fetched = read, m
 The sign-ins inside the desk's Brave profile (the aged personal X account, the Galxe account) and the wallet he
 creates and funds to at most $25. Passport and Score only if a shortlisted quest requires one, at $5 and his yes.
 Everything else is Claude's.
+
+Before the first run, two things are checked with Leif, because the setup assumes a clean start (one account, one
+wallet, one device): whether he **already has a Galxe account**, and whether the aged X account is **already bound to
+one**. A pre-existing account or binding changes the plan — the desk never silently creates a second account or
+rebinds an account, since multi-account patterns are the top cause of restrictions (RULES §A3) and unbinding loses
+the rewards claimed through the old binding (RULES §A7).
