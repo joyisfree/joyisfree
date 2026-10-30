@@ -4,7 +4,6 @@
     "Update the facts as they change (X account age grows by itself; Score and Passport only with Leif's yes).",
     "Everything below is a placeholder until the accounts exist (plan section 8, item 2).",
     "questMinutesCap: the longest single quest the gate accepts. weeklyMinutesCap: the one weekly pass the Do card fills.",
-    "voyage: the evidence floor and odds for points that can become the airdrop (plan section 10).",
     "country: AU, inferred from the studio notes (the usage week resets at midnight Sydney); confirm. kycOk: false until Leif decides on a project KYC."
   ],
   "xAgeMonths": 0,
@@ -30,11 +29,5 @@
     "day30MinRealisedUsd": 10,
     "minNetUsdPerHour": 15,
     "horizonDays": 90
-  },
-  "voyage": {
-    "minFundingUsd": 10000000,
-    "pLaunch": 0.5,
-    "haircut": 0.5,
-    "minUsd": 10
   }
 }

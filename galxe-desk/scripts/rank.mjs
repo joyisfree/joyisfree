@@ -3,10 +3,10 @@
 // path is known, the page is genuine, any on-chain task fits the wallet, the expected value clears the bar and it fits
 // the week. Everything else is refused with the reason written down. Unknown counts as unmet: the gate fails closed.
 //
-// Two lanes:
-//   cash   - token, stablecoin or ETH prizes valued per participant (pool / participants, raffle odds), claimable now.
-//   voyage - points, credentials or OATs that only count when the project itself has said they feed a token it has
-//            confirmed but not launched (the Linea Voyage pattern). Tracked as positions, never as cash.
+// Points, OATs, credentials and Galxe Gold are refused as worthless unless the project has published a dated
+// conversion (tokens per point and a price); then they are valued like any other prize. A separate lane for
+// pre-token points was designed on 30 Oct 2026 and dropped on the evidence: Linea published its 2,000 LXP rule a
+// week before launch, about two years after its Galxe campaign, so no rule-based lane could have entered in time.
 //
 //   node galxe-desk/scripts/rank.mjs --candidates galxe-desk/candidates.json \
 //        --account galxe-desk/account.json --out galxe-desk/shortlist.md
@@ -19,7 +19,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 export const WORTHLESS_TYPES = new Set(['oat', 'points', 'gg', 'xp', 'badge', 'nft-no-floor', 'whitelist', 'role', 'none', 'credential']);
-export const POSITION_TYPES = new Set(['points', 'oat', 'credential']); // may carry pre-token value with Voyage evidence
 export const GENUINE_HOSTS = new Set(['app.galxe.com']); // quests live only here; the marketing site is not a quest page
 export const SPLITS = new Set(['even', 'raffle', 'luck', 'fcfs']);
 const ONCHAIN = /\b(swap|bridge|hold|holding|stake|staking|deposit|mint|trade|liquidity|lend|borrow|buy)\b/i;
@@ -169,7 +168,7 @@ export function questReasons(c, account, now = Date.now()) {
   return reasons;
 }
 
-/** Cash lane: is this reward real, claimable, worth it, and not a speed game? */
+/** Is this reward real, claimable, worth it, and not a speed game? */
 export function cashVerdict(o, c, account) {
   const reasons = [];
   const r = o.reward || {};
@@ -206,43 +205,21 @@ export function cashVerdict(o, c, account) {
   return { reasons, value: ev?.net ?? null, gross: ev?.gross ?? null };
 }
 
-/** Voyage lane: points, credentials or OATs count only with the project's own evidence that they feed an unlaunched token. */
-export function voyageVerdict(o, c, account) {
-  const v = c.voyage || {};
-  const cfg = { minFundingUsd: 10_000_000, pLaunch: 0.5, haircut: 0.5, minUsd: 10, ...(account.voyage || {}) };
-  const reasons = [];
-  if (o.reward?.eligible === false) reasons.push('INELIGIBLE: the official eligibility check says this address cannot claim');
-  if (v.officialSpace !== true || !spaceVerified(c)) reasons.push("VOYAGE_EVIDENCE: not the project's own verified Space");
-  if (!isUrl(v.tokenConfirmedUrl)) reasons.push('VOYAGE_EVIDENCE: token not confirmed by the project');
-  if (v.tokenLaunched !== false) reasons.push(v.tokenLaunched === true ? 'VOYAGE_EVIDENCE: token already launched, value it as cash' : 'VOYAGE_EVIDENCE: launch status unknown');
-  if (!isUrl(v.pointsCountUrl)) reasons.push('VOYAGE_EVIDENCE: no project statement that these points count');
-  if (!(Number(v.fundingUsd) >= cfg.minFundingUsd) || !isUrl(v.fundingSourceUrl)) reasons.push(`VOYAGE_EVIDENCE: funding under $${cfg.minFundingUsd / 1e6}M or unsourced`);
-  if (v.threshold == null) reasons.push('VOYAGE_EVIDENCE: threshold unknown');
-  if (v.reachable !== true) reasons.push('VOYAGE_EVIDENCE: threshold not shown reachable at the weekly pace');
-  if (!v.cutoff || Number.isNaN(Date.parse(v.cutoff))) reasons.push('VOYAGE_EVIDENCE: cut-off date unknown');
-  if (!(Number(v.estimateUsd) > 0) || !isUrl(v.estimateBasisUrl)) reasons.push('VOYAGE_EVIDENCE: no estimate with a sourced basis');
-  const value = Number(v.estimateUsd) > 0 ? Number(v.estimateUsd) * cfg.pLaunch * cfg.haircut : null;
-  if (value != null && value < cfg.minUsd) reasons.push(`LOW_EV: position $${value.toFixed(2)} < $${cfg.minUsd.toFixed(2)}`);
-  return { reasons, value, gross: Number(v.estimateUsd) || null };
-}
-
-function claimBy(c, o, lane) {
-  if (lane === 'voyage') return c.voyage?.cutoff ?? null;
+function claimBy(c, o) {
   const end = toMs(c.endTime);
   const w = Number(o?.reward?.claimWindowDays);
   return Number.isFinite(end) && Number.isFinite(w) ? new Date(end + w * DAY).toISOString().slice(0, 10) : null;
 }
 
-/** Run one candidate through the gate. Returns the verdict, the lane, the best option and what the Do card needs. */
+/** Run one candidate through the gate. Returns the verdict, the best option and what the Do card needs. */
 export function gate(c, account, now = Date.now()) {
   const quest = questReasons(c, account, now);
   const evals = rewardOptions(c).map((o) => {
-    const lane = POSITION_TYPES.has(String(o.reward.type).toLowerCase()) && c.voyage ? 'voyage' : 'cash';
-    const v = lane === 'voyage' ? voyageVerdict(o, c, account) : cashVerdict(o, c, account);
-    return { ...o, lane, ...v };
+    const v = cashVerdict(o, c, account);
+    return { ...o, ...v };
   });
   const passing = evals.filter((e) => e.reasons.length === 0)
-    .sort((a, b) => (a.lane === b.lane ? b.value - a.value : a.lane === 'cash' ? -1 : 1));
+    .sort((a, b) => b.value - a.value);
   const best = quest.length === 0 ? passing[0] ?? null : null;
   const reasons = [...quest];
   if (!best) {
@@ -253,10 +230,12 @@ export function gate(c, account, now = Date.now()) {
   const shown = best ?? evals[0] ?? null;
   return {
     id: c.id, name: c.name ?? null, space: spaceName(c), url: c.url,
-    pass: reasons.length === 0 && !!best, lane: best?.lane ?? null, option: best?.label ?? null, reasons,
+    pass: reasons.length === 0 && !!best, option: best?.label ?? null, reasons,
     ev: shown?.value ?? null, evGross: shown?.gross ?? null,
     minutes: Number.isFinite(Number(c.minutes)) ? Number(c.minutes) : null,
-    claimBy: best ? claimBy(c, best, best.lane) : null, tasks: tasksOf(c),
+    claimBy: best ? claimBy(c, best) : null, tasks: tasksOf(c),
+    endsAt: Number.isFinite(toMs(c.endTime)) ? new Date(toMs(c.endTime)).toISOString().slice(0, 10) : null,
+    capitalUsd: Number.isFinite(Number(c.capitalUsd)) ? Number(c.capitalUsd) : 0,
   };
 }
 
@@ -269,24 +248,20 @@ export function rank(candidates, account, now = Date.now()) {
   const quests = candidates.filter(isCandidate);
   const skipped = candidates.length - quests.length;
   const results = quests.map((c) => gate(c, account, now));
-  const passed = results.filter((x) => x.pass && x.lane === 'cash').sort((a, b) => b.ev - a.ev);
-  const voyage = results.filter((x) => x.pass && x.lane === 'voyage').sort((a, b) => b.ev - a.ev);
+  const passed = results.filter((x) => x.pass).sort((a, b) => b.ev - a.ev);
   const refused = results.filter((x) => !x.pass);
   const byReason = {};
   // Quests per reason (a quest refused for three claim-path gaps counts once under CLAIM_PATH_UNKNOWN).
   for (const x of refused) for (const k of new Set(x.reasons.map((r) => r.replace(/^\[[^\]]*\]\s*/, '').split(':')[0]))) byReason[k] = (byReason[k] || 0) + 1;
-  return { passed, voyage, refused, results, skipped, byReason };
+  return { passed, refused, results, skipped, byReason };
 }
 
-export function toMarkdown({ passed, voyage = [], refused, byReason = {} }, when = new Date()) {
+export function toMarkdown({ passed, refused, byReason = {} }, when = new Date()) {
   const lines = [`# Shortlist, ${when.toISOString().slice(0, 10)}`, ''];
-  lines.push(`Entered only if listed under **Do** or **Voyage**. ${passed.length} cash, ${voyage.length} voyage, ${refused.length} refused.`, '');
-  lines.push('## Do: cash prizes', '');
-  if (passed.length === 0) lines.push('_No cash prize clears the gate this week. That is a result, not a failure._', '');
+  lines.push(`Entered only if listed under **Do**. ${passed.length} pass, ${refused.length} refused.`, '');
+  lines.push('## Do: real prizes, claimable', '');
+  if (passed.length === 0) lines.push('_Nothing clears the gate this week. That is a result, not a failure._', '');
   for (const x of passed) lines.push(`- **${x.space} / ${x.id}**: EV $${x.ev.toFixed(2)} net ($${x.evGross.toFixed(2)} gross), ${x.option}, claim by ${x.claimBy ?? 'unknown'}. ${x.url}`);
-  lines.push('', '## Voyage: points that can become the airdrop (positions, not cash)', '');
-  if (voyage.length === 0) lines.push('_No points campaign has the evidence this week._', '');
-  for (const x of voyage) lines.push(`- **${x.space} / ${x.id}**: position worth $${x.ev.toFixed(2)} after odds and haircut, cut-off ${x.claimBy}. ${x.url}`);
   lines.push('', '## Refused, and why', '');
   const counts = Object.entries(byReason).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(', ');
   if (counts) lines.push(`By reason: ${counts}.`, '');
@@ -309,6 +284,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const result = rank(candidates, account);
   writeFileSync(out, toMarkdown(result));
   writeFileSync(out.replace(/\.md$/, '.json'), JSON.stringify(result, null, 2));
-  console.log(`read ${candidates.length} (${result.skipped} metadata), ${result.passed.length} cash, ${result.voyage.length} voyage, ${result.refused.length} refused -> ${out}`);
+  console.log(`read ${candidates.length} (${result.skipped} metadata), ${result.passed.length} pass, ${result.refused.length} refused -> ${out}`);
   console.log(`refused by reason: ${JSON.stringify(result.byReason)}`);
 }
