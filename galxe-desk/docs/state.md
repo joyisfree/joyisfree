@@ -5,7 +5,7 @@
 - **Done (second pass, 30 Oct, "Try again" against Leif's standard):** gate on Galxe's official quest shape (best eligible reward per quest, on-chain capital and gas, speed games, excluded countries, project KYC, published point conversions); weekly Do card (ending-soon first, one shared $25 wallet cap); 75 tests, 27 of 27 guards bite; six legal points confirmed word for word; data-path rule from the Terms; the pre-token "Voyage" lane built, cross-checked by the panel, and dropped on the Linea backtest.
 - **Live scouting (30 Oct):** 0 verifiable quests from about 160 searches; StarPhone flagged as a likely scam (docs/scouting-2026-10-30.md).
 - **Official read (30 Oct, stopped before synthesis at Leif's word):** 270 findings in rulebook/read-2026-10-30.json, 137 docs quotes re-found by two checkers; 59 of 126 listed pages read.
-- **Not yet proven:** the full crawl and any live shortlist (hosts still refused on 30 Oct); RULES.md still has 30 unconfirmed lines.
+- **Not yet proven:** the full crawl and any live shortlist (hosts still refused on 30 Oct); RULES.md has 29 and CLAIMING.md 3 unconfirmed lines (npm run desk:check).
 - **Next:**
   1. Fold read-2026-10-30.json into RULES.md and CLAIMING.md; `npm run desk:check` counts what is left.
   2. When the hosts answer: `npm run desk:crawl`, the full read, then a manual live run (official API token or a normal browser read) and the first real Do card.
