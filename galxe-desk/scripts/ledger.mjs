@@ -6,15 +6,18 @@
 //   node galxe-desk/scripts/ledger.mjs add --quest GCPnQtZ2uL --action won --amount 16.5 --deadline 2026-11-12   # the deadline comes from CLAIMING.md section 2
 //   node galxe-desk/scripts/ledger.mjs add --quest GCPnQtZ2uL --action claimed --fee 0.08 --gas 0.02 --minutes 2
 //   node galxe-desk/scripts/ledger.mjs add --quest GCPnQtZ2uL --action realised --amount 14.9
+//   node galxe-desk/scripts/ledger.mjs add --quest GCvoyage1 --space PreToken --action position --lane voyage --points 300 --threshold 2000 --cutoff 2027-03-31 --minutes 8
 //   node galxe-desk/scripts/ledger.mjs status
 //
-// Actions: entered, won, claimed, realised, lost, flag. "flag" is any bot notice, odd approval prompt
-// or restriction, and it stops the desk by itself.
+// Actions: entered, won, claimed, realised, lost, flag, position. "flag" is any bot notice, odd approval prompt
+// or restriction, and it stops the desk by itself. "position" records Voyage-lane points against the project's
+// threshold and cut-off; positions are not money until the tokens are sold and recorded as "realised".
+// Entries carry a lane (cash by default, or voyage): the hourly kill rule judges the cash lane only.
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-export const ACTIONS = new Set(['entered', 'won', 'claimed', 'realised', 'lost', 'flag']);
+export const ACTIONS = new Set(['entered', 'won', 'claimed', 'realised', 'lost', 'flag', 'position']);
 const DAY = 86_400_000;
 
 export function parseLedger(text) {
@@ -30,6 +33,11 @@ export function validate(e) {
   if (!e.quest) throw new Error('quest id required');
   if (!e.ts || Number.isNaN(Date.parse(e.ts))) throw new Error('ts must be an ISO date');
   if (e.action === 'won' && !e.deadline) throw new Error('a win needs its claim deadline (the windows are in rulebook/CLAIMING.md section 2)');
+  if (e.action === 'position') {
+    if (!Number.isFinite(Number(e.points)) || e.points == null) throw new Error('a position needs its points');
+    if (!e.cutoff || Number.isNaN(Date.parse(e.cutoff))) throw new Error("a position needs the project's cut-off date");
+  }
+  if (e.lane != null && !['cash', 'voyage'].includes(e.lane)) throw new Error('lane must be cash or voyage');
   return e;
 }
 
@@ -40,11 +48,19 @@ export function status(entries, rules = {}, now = Date.now()) {
   const sum = (f) => entries.reduce((a, e) => a + (Number(f(e)) || 0), 0);
   const count = (a) => entries.filter((e) => e.action === a).length;
 
+  const isVoyage = (e) => e.lane === 'voyage' || e.action === 'position';
   const realisedUsd = sum((e) => (e.action === 'realised' ? e.amount : 0));
   const costsUsd = sum((e) => (Number(e.fee) || 0) + (Number(e.gas) || 0));
-  const minutes = sum((e) => e.minutes);
+  const minutes = sum((e) => (isVoyage(e) ? 0 : e.minutes)); // the cash lane's minutes; the hourly rule judges these
+  const voyageMinutes = sum((e) => (isVoyage(e) ? e.minutes : 0));
   const netUsd = realisedUsd - costsUsd;
   const perHour = minutes > 0 ? netUsd / (minutes / 60) : null;
+
+  // Voyage positions: the latest entry per quest; open while its cut-off has not passed.
+  const latest = new Map();
+  for (const e of entries.filter((x) => x.action === 'position')) latest.set(e.quest, e);
+  const positions = [...latest.values()].map((e) => ({ quest: e.quest, points: Number(e.points), threshold: e.threshold ?? null, cutoff: e.cutoff, open: Date.parse(e.cutoff) >= now }));
+  const openPositions = positions.filter((p) => p.open).length;
 
   const claimedQuests = new Set(entries.filter((e) => e.action === 'claimed').map((e) => e.quest));
   const due = [];
@@ -63,8 +79,13 @@ export function status(entries, rules = {}, now = Date.now()) {
 
   let kill = 'CONTINUE';
   if (flags.length) kill = `STOP_FLAG: ${flags[flags.length - 1].note || 'flag recorded'}`;
-  else if (day >= 30 && realisedUsd < day30Min) kill = `STOP_DAY30: realised $${realisedUsd.toFixed(2)} < $${day30Min}`;
-  else if (day >= 60 && (perHour == null || perHour < minPerHour)) kill = `STOP_RATE: $${perHour == null ? '0.00' : perHour.toFixed(2)}/h < $${minPerHour}/h`;
+  else if (day >= 30 && realisedUsd < day30Min) {
+    const why = `realised ${realisedUsd.toFixed(2)} < ${day30Min}`;
+    kill = openPositions ? `CASH_STOP_DAY30: ${why}; ${openPositions} voyage position(s) continue while the panel finds their evidence still holds` : `STOP_DAY30: ${why}`;
+  } else if (day >= 60 && (perHour == null || perHour < minPerHour)) {
+    const why = `${perHour == null ? '0.00' : perHour.toFixed(2)}/h < ${minPerHour}/h`;
+    kill = openPositions ? `CASH_STOP_RATE: ${why}; ${openPositions} voyage position(s) continue while the panel finds their evidence still holds` : `STOP_RATE: ${why}`;
+  }
   else if (day > horizon) kill = `HORIZON: day ${day} > ${horizon}, decide on the numbers`;
 
   return {
@@ -77,6 +98,9 @@ export function status(entries, rules = {}, now = Date.now()) {
     costsUsd,
     netUsd,
     minutes,
+    voyageMinutes,
+    positions,
+    openPositions,
     netUsdPerHour: perHour,
     due,
     overdue,
@@ -92,6 +116,7 @@ export function format(s) {
     `Realised $${s.realisedUsd.toFixed(2)}, costs $${s.costsUsd.toFixed(2)}, net $${s.netUsd.toFixed(2)} over ${s.minutes} min = ${ph}`,
     `Claims due: ${s.due.length ? s.due.map((d) => `${d.quest} by ${d.deadline}`).join(', ') : 'none'}`,
     `OVERDUE: ${s.overdue.length ? s.overdue.map((d) => `${d.quest} (was ${d.deadline})`).join(', ') : 'none'}`,
+    `Voyage positions: ${s.positions && s.positions.length ? s.positions.map((p) => `${p.quest} ${p.points}/${p.threshold ?? '?'} pts by ${p.cutoff}${p.open ? '' : ' (closed)'}`).join(', ') : 'none'}${s.voyageMinutes ? ` (${s.voyageMinutes} min)` : ''}`,
     `Kill rule: ${s.kill}`,
   ];
   return lines.join('\n');
@@ -126,6 +151,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       amount: o.amount ? Number(o.amount) : undefined,
       deadline: o.deadline,
       note: o.note,
+      lane: o.lane,
+      points: o.points != null ? Number(o.points) : undefined,
+      threshold: o.threshold != null ? (o.threshold === 'none' ? 'none' : Number(o.threshold)) : undefined,
+      cutoff: o.cutoff,
     });
     mkdirSync(dirname(file), { recursive: true });
     appendFileSync(file, JSON.stringify(e) + '\n');
@@ -137,7 +166,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log(format(s));
     if (s.kill !== 'CONTINUE') process.exitCode = 2;
   } else {
-    console.error('usage: ledger.mjs add --quest ID --action entered|won|claimed|realised|lost|flag [--minutes N --fee USD --gas USD --amount USD --deadline DATE --note TEXT]\n       ledger.mjs status [--file PATH --account PATH]');
+    console.error('usage: ledger.mjs add --quest ID --action entered|won|claimed|realised|lost|flag|position [--lane cash|voyage --minutes N --fee USD --gas USD --amount USD --deadline DATE --points N --threshold N --cutoff DATE --note TEXT]\n       ledger.mjs status [--file PATH --account PATH]');
     process.exitCode = 1;
   }
 }

@@ -114,3 +114,21 @@ test('check reports no index as incomplete, and counts read pages', () => {
   assert.equal(counts(rows).unread, 1);
   assert.ok(existsSync(join(dir, 'INDEX.md')));
 });
+
+// ---------- 30 Oct 2026: "read thoroughly" is complete only when no rule line is still waiting on the live page ----------
+import { unconfirmedMarkers } from './rulebook-crawl.mjs';
+
+test('unconfirmed rule lines are counted, the legend is not, and check stays incomplete until they are zero', () => {
+  const text = 'Legend: DIGEST = search summary, RECHECK = confirm live\n§A1 a rule. help/1, DIGEST.\n§A2 another, RECHECK.\n§A3 confirmed. VERIFIED.\n';
+  assert.equal(unconfirmedMarkers(text), 2);
+  const dir = mkdtempSync(join(tmpdir(), 'rulebook-markers-'));
+  writeFileSync(join(dir, 'INDEX.md'), renderIndex([{ url: 'https://a/1', status: 'FETCHED', sha: 'a'.repeat(64), read: 'yes', note: 'n' }], 'now'));
+  writeFileSync(join(dir, 'RULES.md'), text);
+  writeFileSync(join(dir, 'CLAIMING.md'), 'Legend: RECHECK\nwindow 15 days (RECHECK)\n');
+  const c = check(dir);
+  assert.equal(c.unconfirmed, 3);
+  assert.equal(c.complete, false, 'every page read is not enough while rule lines wait on the live page');
+  writeFileSync(join(dir, 'RULES.md'), 'Legend: DIGEST\n§A3 confirmed. VERIFIED.\n');
+  writeFileSync(join(dir, 'CLAIMING.md'), 'Legend: RECHECK\nwindow 15 days, help/9645630, fetched 2026-11-02.\n');
+  assert.equal(check(dir).complete, true);
+});

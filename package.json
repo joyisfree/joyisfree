@@ -13,6 +13,7 @@
     "desk:ledger": "node galxe-desk/scripts/ledger.mjs",
     "desk:status": "node galxe-desk/scripts/ledger.mjs status",
     "desk:crawl": "node galxe-desk/scripts/rulebook-crawl.mjs",
-    "desk:check": "node galxe-desk/scripts/rulebook-crawl.mjs --check"
+    "desk:check": "node galxe-desk/scripts/rulebook-crawl.mjs --check",
+    "desk:card": "node galxe-desk/scripts/do-card.mjs"
   }
 }

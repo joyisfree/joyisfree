@@ -201,11 +201,22 @@ export async function crawl(sources, { outDir, timeoutMs = 20_000, retries = 3, 
   return { rows, changes, counts: counts(rows) };
 }
 
+/** Rule lines still waiting on the live page: lines carrying DIGEST (a search summary) or RECHECK. The legend is excluded. */
+export function unconfirmedMarkers(text) {
+  return text.split('\n').filter((l) => !/^\s*Legend:/.test(l) && /\b(DIGEST|RECHECK)\b/.test(l)).length;
+}
+
 export function check(outDir) {
+  let unconfirmed = 0;
+  for (const f of ['RULES.md', 'CLAIMING.md']) {
+    const p = join(outDir, f);
+    if (existsSync(p)) unconfirmed += unconfirmedMarkers(readFileSync(p, 'utf8'));
+  }
   const idx = join(outDir, 'INDEX.md');
-  if (!existsSync(idx)) return { listed: 0, fetched: 0, missing: 0, read: 0, unread: 0, complete: false, note: 'no INDEX.md yet: the crawl has not run' };
+  if (!existsSync(idx)) return { listed: 0, fetched: 0, missing: 0, read: 0, unread: 0, unconfirmed, complete: false, note: 'no INDEX.md yet: the crawl has not run' };
   const rows = [...parseIndex(readFileSync(idx, 'utf8')).entries()].map(([url, r]) => ({ url, ...r }));
-  return counts(rows);
+  const c = counts(rows);
+  return { ...c, unconfirmed, complete: c.complete && unconfirmed === 0 };
 }
 
 function pagesOnDisk(outDir) {
@@ -221,7 +232,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const outDir = process.argv.includes('--out') ? process.argv[process.argv.indexOf('--out') + 1] : 'galxe-desk/rulebook';
   if (process.argv.includes('--check')) {
     const c = check(outDir);
-    console.log(`listed ${c.listed}, fetched ${c.fetched}, read ${c.read}, unread ${c.unread}, missing ${c.missing}, pages on disk ${pagesOnDisk(outDir)}${c.note ? ` (${c.note})` : ''}`);
+    console.log(`listed ${c.listed}, fetched ${c.fetched}, read ${c.read}, unread ${c.unread}, missing ${c.missing}, pages on disk ${pagesOnDisk(outDir)}, rule lines still unconfirmed ${c.unconfirmed}${c.note ? ` (${c.note})` : ''}`);
     process.exitCode = c.complete ? 0 : 1;
   } else {
     const sources = JSON.parse(readFileSync(join(outDir, 'sources.json'), 'utf8'));

@@ -104,3 +104,199 @@ test('rank sorts the shortlist by expected value and renders both lists', () => 
   assert.match(md, /## Do[\s\S]*B[\s\S]*AIW3[\s\S]*## Refused/);
   assert.match(md, /BAD: WORTHLESS_REWARD: oat/);
 });
+
+// ---------- 30 Oct 2026: Galxe's official quest shape, task costs, speed games, the Voyage lane ----------
+import { mapRewardType, toMs, tasksOf, rewardOptions } from './rank.mjs';
+
+const NOW2 = Date.parse('2026-11-02T00:00:00Z');
+const secs = (iso) => Math.floor(Date.parse(iso) / 1000);
+
+// The official API shape (docs.galxe.com/galxe-integration/api-reference/quest): unix-second times, participantsCount,
+// a space object and credential groups whose rewards carry rewardType and rewardCount.
+const official = () => ({
+  id: 'GCofficial1', name: 'Season 2 week 1', type: 'Airdrop', status: 'Active',
+  startTime: secs('2026-10-28T00:00:00Z'), endTime: secs('2026-11-10T00:00:00Z'), cap: 0, participantsCount: 1999,
+  gasType: 'Gasless', chain: 'GRAVITY', space: { id: '123', name: 'Funded L2', verified: true },
+  url: 'https://app.galxe.com/quest/fundedl2/GCofficial1', requirements: { xAgeMonths: 3 },
+  project: { fundingUsd: 25000000, tokenStatus: 'live' }, minutes: 6,
+  credentialGroups: [{
+    conditionRelation: 'ALL',
+    conditions: [{ expression: 'Follow @FundedL2 on X' }, { expression: 'Visit the docs page' }],
+    rewards: [
+      { rewardType: 'OAT', rewardCount: 1 },
+      { rewardType: 'TOKEN', rewardCount: 20, value: { split: 'raffle', prizeUsd: 500, winners: 20, tokenLaunched: true, claimFeeUsd: 0.08, gasUsd: 0.02, claimChain: 'Gravity L1', claimWindowDays: 15 } },
+    ],
+  }],
+});
+const acct2 = { ...account, walletCapUsd: 25 };
+
+test('official shape: unix seconds, participantsCount and a space object are read; the token raffle wins over the OAT', () => {
+  const r = gate(official(), acct2, NOW2);
+  assert.equal(r.pass, true, r.reasons.join('; '));
+  assert.equal(r.lane, 'cash');
+  assert.equal(r.option, 'token');
+  assert.equal(r.space, 'Funded L2');
+  assert.ok(Math.abs(r.ev - (500 * 20 / 2000 - 0.1)) < 1e-9, `ev ${r.ev}`);
+  assert.equal(r.claimBy, '2026-11-25');
+  assert.equal(r.tasks[0].items[0].onX, true);
+  assert.equal(r.tasks[0].items[1].onX, false);
+});
+
+test('a multi-reward quest that fails is refused with every option labelled', () => {
+  const c = official(); c.participantsCount = 99999;
+  const r = gate(c, acct2, NOW2);
+  assert.equal(r.pass, false);
+  assert.ok(r.reasons.includes('[oat] WORTHLESS_REWARD: oat'), r.reasons.join('; '));
+  assert.ok(r.reasons.some((x) => /^\[token\] LOW_EV/.test(x)), r.reasons.join('; '));
+});
+
+test('refuses: the official eligibility check says this address cannot claim', () => {
+  const c = official(); c.credentialGroups[0].rewards[1].eligible = false;
+  const r = gate(c, acct2, NOW2);
+  assert.equal(r.pass, false);
+  assert.ok(r.reasons.some((x) => /\[token\] INELIGIBLE: the official eligibility check/.test(x)), r.reasons.join('; '));
+});
+
+test('refuses: an on-chain task with its capital and gas unrecorded', () => {
+  const c = official(); c.credentialGroups[0].conditions.push({ expression: 'Bridge at least $10 to Funded L2' });
+  const r = gate(c, acct2, NOW2);
+  assert.ok(r.reasons.includes('TASK_COST_UNKNOWN: on-chain task without capital and gas recorded'), r.reasons.join('; '));
+});
+
+test('refuses: capital above the wallet cap; within the cap, task gas counts against value', () => {
+  const c = official(); c.credentialGroups[0].conditions.push({ expression: 'Bridge at least $10 to Funded L2' });
+  c.capitalUsd = 100; c.taskGasUsd = 0.5;
+  assert.ok(gate(c, acct2, NOW2).reasons.includes('CAPITAL_ABOVE_CAP: $100 > $25 wallet cap'));
+  c.capitalUsd = 10;
+  const r = gate(c, acct2, NOW2);
+  assert.equal(r.pass, true, r.reasons.join('; '));
+  assert.ok(Math.abs(r.ev - (5 - 0.1 - 0.5)) < 1e-9, `ev ${r.ev}`);
+  assert.equal(r.tasks[0].items[2].onChain, true);
+});
+
+const fcfs = (slots, slotsLeft) => { const c = official(); c.credentialGroups[0].rewards = [{ rewardType: 'TOKEN', value: { split: 'fcfs', prizeUsd: 5, slots, slotsLeft, tokenLaunched: true, claimFeeUsd: 0.08, gasUsd: 0, claimChain: 'Gravity L1', claimWindowDays: 15 } }]; return c; };
+test('refuses first-come-first-served when slots are unknown or under half are left; passes when plenty are left', () => {
+  assert.ok(gate(fcfs(undefined, undefined), acct2, NOW2).reasons.includes('SPEED_GAME: first-come-first-served with unknown slots'));
+  assert.ok(gate(fcfs(100, 10), acct2, NOW2).reasons.includes('SPEED_GAME: 10 of 100 slots left'));
+  const ok = gate(fcfs(100, 80), acct2, NOW2);
+  assert.equal(ok.pass, true, ok.reasons.join('; '));
+  assert.ok(Math.abs(ok.ev - 4.92) < 1e-9);
+});
+
+test('toMs reads unix seconds, milliseconds and ISO; mapRewardType maps the official names', () => {
+  assert.equal(toMs(1730000000), 1730000000000);
+  assert.equal(toMs('1730000000'), 1730000000000);
+  assert.equal(toMs(1730000000000), 1730000000000);
+  assert.equal(toMs('2026-11-02T00:00:00Z'), NOW2);
+  assert.ok(Number.isNaN(toMs(undefined)));
+  assert.deepEqual(['OAT', 'TOKEN', 'Airdrop', 'LOYALTYPOINTS', 'MysteryBox', 'CUSTOM', 'weird'].map(mapRewardType), ['oat', 'token', 'token', 'points', 'mysterybox', 'whitelist', 'weird']);
+  assert.equal(rewardOptions({}).length, 0);
+});
+
+// The Linea Voyage pattern: the project's own verified Space, a confirmed but unlaunched token, the project's
+// statement that these points count, real funding, a reachable threshold and a sourced estimate.
+const voyageQuest = () => ({
+  id: 'GCvoyage1', name: 'Voyage week 3', type: 'Points', status: 'Active',
+  startTime: '2026-10-28T00:00:00Z', endTime: '2026-11-30T00:00:00Z', cap: 0, participantsCount: 250000,
+  space: { id: '999', name: 'PreToken L2', verified: true }, url: 'https://app.galxe.com/quest/pretokenl2/GCvoyage1',
+  requirements: {}, project: { fundingUsd: 50000000, tokenStatus: 'confirmed' }, minutes: 8,
+  credentialGroups: [{ conditionRelation: 'ANY', conditions: [{ expression: 'Repost the announcement on X' }, { expression: 'Complete the quiz' }], rewards: [{ rewardType: 'POINTS', rewardCount: 100 }] }],
+  voyage: {
+    officialSpace: true, tokenConfirmedUrl: 'https://pretoken.example/blog/token', tokenLaunched: false,
+    pointsCountUrl: 'https://pretoken.example/blog/points-count', fundingUsd: 50000000, fundingSourceUrl: 'https://defillama.com/raises/pretoken',
+    threshold: 2000, reachable: true, cutoff: '2027-03-31', estimateUsd: 186, estimateBasisUrl: 'https://monad.xyz/blog/the-mon-airdrop-results',
+  },
+});
+
+test('voyage: the Linea-shaped campaign passes into the Voyage lane, never the cash list', () => {
+  const r = gate(voyageQuest(), acct2, NOW2);
+  assert.equal(r.pass, true, r.reasons.join('; '));
+  assert.equal(r.lane, 'voyage');
+  assert.equal(r.ev, 186 * 0.5 * 0.5);
+  assert.equal(r.claimBy, '2027-03-31');
+  assert.equal(r.tasks[0].relation, 'ANY');
+  assert.equal(r.tasks[0].items[0].onX, true);
+});
+
+test('voyage: points with no evidence at all stay worthless', () => {
+  const c = voyageQuest(); delete c.voyage;
+  assert.ok(gate(c, acct2, NOW2).reasons.includes('WORTHLESS_REWARD: points'));
+});
+
+const voyageRefusals = [
+  ['not the official Space', (c) => { c.voyage.officialSpace = false; }, /not the project's own verified Space/],
+  ['Space unverified', (c) => { c.space.verified = false; }, /not the project's own verified Space/],
+  ['token unconfirmed', (c) => { delete c.voyage.tokenConfirmedUrl; }, /token not confirmed/],
+  ['token already launched', (c) => { c.voyage.tokenLaunched = true; }, /already launched, value it as cash/],
+  ['launch status unknown', (c) => { delete c.voyage.tokenLaunched; }, /launch status unknown/],
+  ['no statement that points count', (c) => { delete c.voyage.pointsCountUrl; }, /no project statement that these points count/],
+  ['funding under the floor', (c) => { c.voyage.fundingUsd = 5000000; }, /funding under \$10M or unsourced/],
+  ['funding unsourced', (c) => { delete c.voyage.fundingSourceUrl; }, /funding under \$10M or unsourced/],
+  ['threshold unknown', (c) => { delete c.voyage.threshold; }, /threshold unknown/],
+  ['threshold not reachable', (c) => { c.voyage.reachable = false; }, /not shown reachable/],
+  ['cut-off unknown', (c) => { delete c.voyage.cutoff; }, /cut-off date unknown/],
+  ['no estimate', (c) => { delete c.voyage.estimateUsd; }, /no estimate with a sourced basis/],
+  ['estimate unsourced', (c) => { c.voyage.estimateBasisUrl = 'my guess'; }, /no estimate with a sourced basis/],
+  ['position too small', (c) => { c.voyage.estimateUsd = 20; }, /LOW_EV: position \$5\.00 < \$10\.00/],
+];
+for (const [name, mutate, re] of voyageRefusals) {
+  test(`voyage refuses: ${name}`, () => {
+    const c = voyageQuest(); mutate(c);
+    const r = gate(c, acct2, NOW2);
+    assert.equal(r.pass, false, `should refuse ${name}`);
+    assert.ok(r.reasons.some((x) => re.test(x)), `expected ${re} in ${JSON.stringify(r.reasons)}`);
+  });
+}
+
+test('rank keeps the lanes apart and counts refusals by reason', () => {
+  const oat = official(); oat.id = 'OATONLY'; oat.credentialGroups[0].rewards = [{ rewardType: 'OAT' }];
+  const r = rank([official(), voyageQuest(), oat], acct2, NOW2);
+  assert.deepEqual(r.passed.map((x) => x.id), ['GCofficial1']);
+  assert.deepEqual(r.voyage.map((x) => x.id), ['GCvoyage1']);
+  assert.deepEqual(r.refused.map((x) => x.id), ['OATONLY']);
+  assert.equal(r.byReason.WORTHLESS_REWARD, 1);
+  const md = toMarkdown(r, new Date(NOW2));
+  assert.match(md, /## Do: cash prizes[\s\S]*GCofficial1[\s\S]*## Voyage[\s\S]*GCvoyage1[\s\S]*## Refused/);
+  assert.match(md, /By reason: WORTHLESS_REWARD 1\./);
+});
+
+test('the refusal summary counts quests, not reason lines: three claim-path gaps in one quest count once', () => {
+  const c = official(); c.id = 'NOPATH';
+  c.credentialGroups[0].rewards = [{ rewardType: 'TOKEN', value: { split: 'even', poolUsd: 100000, tokenLaunched: true } }];
+  const r = rank([c], acct2, NOW2);
+  assert.equal(r.refused.length, 1);
+  assert.equal(r.refused[0].reasons.filter((x) => x.startsWith('CLAIM_PATH_UNKNOWN')).length, 3);
+  assert.equal(r.byReason.CLAIM_PATH_UNKNOWN, 1);
+});
+
+const jurisdiction = [
+  ['our country excluded', (c, a) => { c.requirements.excludedCountries = ['US', 'au']; a.country = 'AU'; }, /INELIGIBLE: AU is excluded/],
+  ['exclusions present but our country unrecorded', (c, a) => { c.requirements.excludedCountries = ['US']; delete a.country; }, /our country is not recorded/],
+  ['exclusions recorded as text', (c, a) => { c.requirements.excludedCountries = 'US and others'; a.country = 'AU'; }, /excludedCountries unknown/],
+  ['project KYC needed', (c, a) => { c.requirements.kyc = true; a.kycOk = false; }, /project KYC needed/],
+  ['KYC recorded as unknown', (c, a) => { c.requirements.kyc = 'maybe'; }, /kyc unknown/],
+];
+for (const [name, mutate, re] of jurisdiction) {
+  test(`refuses: ${name}`, () => {
+    const c = official(); const a = { ...acct2 }; mutate(c, a);
+    const r = gate(c, a, NOW2);
+    assert.equal(r.pass, false);
+    assert.ok(r.reasons.some((x) => re.test(x)), `expected ${re} in ${JSON.stringify(r.reasons)}`);
+  });
+}
+test('a country not on the exclusion list passes', () => {
+  const c = official(); c.requirements.excludedCountries = ['US', 'CN'];
+  assert.equal(gate(c, { ...acct2, country: 'AU' }, NOW2).pass, true);
+});
+
+test('points with a published, dated conversion are valued as points x tokens per point x price, and can pass', () => {
+  const c = official(); c.id = 'CONV';
+  c.credentialGroups[0].rewards = [{ rewardType: 'LOYALTYPOINTS', rewardCount: 500, value: {
+    pointsConversion: { ratio: 0.02, tokenPriceUsd: 0.5, date: '2026-10-20', source: 'https://app.galxe.com/space/x/announcement' },
+    tokenLaunched: true, claimFeeUsd: 0.08, gasUsd: 0.02, claimChain: 'Gravity L1', claimWindowDays: 15 } }];
+  const r = gate(c, acct2, NOW2);
+  assert.equal(r.pass, true, r.reasons.join('; '));
+  assert.ok(Math.abs(r.ev - (500 * 0.02 * 0.5 - 0.1)) < 1e-9, `ev ${r.ev}`);
+  c.credentialGroups[0].rewards[0].value.pointsConversion.tokenPriceUsd = undefined;
+  assert.ok(gate(c, acct2, NOW2).reasons.includes('LOW_EV: cannot value (split, pool or prize missing)'), 'an unpriced conversion cannot be valued');
+});

@@ -1,6 +1,6 @@
 # Claiming: how a prize actually lands, and every way it does not
 
-First pass, 28 Oct 2026, from RULES.md. Confirm each line against the live page when the crawl runs (RECHECK).
+Legend: first pass 28 Oct 2026, from RULES.md. Every line marked RECHECK is confirmed against the live page when the crawl runs, and `npm run desk:check` counts the ones left.
 
 ## 1. Before a minute is spent: can this address claim?
 

@@ -1,8 +1,8 @@
 # Galxe rules, as they bind one person with one account
 
-First pass, 28 Oct 2026. **Source kinds:** VERIFIED = official text read through the Context7 index of docs.galxe.com;
-DIGEST = search summary of an official page, to be confirmed against the live page (RECHECK). Help-centre articles
-are cited as help/ID = https://help.galxe.com/en/articles/ID and carry no visible date.
+First pass 28 Oct 2026; second pass 30 Oct.
+
+Legend: VERIFIED = official text read through the Context7 index of docs.galxe.com. DIGEST = a search summary of an official page, still to be confirmed against the live page (RECHECK). Help-centre articles are cited as help/ID = https://help.galxe.com/en/articles/ID and carry no visible date. `npm run desk:check` counts every line below that still carries DIGEST or RECHECK, and the rulebook is complete only at zero.
 
 ## A. What is allowed, and what gets an account restricted
 
@@ -21,22 +21,30 @@ device fingerprints and geographic inconsistencies also trigger review. Restrict
 a new wallet does not clear one. One appeal, through live chat, with new evidence; repeat appeals and alternative
 accounts do not help. Gigapot restrictions cannot be lifted. help/11925374, help/11424533, DIGEST.
 
-§A4. **Terms of Service, prohibited uses (VERIFIED):** "using unauthorized third-party applications"; using the
-services "under a different identifier if access was disabled"; leasing access to a wallet; sharing passwords or
-private keys; "Abusive Activity" (unreasonable or disproportionate load, interfering with systems or data,
-unauthorised access, using third-party accounts, transferring access rights). The list is "representative, not
-exhaustive" and can change without notice. https://docs.galxe.com/about/legal/terms-of-service (effective
-10 Sep 2025 per DIGEST).
+§A4. **Terms of Service, prohibited uses (VERIFIED, wording confirmed 30 Oct 2026):** you will not "use or access the
+Services through any unauthorized third party application(s) or client(s)", or share "your email password, private
+keys or other sensitive information with any other person"; you will not use the Services "under a different wallet
+address, email address or other identifier if we've disabled access for you"; you will not "buy, sell, rent or lease
+access to your Digital Wallet"; plus "Abusive Activity" (unreasonable or disproportionate load, interfering with
+systems or data, unauthorised access, using third-party accounts, transferring access rights). The list is
+"representative, not exhaustive" and the Terms "may be updated by us at any time with or without notice".
+https://docs.galxe.com/about/legal/terms-of-service. The effective date (10 Sep 2025) is DIGEST until the live page is read.
+**For the desk:** the first clause rules out any bot, browser agent or scraper of the app's own private API acting as a
+client. Live quest data comes through Galxe's official API with a token Galxe issues, or through a normal browser
+read; never through a script posing as the app.
 
 §A5. **Suspension and termination (VERIFIED):** Galxe may suspend, restrict, deactivate or cancel accounts on legal
 orders, suspected prohibited uses, pending investigations, partner limits, "circumvention of Galxe's controls",
-"abuse of promotions", or breach of the Terms; some decisions rest on "confidential criteria". Galxe may "limit the
-number of User Accounts or Digital Wallets you may link" and may block by location, IP or device. Same source;
-limits and blocking per DIGEST.
+"abuse of promotions", or breach of the Terms; some decisions rest on "confidential criteria". Galxe reserves the
+right "to block access to the Services, in whole or in part, from any geographic location, IP addresses and unique
+device identifiers or to any user who we believe is in breach of these Terms" (VERIFIED, 30 Oct). The power to "limit
+the number of User Accounts or Digital Wallets you may link" is DIGEST until the live page is read.
 
-§A6. **Eligibility decisions are final.** Earndrop participation acknowledges that "eligibility determinations are
-final"; the Terms call eligibility determinations, including algorithmic scoring, final and non-appealable.
-https://docs.galxe.com/about/legal (VERIFIED for Earndrop); Terms per DIGEST.
+§A6. **Earndrop eligibility is final, and unclaimed tokens can be lost (VERIFIED, 30 Oct).** Terms §10: participation
+acknowledges that "Eligibility determinations (including algorithmic scoring) are final and non-appealable", that
+"Claims may incur gas fees", that Galxe disclaims responsibility for "Project decisions to modify/cancel Earndrops or
+eligibility rules", and that "Unclaimed tokens may be forfeited per project terms". The user alone bears "tax
+compliance, wallet security, and regulatory research". https://docs.galxe.com/about/legal/terms-of-service
 
 §A7. **One social account binds to one Galxe account; the primary wallet cannot be changed or deleted; unbinding a
 social account or secondary wallet loses the rewards claimed through it.** help/9733866, DIGEST.
@@ -45,7 +53,18 @@ social account or secondary wallet loses the rewards claimed through it.** help/
 documents; 30-day wait after revoking. help/9424571, DIGEST; Sumsub flow VERIFIED at
 https://docs.galxe.com/about/legal/passport-terms-of-use.
 
-§A9. **Using a VPN to evade access controls is barred.** Terms, DIGEST.
+§A9. **No VPN to get round location rules (VERIFIED, 30 Oct).** Terms §2: "You must not use any software or
+networking techniques, including use of a Virtual Private Network (VPN) to modify your internet protocol address or
+otherwise circumvent or attempt to circumvent this prohibition" (services are limited by jurisdiction and sanctions),
+and Galxe may "monitor where our Services are accessed from". https://docs.galxe.com/about/legal/terms-of-service
+
+§A10. **Quest participation is governed by X's rules too, and Galxe can switch anything off (VERIFIED, 30 Oct).** Terms
+§9: participation in Quest "is expressly governed by Galxe's Terms, Privacy Policy, Campaign-Specific Rules, Galxe
+Passport terms, and third-party platform policies (e.g., Twitter, Discord, Snapshot)". Galxe disclaims "Accuracy of
+Quest completion tracking" and the "Value, functionality, or redemption of rewards", and "reserves the right to suspend
+Quests, APIs, or user access without notice". Business+ terms (§7) disclaim liability for "Bot analysis false
+positives": an honest account that gets flagged has no claim against Galxe, which is why the desk keeps every action
+human-paced and logged. https://docs.galxe.com/about/legal/terms-of-service
 
 **What the desk takes from A:** one person, one account, one device, no scripts on the account, no VPN, no bursts,
 human pace. The automation Leif first described (an account that "enters everything") is §A1 by definition and loses
@@ -119,7 +138,8 @@ https://docs.galxe.com/galxe-integration/guides/quests and /api-reference/quest.
 §C3. **API access (VERIFIED):** a token is generated in the dashboard under Settings → Server API, bound to the
 wallet that generates it, which must be owner or admin of a Space; free tier 10 QPS and 100,000 requests a month on
 the /query endpoint; quest listing is per Space (`spaceId`). Whether `quest(id)` answers for quests outside one's own
-Space is not stated: RECHECK by trying it with a free Joyisfree Space. https://docs.galxe.com/galxe-integration/getting-started/authentication,
+Space is not stated: RECHECK by trying it with a free Space owned by the desk wallet, named neutrally, never the brand.
+Under §A4 this token, or a normal browser read, is the only compliant source of live quest data. https://docs.galxe.com/galxe-integration/getting-started/authentication,
 /resources/rate-limits, /api-reference/quest. No official feed (RSS, email, Telegram, push) for new quests exists. DIGEST.
 
 ## D. The platform's state (why dates matter)

@@ -69,3 +69,32 @@ test('validate refuses unknown actions, missing ids and a win without its deadli
   assert.throws(() => validate({ ts: '2026-11-01T00:00:00Z', quest: 'A', action: 'won' }), /CLAIMING\.md/);
   assert.ok(validate({ ts: '2026-11-01T00:00:00Z', quest: 'A', action: 'won', deadline: '2026-11-16' }));
 });
+
+// ---------- 30 Oct 2026: Voyage positions and per-lane kill rules ----------
+const position = (quest, points, cutoff, ts = '2026-11-03T09:00:00Z') => ({ ts, quest, action: 'position', lane: 'voyage', points, threshold: 2000, cutoff, minutes: 8 });
+
+test('a position needs its points and the cut-off; the lane must be cash or voyage', () => {
+  assert.throws(() => validate({ ts: '2026-11-01T00:00:00Z', quest: 'V', action: 'position', cutoff: '2027-03-31' }), /needs its points/);
+  assert.throws(() => validate({ ts: '2026-11-01T00:00:00Z', quest: 'V', action: 'position', points: 100 }), /cut-off/);
+  assert.throws(() => validate({ ts: '2026-11-01T00:00:00Z', quest: 'V', action: 'entered', lane: 'moon' }), /lane must be cash or voyage/);
+  assert.ok(validate(position('V', 100, '2027-03-31')));
+});
+
+test('positions are tracked apart: the latest per quest, voyage minutes kept out of the hourly rule', () => {
+  const entries = [...fixture, position('V', 100, '2027-03-31'), position('V', 300, '2027-03-31', '2026-11-10T09:00:00Z')];
+  const s = status(entries, rules, day(10));
+  assert.equal(s.minutes, 16, 'cash minutes unchanged by voyage work');
+  assert.equal(s.voyageMinutes, 16);
+  assert.deepEqual(s.positions.map((p) => [p.quest, p.points, p.open]), [['V', 300, true]]);
+  assert.equal(s.openPositions, 1);
+  assert.match(format(s), /Voyage positions: V 300\/2000 pts by 2027-03-31 \(16 min\)/);
+});
+
+test('kill rule: with open positions, a thin cash lane stops the cash lane only', () => {
+  const thin = fixture.filter((e) => e.action !== 'realised');
+  assert.match(status([...thin, position('V', 300, '2027-03-31')], rules, day(30)).kill, /^CASH_STOP_DAY30: .*1 voyage position\(s\) continue/);
+  assert.match(status([...thin, position('V', 300, '2026-11-05')], rules, day(30)).kill, /^STOP_DAY30/, 'a closed position does not keep the desk open');
+  const slow = [...fixture, { ts: '2026-11-20T09:00:00Z', quest: 'D', action: 'entered', minutes: 600, fee: 0 }];
+  assert.match(status([...slow, position('V', 300, '2027-03-31')], rules, day(60)).kill, /^CASH_STOP_RATE/);
+  assert.match(status([...slow, position('V', 300, '2027-03-31'), { ts: '2026-11-21T09:00:00Z', quest: 'V', action: 'flag', note: 'odd prompt' }], rules, day(60)).kill, /^STOP_FLAG: odd prompt/);
+});
