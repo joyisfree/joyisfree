@@ -1,0 +1,2530 @@
+{
+ "date": "2026-10-30",
+ "note": "Read stopped before its synthesis step at Leif's request. Docs quotes are marked verified only where both independent checkers re-found them in the official docs index; help-centre items are search summaries, not the page.",
+ "coverage": {
+  "read:docs:About Galxe: overview, G token, DAO, community pro": {
+   "read": 5,
+   "notRead": 0
+  },
+  "read:docs:About: Legal (terms, passport terms, privacy)": {
+   "read": 4,
+   "notRead": 0
+  },
+  "read:docs:Quest: introduction and smart contract": {
+   "read": 2,
+   "notRead": 0
+  },
+  "read:docs:Quest: GraphQL API reference": {
+   "read": 3,
+   "notRead": 0
+  },
+  "read:docs:Quest: Credential API (advanced credential configu": {
+   "read": 10,
+   "notRead": 1
+  },
+  "read:docs:Galxe ID: introduction, Passport, OAuth integratio": {
+   "read": 3,
+   "notRead": 1
+  },
+  "read:docs:Identity Protocol: introduction, concepts, roles,": {
+   "read": 4,
+   "notRead": 0
+  },
+  "read:docs:Galxe Integration: introduction and getting starte": {
+   "read": 4,
+   "notRead": 0
+  },
+  "read:docs:Identity Protocol: specification, tutorials, resou": {
+   "read": 8,
+   "notRead": 0
+  },
+  "read:docs:Galxe Integration: guides": {
+   "read": 5,
+   "notRead": 0
+  },
+  "read:docs:Galxe Integration: API reference (quest, space, cr": {
+   "read": 4,
+   "notRead": 0
+  },
+  "read:docs:Loyalty Points (onchain points on Gravity)": {
+   "read": 4,
+   "notRead": 0
+  },
+  "read:docs:Galxe Integration: resources (rate limits, error h": {
+   "read": 3,
+   "notRead": 1
+  },
+  "read:help:Claiming rewards, claim fees, raffle, first-come-f": {
+   "read": 0,
+   "notRead": 6
+  },
+  "read:help:XP, loyalty levels, Space loyalty points and recur": {
+   "read": 0,
+   "notRead": 3
+  },
+  "read:help:Galxe Gold, Rewards Hub, Mystery Box, Gigapot and": {
+   "read": 0,
+   "notRead": 6
+  },
+  "read:help:Earndrop and campaign programmes": {
+   "read": 0,
+   "notRead": 5
+  },
+  "read:help:Participation requirements, Galxe Passport, Galxe": {
+   "read": 0,
+   "notRead": 3
+  },
+  "read:help:Bot identification, sybil prevention, Business+ an": {
+   "read": 0,
+   "notRead": 4
+  },
+  "read:help:Galxe account, wallets, social binding and X, Disc": {
+   "read": 0,
+   "notRead": 12
+  },
+  "read:help:Gravity L1, G, G staking, Smart Balance and Galxe+": {
+   "read": 0,
+   "notRead": 6
+  },
+  "read:help:Security, phishing, scams and checking a Space": {
+   "read": 0,
+   "notRead": 11
+  },
+  "read:help:Creators: quest building, Spaces and quest types": {
+   "read": 0,
+   "notRead": 8
+  }
+ },
+ "findings": [
+  {
+   "url": "https://docs.galxe.com/about/introduction",
+   "quote": "A secure identity solution powered by Galxe Identity Protocol that simplifies online verification, enabling trusted, privacy-preserving web3 exploration.",
+   "meaning": "Passport is Galxe's own identity-verification product, built to verify you while keeping your data private.",
+   "topic": "Passport",
+   "kind": "verbatim",
+   "cluster": "About Galxe: overview, G token, DAO, community pro",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/introduction",
+   "quote": "An AI copilot that offers comprehensive support in project research, quantitative trading, and identifying lucrative opportunities across the web3 ecosystem. Instantly accessible through browser extension and GPTs, [Alva](https://alva.xyz) ensures access to crucial information, anytime and anywhere.",
+   "meaning": "Galxe lists its own AI copilot, Alva (alva.xyz, via browser extension and GPTs), as a research and opportunity-finding aid; nothing here says it may complete quests or act on your account.",
+   "topic": "AI tools and apps (Alva)",
+   "kind": "verbatim",
+   "cluster": "About Galxe: overview, G token, DAO, community pro",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/gal/tokenomics",
+   "quote": "Update on July 4, 2024: With the approval of proposals [GP-25](https://dao.galxe.com/#/proposal/0x8d3f386c3b0cb9fa170d4231c65f18bd45ea1402b90a70116e1101c22e62ed01) and [GP-30](https://dao.galxe.com/#/proposal/0xa6af134cd0522ea34d2d6485a557fafdb01cc7f32726f409bd8f399cc2af2514) by the Galxe DAO community, [Galxe (GAL)](https://coinmarketcap.com/currencies/galxe/) token will be upgraded to [Gravity (G)](https://coinmarketcap.com/currencies/gravity-token/), unifying and streamlining the experience across both ecosystems.",
+   "meaning": "After DAO votes GP-25 and GP-30 (update dated July 4, 2024), the old GAL token is upgraded to Gravity (G).",
+   "topic": "G token (GAL to G upgrade)",
+   "kind": "verbatim",
+   "cluster": "About Galxe: overview, G token, DAO, community pro",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/gal/tokenomics",
+   "quote": "This upgrade focuses on enhancing the user journey, integrating the token seamlessly across our Layer 1 and the Galxe ecosystem, and simplifying the ticker for easier recognition. G will serve as the universal token, providing utility in governance, transactions, and incentives across the entire ecosystem.",
+   "meaning": "G is meant to be the single token for governance, transactions and incentives across Galxe and Galxe's own Layer 1 chain.",
+   "topic": "G token utility and Gravity Layer 1",
+   "kind": "verbatim",
+   "cluster": "About Galxe: overview, G token, DAO, community pro",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/gal/tokenomics",
+   "quote": "Official Portal for Upgrading GAL to G: [https://g.xyz/GAL-G-Portal](https://g.xyz/GAL-G-Portal)",
+   "meaning": "If you still hold GAL, the docs name g.xyz/GAL-G-Portal as the official portal for upgrading it to G.",
+   "topic": "security (official GAL to G portal)",
+   "kind": "verbatim",
+   "cluster": "About Galxe: overview, G token, DAO, community pro",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/gal/dao",
+   "quote": "G DAO is managed by G stakers. G stakers have the ability manage funds held by the Galxe & Gravity Community Treasury.",
+   "meaning": "Galxe governance, including the community treasury, is run by people who stake G.",
+   "topic": "DAO governance (who votes)",
+   "kind": "verbatim",
+   "cluster": "About Galxe: overview, G token, DAO, community pro",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/gal/dao",
+   "quote": "In order for a proposal to pass, it must have over 50% passing votes with endorsement from wallet addresses staking at least 120,000,000 G, with delegation allowed.",
+   "meaning": "You may delegate your staked G's vote; a proposal needs over 50% yes votes backed by wallets staking at least 120 million G (the page sets a lower 12 million G quorum for small or minor proposals).",
+   "topic": "DAO governance (delegation and thresholds)",
+   "kind": "verbatim",
+   "cluster": "About Galxe: overview, G token, DAO, community pro",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/gal/dao",
+   "quote": "To create a Temperature Check for your Proposal, follow the Proposal Template and post on the [DAO Governance category on G DAO Forum](https://dao-forum.galxe.com/c/governance/5).",
+   "meaning": "A proposal starts as a temperature-check post, written to the Proposal Template, in the DAO Governance category of the G DAO forum.",
+   "topic": "DAO governance (proposals)",
+   "kind": "verbatim",
+   "cluster": "About Galxe: overview, G token, DAO, community pro",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/gal/dao",
+   "quote": "Once your proposal has passed the temperature check, you can work with the operation team to schedule a snapshot vote. [The snapshot vote](https://snapshot.org/#/gal.eth) will last for 5 days.",
+   "meaning": "A proposal that passes the forum check goes to a 5-day Snapshot vote at snapshot.org/#/gal.eth, scheduled with Galxe's operation team.",
+   "topic": "DAO governance (vote window)",
+   "kind": "verbatim",
+   "cluster": "About Galxe: overview, G token, DAO, community pro",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/community-programs/galxe-astronaut",
+   "quote": "Introducing the Galxe Astronaut Program \u2014 an exciting and interactive approach to celebrating your participation in the [Galxe Discord community](https://discord.com/invite/galxe). This system will ensure your efforts receive the recognition and rewards they deserve!",
+   "meaning": "The Astronaut Program rewards your participation in Galxe's official Discord, linked here as discord.com/invite/galxe.",
+   "topic": "Astronaut Program (Discord participation)",
+   "kind": "verbatim",
+   "cluster": "About Galxe: overview, G token, DAO, community pro",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/community-programs/galxe-astronaut",
+   "quote": "The Astronaut Program comprises three distinct tiers: Diamond and Platinum, each offering a bespoke array of rewards to elevate every phase of your adventure.",
+   "meaning": "The page says there are three tiers but names only two (Diamond and Platinum), and it does not say what the rewards actually are.",
+   "topic": "Astronaut Program tiers",
+   "kind": "verbatim",
+   "cluster": "About Galxe: overview, G token, DAO, community pro",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/community-programs/galxe-astronaut",
+   "quote": "**Diamond Tier:** Reserved for the ultimate 1% of our stellar explorers, representing the absolute apex of achievement and illuminating the highest reaches of our cosmos.\n* **Platinum Tier:** Encapsulates the exceptional 4% of our dedicated explorers, serving as the vanguard pioneers who drive the momentum of our universe.",
+   "meaning": "Tiers are percentile cuts, Diamond for the top 1% and Platinum for 4% of participants, so your tier depends on how you rank against everyone else.",
+   "topic": "Astronaut Program tiers (percentile cuts)",
+   "kind": "verbatim",
+   "cluster": "About Galxe: overview, G token, DAO, community pro",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/community-programs/galxe-astronaut",
+   "quote": "Your ranking is a composite of your engagements on the Galxe platform and contributions to our community, balanced to ensure equity. This encompasses participation in Galxe events, utilization of paid features, loyalty points, Web3 Score, and Galxe OG NFTs.",
+   "meaning": "Your Astronaut rank is a weighted mix of event participation, use of paid Galxe features, loyalty points, Web3 Score and Galxe OG NFTs.",
+   "topic": "Astronaut Program ranking inputs",
+   "kind": "verbatim",
+   "cluster": "About Galxe: overview, G token, DAO, community pro",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/community-programs/galxe-astronaut",
+   "quote": "Participation in Galxe Space Campaigns - 30%\n* Utilization of Galxe Features (Smart Balance, Passport, Web3 Score) - 25%\n* Loyalty Points - 25%\n* Web3 Score - 20%\n* Participation in OG Campaigns - 5%",
+   "meaning": "The weights are Space campaigns 30%, feature use (Smart Balance, Passport, Web3 Score) 25%, loyalty points 25%, Web3 Score 20% and OG campaigns 5%, which as listed add up to 105%.",
+   "topic": "Astronaut Program ranking weights",
+   "kind": "verbatim",
+   "cluster": "About Galxe: overview, G token, DAO, community pro",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/community-programs/galxe-astronaut",
+   "quote": "Rest assured, your previous contributions, including earlier Galxe event participation and engagements, will be considered and evaluated using your wallet address.",
+   "meaning": "Earlier Galxe activity still counts toward your rank, and it is looked up by wallet address, so it is credited to the wallet that did it.",
+   "topic": "Astronaut Program (wallet-based history)",
+   "kind": "verbatim",
+   "cluster": "About Galxe: overview, G token, DAO, community pro",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/community-programs/galxe-astronaut",
+   "quote": "Explore the Diamond and Platinum campaigns to identify your eligible Cosmic Explorer Rank.",
+   "meaning": "You find out which rank you qualify for by looking at the Diamond and Platinum campaigns on Galxe.",
+   "topic": "Astronaut Program eligibility check",
+   "kind": "verbatim",
+   "cluster": "About Galxe: overview, G token, DAO, community pro",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/community-programs/galxe-contributor",
+   "quote": "**Community & Content**: Create and share content via your own external social media accounts, including the latest updates about Galxe, newly launched features, and various campaigns. Lead the initiative for healthy community discussions, community campaigns, events, and Galxe Forum proposals.",
+   "meaning": "In the Contributor Program's Community & Content faction you post about Galxe from your own social media accounts and help lead discussions, events and forum proposals.",
+   "topic": "Contributor Program (social content on own accounts)",
+   "kind": "verbatim",
+   "cluster": "About Galxe: overview, G token, DAO, community pro",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/community-programs/galxe-contributor",
+   "quote": "With multiple factions, we open up opportunities for contributors to excel in multiple areas, rather than limiting their potential. For example, a Community & Content faction contributor can still contribute to other faction activities!",
+   "meaning": "Contributors are not locked into one faction and can take part in other factions' activities too.",
+   "topic": "Contributor Program factions",
+   "kind": "verbatim",
+   "cluster": "About Galxe: overview, G token, DAO, community pro",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/community-programs/galxe-contributor",
+   "quote": "Have a chance to participate in events hosted by Galxe\n* Receive various rewards and exclusive Galxe swag",
+   "meaning": "Contributor rewards are described only as 'various rewards' and exclusive swag plus a chance at Galxe-hosted events; the returned text gives no amounts, schedule or way to apply.",
+   "topic": "Contributor Program rewards",
+   "kind": "verbatim",
+   "cluster": "About Galxe: overview, G token, DAO, community pro",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/terms-of-service",
+   "quote": "By becoming a Service User, you agree that you will not use the Services to do or undertake any of the following, as determined by Galxe in its sole discretion:",
+   "meaning": "Galxe alone decides whether what you are doing counts as a banned use, so your own reading of the rules is not the final word.",
+   "topic": "restrictions",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/terms-of-service",
+   "quote": "The specific types of use listed below are representative, but not exhaustive, and Galxe reserves the right to update or amend such list in its sole discretion at any time, with or without notice to you. These Prohibited Uses are in addition to the Community Guidelines (discussed below).",
+   "meaning": "The list of banned activities is only a set of examples, Galxe can change it at any time without telling you, and separate Community Guidelines apply on top of it.",
+   "topic": "restrictions",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/terms-of-service",
+   "quote": "If you are uncertain as to whether or not your use of the Services involves a Prohibited Use or have questions about how these requirements apply to you, please contact us at [support@galxe.com](mailto:support@galxe.com).",
+   "meaning": "If you are unsure whether something you plan to do is allowed, Galxe tells you to ask support@galxe.com.",
+   "topic": "restrictions",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/terms-of-service",
+   "quote": "Abusive Activity: Actions which: (i) impose an unreasonable or disproportionately large load on our infrastructure, or detrimentally interfere with, intercept, or expropriate any system, data, or information;",
+   "meaning": "Anything that puts unusually heavy load on Galxe, or interferes with, intercepts or takes its systems or data (for example aggressive automated traffic), is a banned use.",
+   "topic": "automation and bots",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/terms-of-service",
+   "quote": "(iii) attempt to gain unauthorized access to the Services, other Digital Wallets not belonging to you, computer systems or networks connected to the Services, through password mining or any other means;",
+   "meaning": "Trying by any means to get unauthorized access to the service, or to wallets that are not yours, is a banned use.",
+   "topic": "restrictions",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/terms-of-service",
+   "quote": "(iv) use the account of any third party to access or use the Services, except in the case of applications which are specifically authorized by a third party to access such third party's Digital Wallet and information; or (v) transfer your access or rights to use the Services to a third party",
+   "meaning": "Using someone else's account or wallet is banned (the only exception is an app that owner specifically authorized), and so is handing your own access to anyone else without Galxe's express permission.",
+   "topic": "multiple accounts",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/terms-of-service",
+   "quote": "Unlawful Activity: Activity which would violate, or assist in violation of, any law, statute, ordinance or regulation, sanctions programs administered in any of the countries where Galxe conducts business, including but not limited to the U.S. Department of Treasury's Office of Foreign Assets Control (\"OFAC\"), or which would involve proceeds of any unlawful activity.",
+   "meaning": "Using Galxe in a way that breaks any law or sanctions programme, including U.S. OFAC sanctions, is banned.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/terms-of-service",
+   "quote": "Eligibility. To be eligible to use the Services you must be at least 18 years old or of the legal age in the jurisdiction you reside in at the time of using the Services. If you are below the legal age in your jurisdiction, you are prohibited from using the Services.",
+   "meaning": "You must be at least 18, or the legal age where you live, to use Galxe at all.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/terms-of-service",
+   "quote": "Galxe may, at its option and in its sole discretion: (a) suspend or restrict your User Account or Developer Account and/or access to any or all of the Services, and/or (b) deactivate or cancel your User Account or Developer Account and block your access to the Services, if:",
+   "meaning": "Galxe can, at its sole discretion, restrict, suspend or close your user or developer account and block your access for the reasons listed in this section.",
+   "topic": "flags and appeals",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/terms-of-service",
+   "quote": "(ii) we reasonably suspect you of using the Services in connection with a Prohibited Uses;",
+   "meaning": "Reasonable suspicion of a banned use is enough for Galxe to suspend or close your account.",
+   "topic": "flags and appeals",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/terms-of-service",
+   "quote": "(v) you take any action that Galxe deems in its sole discretion as circumventing Galxe's controls, or abusing promotions which Galxe may offer from time to time; or (vi) you breach these Terms.",
+   "meaning": "Anything Galxe decides is getting around its controls or abusing the promotions it runs, or any breach of the Terms, is grounds to suspend or close your account.",
+   "topic": "flags and appeals",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/terms-of-service",
+   "quote": "WE WILL NOT BE RESPONSIBLE OR LIABLE TO YOU FOR ANY LOSS AND TAKE NO RESPONSIBILITY FOR, AND WILL NOT BE LIABLE TO YOU FOR, ANY USE OF ANY DIGITAL ASSETS OR NFT CONTENT, WHETHER IN CONNECTION WITH YOUR DIGITAL WALLET OR OTHERWISE",
+   "meaning": "Galxe accepts no responsibility for any loss involving your digital assets or NFTs, including losses in your own wallet.",
+   "topic": "security advice",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/terms-of-service",
+   "quote": "(A) USER ERROR, SUCH AS FORGOTTEN PASSWORDS, PRIVATE KEYS OR SEED PHRASES, INCORRECTLY CONSTRUCTED TRANSACTIONS OR MISTYPED ADDRESSES; (B) SERVER FAILURE OR DATA LOSS; (C) CORRUPTED WALLET FILES; (D) UNAUTHORIZED ACCESS TO APPLICATIONS; (E) ANY UNAUTHORIZED THIRD PARTY ACTIVITIES, INCLUDING WITHOUT LIMITATION THE USE OF VIRUSES, PHISHING, BRUTEFORCING OR OTHER MEANS OF ATTACK",
+   "meaning": "Galxe will not cover losses from your own mistakes (forgotten passwords, lost keys or seed phrases, wrong transactions, mistyped addresses), server failures, corrupted wallet files, or hacks and phishing.",
+   "topic": "security advice",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/terms-of-service",
+   "quote": "(F) CONNECTING A WALLET ADDRESS THAT DOES NOT SUPPORT THE DIGITAL ASSET(S), IS INCOMPATIBLE WITH THE DIGITAL ASSET, OR OTHERWISE WHERE YOU ARE UNABLE TO ACCESS SUCH DIGITAL ASSETS.",
+   "meaning": "Galxe will not cover a loss caused by connecting a wallet that does not support, or cannot access, the asset you receive, so the wallet must suit the reward's chain and token.",
+   "topic": "rewards claiming",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-terms-of-use",
+   "quote": "GALXE Passport is a Know Your Customer (\u201cKYC\u201d) identity-verification tool that allows users to authenticate their identity and create a shareable Non-Fungible Token to use with other Web3 platforms, and is operated by Star Frameworks Labs Pte. Ltd.",
+   "meaning": "Galxe Passport is an identity (KYC) check that produces a shareable NFT for use on other Web3 platforms, run by Star Frameworks Labs Pte. Ltd.",
+   "topic": "Passport",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-terms-of-use",
+   "quote": "To be eligible to use the Services the jurisdiction in which you access the Service must allow these Services and you must be of the legal age in the jurisdiction you reside in at the time of using the Services.",
+   "meaning": "To use Passport you must be of legal age where you live and must access it from a jurisdiction that allows it.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-terms-of-use",
+   "quote": "Once you create a User Account, you will then need to verify your identity by providing certain information and uploading a picture of themselves and a picture of their passport, driver's license, national insurance card, or other government-issued identification (collectively, \u201cIdentity Documents\u201d). Once your identity has been verified, you will be able to mint the GALXE Passport NFT.",
+   "meaning": "Getting a Passport means connecting a wallet, then uploading a photo of yourself and a government ID, and you can mint the Passport NFT only after the identity check passes.",
+   "topic": "Passport",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-terms-of-use",
+   "quote": "We work with a third party service provider, Sumsub, to verify your identity. You will upload your information, including identity verification information, to Sumsub, who will then conduct the identity verification.",
+   "meaning": "The Passport identity check is run by an outside company, Sumsub, and you upload your documents to them.",
+   "topic": "Passport",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-terms-of-use",
+   "quote": "After you send us the encrypted data, we will keep it safely stored on our servers, and delete all information we collected during the process. At this point, only you can use your password to decrypt and access your identity information.",
+   "meaning": "After verification Galxe keeps only a copy encrypted with your password and deletes the rest, so only your password unlocks your identity data.",
+   "topic": "Passport",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-terms-of-use",
+   "quote": "Creating GALXE Passport NFTs may be subject to fees and other charges (\"Fees\") established from time to time in the sole discretion of GALXE, and/or third-party service providers. On the date of initial publication of these Terms, Fees include service fees established by and payable to GALXE.",
+   "meaning": "Minting a Passport may cost fees set by Galxe or its providers at their discretion, including a service fee paid to Galxe.",
+   "topic": "fees",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-terms-of-use",
+   "quote": "(iv) use the account of any third party to access or use the Services, except in the case of applications which are specifically authorized by a third party to access such third party's User Account and information; or (v) transfer your access or rights to use the Services to a third party",
+   "meaning": "For Passport too, using someone else's account (except through an app they authorized) or handing your access to anyone else is banned.",
+   "topic": "multiple accounts",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-terms-of-use",
+   "quote": "Fraud: Activity which operates to defraud GALXE, any GALXE user(s) or any other person, or provide any false, inaccurate, or misleading information to GALXE or to our third-party service providers.",
+   "meaning": "Giving Galxe or its verification providers any false, inaccurate or misleading information is banned as fraud.",
+   "topic": "restrictions",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-terms-of-use",
+   "quote": "or harvest or otherwise collect information from the Services about others, including without limitation email addresses and password, without proper consent.",
+   "meaning": "Collecting information about other users from the service without their consent is banned.",
+   "topic": "automation and bots",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-terms-of-use",
+   "quote": "(v) you take any action that GALXE deems in its sole discretion as circumventing GALXE's controls, or abusing promotions which GALXE may offer from time to time; or (vi) you breach these Terms.",
+   "meaning": "Anything Galxe decides is getting around its controls or abusing its promotions, or any breach of these Terms, can get your Passport account suspended or closed.",
+   "topic": "flags and appeals",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-terms-of-use",
+   "quote": "GALXE's decision to take certain actions, including limiting access to, suspending, or disassociating your GALXE Passport NFT from the Services, may be based on confidential criteria that are essential to GALXE's risk management and/or security protocols. You agree that GALXE is under no obligation to disclose the details of its risk management and/or security procedures to you.",
+   "meaning": "Galxe can limit your access, suspend you or detach your Passport NFT from the service on confidential risk criteria, and it does not have to tell you the details.",
+   "topic": "flags and appeals",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-terms-of-use",
+   "quote": "If GALXE suspends or closes your account or terminates your use of the Services for any reason, we will provide you with notice of our actions, unless a court order or other legal process prevents or prohibits GALXE from providing you with such notice.",
+   "meaning": "If Galxe suspends or closes your account it says it will notify you, unless a court order or legal process prevents it.",
+   "topic": "flags and appeals",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-terms-of-use",
+   "quote": "WE CANNOT GUARANTEE THE SECURITY OF ANY DATA THAT YOU DISCLOSE ONLINE. YOU ACCEPT THE INHERENT SECURITY RISKS OF PROVIDING INFORMATION AND DEALING ONLINE OVER THE INTERNET AND WILL NOT HOLD US RESPONSIBLE FOR ANY BREACH OF SECURITY UNLESS IT IS DUE TO OUR GROSS NEGLIGENCE.",
+   "meaning": "Galxe does not guarantee the safety of data you submit, and you agree not to hold it responsible for a breach unless it was grossly negligent.",
+   "topic": "security advice",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/privacy-policy",
+   "quote": "Name, contact information and other identifiers: identifiers such as a name, username, account name, X handle, blockchain address, address, phone number, birth date, email address, and online identifier.",
+   "meaning": "Galxe stores your X handle and wallet address alongside identifiers such as your name, username, email address and phone number.",
+   "topic": "X and Discord tasks",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/privacy-policy",
+   "quote": "Blockchain information: your wallet address, on-chain activities, interactions with the Services on the blockchain, and other similar activities.",
+   "meaning": "Galxe records your wallet address and your on-chain activity, including how you interact with it on the blockchain.",
+   "topic": "multiple accounts",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/privacy-policy",
+   "quote": "Device information: internet protocol (IP) address, web browser type, operating system version, phone carrier and manufacturer, application installations, device identifiers, mobile advertising identifiers, and push notification tokens.",
+   "meaning": "Galxe records your IP address, browser, operating system, phone carrier and device identifiers.",
+   "topic": "multiple accounts",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/privacy-policy",
+   "quote": "Location data: location information about a particular individual or device, general location information (for example, your IP address may indicate your more general geographic region). However, this information is not precise geolocation.",
+   "meaning": "Galxe works out your general region from your IP address, though not your precise location.",
+   "topic": "VPN and location",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/privacy-policy",
+   "quote": "Third-party accounts: if you connect your third party accounts to your User Account (such as Twitter, Discord, or GitHub), we will collect certain personal information about you from those third parties.",
+   "meaning": "Connecting X, Discord or GitHub to your Galxe account gives Galxe certain personal information from those accounts.",
+   "topic": "X and Discord tasks",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/privacy-policy",
+   "quote": "Social media: if you choose to link, create, or log in to your User Account with a social media service (e.g., Twitter, Facebook, Instagram, etc.), we collect your permission to access certain information from your profile with that social media service.",
+   "meaning": "Linking or logging in with a social account such as X gives Galxe permission to read certain information from that profile.",
+   "topic": "X and Discord tasks",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/privacy-policy",
+   "quote": "Providing support and services: including to provide our Services, operate our Website, App and online services, create your Web3 Score, update your Galxe ID information, and interact with you on our Services;",
+   "meaning": "Galxe uses the information it collects to create your Web3 Score and keep your Galxe ID up to date.",
+   "topic": "Score",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/privacy-policy",
+   "quote": "Securing and protecting our business: including to protect and secure our business operations, assets, Services, network and information and technology resources; to investigate, prevent, detect and take action regarding fraud, unauthorized access, situations involving potential threats to the rights or safety of any person or third-party, or other unauthorized activities or misconduct.",
+   "meaning": "Galxe uses your data to investigate, detect and act on fraud, unauthorized access and other misconduct.",
+   "topic": "flags and appeals",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/privacy-policy",
+   "quote": "Our lawful basis is your consent to choose to subscribe to any newsletter or marketing (and you can unsubscribe at any time).",
+   "meaning": "Galxe newsletters and marketing are sent only with your consent, and you can unsubscribe at any time.",
+   "topic": "notifications",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/privacy-policy",
+   "quote": "Protect our rights: We may disclose Personal Information where we believe it necessary to respond to claims asserted against us, to enforce or administer our agreements and terms, for fraud prevention, risk assessment, investigation and/or to protect the rights, property or safety of Galxe or our affiliates, partners, clients, customers and/or others.",
+   "meaning": "Galxe may share your personal information with affiliates and partners for fraud prevention, risk assessment, investigations or to enforce its terms.",
+   "topic": "flags and appeals",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/privacy-policy",
+   "quote": "Our Services are restricted for users of legal age and children under the age of 18 are not allowed to use our Services.",
+   "meaning": "Anyone under 18 is not allowed to use Galxe.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/privacy-policy",
+   "quote": "However, we cannot guarantee that unauthorized access, hacking, data loss, or other breaches will never occur. We urge you to take steps to keep your Personal Information safe, such as choosing a strong password and logging out of your User Account and closing your web browser when finished using the Services.",
+   "meaning": "Galxe says breaches can happen and advises a strong password, logging out of your account and closing the browser when you finish.",
+   "topic": "security advice",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-privacy-policy",
+   "quote": "GALXE Passport credential only looks at your GALXE Passport NFT holding in your wallet. GALXE Passport NFT is minted on BNB Chain with this contract address. Participating in these campaigns will not disclose your identity information.",
+   "meaning": "A campaign that requires the Passport credential only checks that your wallet holds the Passport NFT (minted on BNB Chain) and does not reveal your identity.",
+   "topic": "Passport",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-privacy-policy",
+   "quote": "Other partners may use GALXE Passport SBT as a proof-of-human mechanism to prevent sybil attack.",
+   "meaning": "Partner projects can use the Passport soulbound token as proof that you are one real person, to stop sybil attacks (one person acting as many accounts).",
+   "topic": "Passport",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-privacy-policy",
+   "quote": "Because GALXE Passport does NOT store your password, there is no way to recover your password if you lose it. If you lose your password, you can still use your GALXE Passport as a proof-of-human NFT, however, you won't be able to decrypt your Sumsub data to share with other third parties for compliance purposes.",
+   "meaning": "A lost Passport password cannot be recovered, and although the Passport still works as proof-of-human you can no longer decrypt your identity data to share it.",
+   "topic": "Passport",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-privacy-policy",
+   "quote": "Neither Sumsub, nor any other third party, has the capability to connect a user's verification documents to any particular wallet address. Therefore, verifying your information will not allow those third parties to tie any specific wallet address to any identifiable individual and you will remain anonymous.",
+   "meaning": "Sumsub and other third parties cannot link your identity documents to your wallet address, so verifying keeps your wallet anonymous.",
+   "topic": "Passport",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-privacy-policy",
+   "quote": "Please note that use of this third-party service is optional but certain features of the Service may not be available to you unless you provide additional information.",
+   "meaning": "Identity verification is optional, but some features stay locked unless you provide the extra information.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-privacy-policy",
+   "quote": "Third Party Platforms: At your request and only with your authorization, we will disclose your identity token and/or identity verification information you have provided to us, to third- party crypto exchanges, asset management platforms, web3 platforms and applications, defi platforms or other services where a KYC token may be required.",
+   "meaning": "Galxe shares your Passport identity token or verification data with exchanges, Web3 apps or other platforms only when you request and authorize it.",
+   "topic": "third-party apps or clients",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-privacy-policy",
+   "quote": "and the IP address associated with your transactions in the system. The information that we collect automatically may be linked with other Personal Information we have collected.",
+   "meaning": "Galxe logs the IP address tied to your transactions and may link this automatically collected data to the rest of your personal information.",
+   "topic": "VPN and location",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-privacy-policy",
+   "quote": "Please note that you will not be able to opt-out of transactional e-mail communication, such as communication related to your user account activities.",
+   "meaning": "You can switch off promotional emails but not transactional emails about your account activity.",
+   "topic": "notifications",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-privacy-policy",
+   "quote": "You can opt out of receiving push notifications through your device settings. Please note that opting out of receiving push notifications may impact your use of the Services.",
+   "meaning": "You can turn off Galxe push notifications in your device settings, though doing so may affect how the service works for you.",
+   "topic": "notifications",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/about/legal/passport-privacy-policy",
+   "quote": "Our Services are restricted for users at least 18 years old (or of legal age in their jurisdiction) and children under the age of 18 are not allowed to use our Services.",
+   "meaning": "Passport is only for people who are at least 18, or of legal age where they live.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "About: Legal (terms, passport terms, privacy)",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/introduction",
+   "quote": "Through a turnkey, no-code solution, Quest connects projects and applications with millions of users through reward-based loyalty programs.",
+   "meaning": "Each quest is a loyalty reward program that a project sets up with Galxe's no-code tool, so that project chooses the tasks and the rewards in it.",
+   "topic": "how rewards are decided",
+   "kind": "verbatim",
+   "cluster": "Quest: introduction and smart contract",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/introduction",
+   "quote": "Cultivate a genuine community experience by safeguarding your ecosystem from bots with our sybil-resistant credentials, ensuring a human-centric web3 growth path.",
+   "meaning": "Projects can protect their quests with Galxe's sybil-resistant credentials, which are there to keep out bots and people running many accounts, so quests are built to reward a real person on a single account.",
+   "topic": "bots, automation and multiple accounts",
+   "kind": "verbatim",
+   "cluster": "Quest: introduction and smart contract",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/introduction",
+   "quote": "Pinpoint and connect with your most passionate supporters by utilizing specific credentials to identify and engage loyal users within and beyond your community boundaries.",
+   "meaning": "Whether you qualify depends on the specific credentials each project chooses to check, and those can look at your activity in other communities as well as in the project's own.",
+   "topic": "eligibility requirements",
+   "kind": "verbatim",
+   "cluster": "Quest: introduction and smart contract",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/introduction",
+   "quote": "Take your marketing and growth ambitions to new heights with our automated solutions, leveraging both on-chain analytics and off-chain interactions for unmatched precision.",
+   "meaning": "The automation here is Galxe's tooling for projects, which reads both your wallet's on-chain activity and your off-chain interactions to target and qualify people, and nothing in it lets participants automate their own actions.",
+   "topic": "task verification and automation",
+   "kind": "verbatim",
+   "cluster": "Quest: introduction and smart contract",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/introduction",
+   "quote": "Transform newcomers into knowledgeable users with our engaging Learn-to-Experience-to-Earn campaigns, featuring quizzes, insightful readings, and interactive on-chain quests designed to streamline the user onboarding process.",
+   "meaning": "Expect many quests to ask you to read material, pass a quiz and do real on-chain actions before you earn anything.",
+   "topic": "task types",
+   "kind": "verbatim",
+   "cluster": "Quest: introduction and smart contract",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/introduction",
+   "quote": "Propel your brand into the spotlight by leveraging Galxe's expansive reach through strategic social media integrations, ensuring your presence resonates across the digital landscape.",
+   "meaning": "Galxe sells its social media integrations to projects as a way to get noticed, so many quests include social tasks (for example on X or Discord) meant to spread the project's name.",
+   "topic": "X (Twitter) and Discord tasks",
+   "kind": "verbatim",
+   "cluster": "Quest: introduction and smart contract",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/introduction",
+   "quote": "Foster lasting relationships with your audience by initiating a comprehensive loyalty program, powered by continuous campaigns and rewarding incentives that drive long-term user retention.",
+   "meaning": "Projects can run ongoing loyalty programs made of repeated campaigns, so rewards may come from steady participation over time rather than from any one quest.",
+   "topic": "loyalty points and programs",
+   "kind": "verbatim",
+   "cluster": "Quest: introduction and smart contract",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/smart-contract/contracts/spacestation",
+   "quote": "This is an incomplete list of our contract addresses",
+   "meaning": "Galxe says its published list of Quest SpaceStation contract addresses is incomplete (it gives no Gravity address, for example), so an address missing from it does not prove a scam, and the list alone cannot confirm every contract you are asked to sign with.",
+   "topic": "security advice: verifying Quest contracts",
+   "kind": "verbatim",
+   "cluster": "Quest: introduction and smart contract",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/smart-contract/contracts/spacestation",
+   "quote": "| Polygon | 0xf6D1B85af155229AcD7B523601148585A1ff67C6 |\n| BNB Chain | 0x2D18f2d27D50C9b4013DEBA3D54f60996bD8847E |\n| Ethereum | 0x75cdA57917E9F73705dc8BCF8A6B2f99AdBdc5a5 |\n| Avalanche | 0x13D8c4e3741e968Cc8E740bdB02537cB1d2d70e6 |\n| Arbitrum | 0x9e6eF7F75ad88D4Edb4C9925C94B769C5b0d6281 |\n| Fantom | 0x168a6136fD4F60699B64fb9F8a2F8ed95B279954 |\n| Moonbeam | 0xa36AABC82b62b01884a66Dd9f51aB2E7061748aA |\n| IoTex | 0xc24785Ed62B06Bf4b9B304b8153969ABe39fF7BC |\n| Optimism | 0x2e42f214467f647Fe687Fd9a2bf3BAdDFA737465 |",
+   "meaning": "The page lists only addresses, not what each contract does, but these are Galxe's current Quest SpaceStation contracts on nine chains, so when your wallet asks you to sign an on-chain Quest transaction you can compare the contract address with these.",
+   "topic": "chains and on-chain claim contracts",
+   "kind": "verbatim",
+   "cluster": "Quest: introduction and smart contract",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/smart-contract/contracts/spacestation",
+   "quote": "These contracts may still be in use",
+   "meaning": "Older SpaceStation contracts may still be live, so an on-chain transaction for an older quest can legitimately point at a legacy address instead of a current one.",
+   "topic": "security advice: legacy Quest contracts",
+   "kind": "verbatim",
+   "cluster": "Quest: introduction and smart contract",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/smart-contract/contracts/spacestation",
+   "quote": "| Arbitrum | 0xA0D893e6F4bb0e5823c995310BF1B1B4387ac83D |\n| Arbitrum | 0x1ae981A0a3AE5F9cDc059d9478D2C37E8eB442eB |\n| Avalanche | 0xe338D00f5fBD32Fa414531be1685418c7C118E83 |\n| BNB Chain | 0x835f22b4280aAf357d12DBf03721651b3A8b0167 |\n| BNB Chain | 0x5C1274456be4dd280429B9A8319e552cAD2595fA |\n| BNB Chain | 0x760B8237e457e6A2b5b196ae073EF0301b8316a2 |\n| Ethereum | 0xc92EDE6aC9865111356B8f51fBD7ee8D261D9637 |\n| Ethereum | 0x5bD25d2f4f26Bc82A34dE016D34612A28A0Cd492 |\n| Ethereum | 0x987fb80B5E8646A2DC4C276881484BD442d645F3 |\n| Ethereum | 0xaae9f9d4fb8748feba405cE25856DC57C91BbB92 |",
+   "meaning": "These are the legacy SpaceStation addresses on Arbitrum, Avalanche, BNB Chain and Ethereum that Galxe says may still be in use, which you can check an older quest's transaction against.",
+   "topic": "chains and on-chain claim contracts (legacy)",
+   "kind": "verbatim",
+   "cluster": "Quest: introduction and smart contract",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/smart-contract/contracts/spacestation",
+   "quote": "| Fantom | 0x597e0A675D071228edFC8918f54A5d5257bD6663 |\n| Fantom | 0x88a8378d0f3d4ff110d2757e12fe3adb17903403 |\n| Polygon | 0xdeb1F826c512EEE2FA9398225A3401A0Dd5311E2 |\n| Polygon | 0x6e7801d5b07dA1A82F6D1930685731a50645B182 |\n| Polygon | 0x44D2a93948B70DC0568020AaD2efc6FE7d146404 |\n| Polygon | 0x6cad6e1abc83068ea98924aef37e996ed02abf1c |",
+   "meaning": "These are the legacy SpaceStation addresses on Fantom and Polygon that Galxe says may still be in use, which you can check an older quest's transaction against.",
+   "topic": "chains and on-chain claim contracts (legacy)",
+   "kind": "verbatim",
+   "cluster": "Quest: introduction and smart contract",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/graphql-api/credential/queries/credential",
+   "quote": "**eligible** (Int!) - Determines if a specified address completes this Cred (requires arguments: address, campaignId)",
+   "meaning": "Galxe checks whether a task (credential) is done one wallet address at a time, and can check within a specific quest, so what counts is whether the address you use is recorded as having completed it.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "Quest: GraphQL API reference",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/quest/graphql-api/credential/queries/credential",
+   "quote": "**syncStatus** (SyncStatus!) - Synchronization state (SYNCED or SYNCING)",
+   "meaning": "A credential's completion data is synchronized and can be in the middle of a sync, so a task you just finished may take a while to show as done.",
+   "topic": "task verification",
+   "kind": "verbatim",
+   "cluster": "Quest: GraphQL API reference",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/quest/graphql-api/credential/queries/credential",
+   "quote": "**recurrence** (CredDimensionConfig) - Recurrence type (NONE, DAILY, WEEKLY, MONTHLY)",
+   "meaning": "A credential can be set to repeat daily, weekly or monthly, or not at all, so some tasks count once per period rather than only once.",
+   "topic": "task recurrence",
+   "kind": "verbatim",
+   "cluster": "Quest: GraphQL API reference",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/quest/graphql-api/credential/queries/credential",
+   "quote": "The Credential of the referral type can read the count of referrals",
+   "meaning": "Referral tasks are checked against a recorded count of how many people each address has referred.",
+   "topic": "referral",
+   "kind": "verbatim",
+   "cluster": "Quest: GraphQL API reference",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/graphql-api/credential/queries/credential",
+   "quote": "The Credential of the quiz type can read the result of quiz",
+   "meaning": "A quiz task is judged on the quiz result Galxe records for your address.",
+   "topic": "task verification",
+   "kind": "verbatim",
+   "cluster": "Quest: GraphQL API reference",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/graphql-api/credential/queries/credential",
+   "quote": "`galxePassport`: GalxePassportCredValue",
+   "meaning": "A credential can hold Galxe Passport data for each holder, so some quests may require a Galxe Passport (the page gives only the field name, no rules).",
+   "topic": "Passport",
+   "kind": "verbatim",
+   "cluster": "Quest: GraphQL API reference",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/graphql-api/credential/queries/credential",
+   "quote": "`gitcoinPassport`: GitcoinPassportCredValue",
+   "meaning": "A credential can also hold Gitcoin Passport data for each holder, so some quests may check a Gitcoin Passport (the page gives only the field name, no rules).",
+   "topic": "Passport",
+   "kind": "verbatim",
+   "cluster": "Quest: GraphQL API reference",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/graphql-api/credential/mutations/credential-holder-update",
+   "quote": "Updates the holders of a credential by appending, removing, or replacing addresses. This mutation requires the credential ID, the operation to perform, and a list of addresses.",
+   "meaning": "A credential's holder list can be edited directly (addresses added, removed, or the whole list replaced), so for list-based tasks you are eligible only if your address is on that list, and the list can change.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "Quest: GraphQL API reference",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/quest/graphql-api/space/queries/space",
+   "quote": "Fetches details of a Space by its numeric ID or alias. The query returns comprehensive information including sprints and loyalty points rankings.",
+   "meaning": "Each project's Space keeps its own sprints (seasons, with start and end times) and its own loyalty points rankings.",
+   "topic": "loyalty points",
+   "kind": "verbatim",
+   "cluster": "Quest: GraphQL API reference",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/quest/graphql-api/space/queries/space",
+   "quote": "Used for passing when querying the season leaderboard.",
+   "meaning": "Loyalty points have a separate leaderboard for each season (selected by its sprint ID), apart from the Space's overall ranking.",
+   "topic": "loyalty points",
+   "kind": "verbatim",
+   "cluster": "Quest: GraphQL API reference",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/graphql-api/space/queries/space",
+   "quote": "`address`: Address\n> > User Information\n> >\n> > `points`: Int!\n> >\n> > `rank`: Int!\n> > User points ranking",
+   "meaning": "Each leaderboard entry links your address (user information) to your points total and your rank, so anyone who queries the API can see where you stand in a Space.",
+   "topic": "loyalty points",
+   "kind": "verbatim",
+   "cluster": "Quest: GraphQL API reference",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/graphql-api/space/queries/space",
+   "quote": "We recommend that you use the **number ID** for queries, as the alias may change.",
+   "meaning": "If you look up a Space through the API, use its number ID, because its alias (the readable name) can change.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Quest: GraphQL API reference",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/overview/introduction",
+   "quote": "Galxe offers a variety of **Advanced Credential Configuration Types**, allowing you to verify user-specific information or onchain tasks in a Galxe Quest.",
+   "meaning": "Quest tasks can be checked against the project's own data or against on-chain records, not only by Galxe's built-in checks.",
+   "topic": "verification",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/overview/introduction",
+   "quote": "**CSV File** | Easy to use, suitable for small-scale data validation, requires manual upload.",
+   "meaning": "A task backed by a CSV list only recognises you once the project has uploaded a list that includes you, so Verify can fail until it does.",
+   "topic": "verification",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/overview/introduction",
+   "quote": "**Google Sheets** | Periodic synchronization, easy to manage, relies on Google services.",
+   "meaning": "A task backed by a Google Sheet updates on a periodic sync, so a finished action may not verify straight away.",
+   "topic": "verification",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/overview/introduction",
+   "quote": "**API** | Supports real-time data push to Galxe.",
+   "meaning": "An API-type task recognises you only when the project pushes your data to Galxe, so it depends on the project sending it.",
+   "topic": "verification",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/overview/introduction",
+   "quote": "**Contract Query** | Enables contract query capabilities, commonly used to query `ERC20` or `ERC721` holders.",
+   "meaning": "Token- and NFT-holding tasks are usually checked by reading the token's own contract for your address.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/api-cred/config",
+   "quote": "`ID Type` provides various identity options, including social accounts, blockchain addresses, and other unique identifiers.",
+   "meaning": "A task can be tied to a wallet address, a linked social account or another identifier, so do the action with the same identity the task checks.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/api-cred/config",
+   "quote": "Control the time range of the credential, prohibiting new verifications after the deadline.",
+   "meaning": "A task can have its own cutoff, and after it you can no longer newly verify even if you did the action.",
+   "topic": "deadlines",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/api-cred/config",
+   "quote": "Remind users of the frequency of API data source updates, such as once a day or once every two days.",
+   "meaning": "The project's data behind a task may refresh only daily or every two days, so a fresh action can take that long to verify.",
+   "topic": "verification",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/api-cred/config",
+   "quote": "Guide users to the specific URL where they can complete the task.",
+   "meaning": "The link on a task is set by the project that built the quest and points to where it wants the task done.",
+   "topic": "security",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/api-cred/config",
+   "quote": "This GraphQL mutation updates the items associated with a credential by appending or removing items. It requires an access token and returns the name of the updated credential.",
+   "meaning": "Whoever holds the credential's access token, normally the project, can add addresses to an API-type task's list or remove them, so your eligibility there can change.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/rest-cred/introduction",
+   "quote": "`REST` Credentials support integration with any available `REST` endpoints and send requests during user verification for interaction.",
+   "meaning": "For a REST-checked task, Galxe asks the project's server about you at the moment you click Verify.",
+   "topic": "verification",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/rest-cred/introduction",
+   "quote": "It takes a single wallet address as input and outputs `1` (eligible) or `0` (not eligible) to determine whether the wallet address qualifies.",
+   "meaning": "The check looks at one wallet address and gives a plain yes or no, so the action has to have been done from the wallet you verify with.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/rest-cred/single-config",
+   "quote": "It is suitable for when task verification is equivalent to answering the question, *Did this particular user perform this task -- yes or no?*",
+   "meaning": "A single-dimension task is pass or fail: it records whether you did the task, not how much of it.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/rest-cred/single-config",
+   "quote": "return resp.isWhitelisted && resp.balance >= 500 ? 1 : 0;",
+   "meaning": "Galxe's own example shows one task can require several conditions at once, such as being on the project's whitelist and holding a minimum balance.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/rest-cred/multi-config",
+   "quote": "It is suitable when the verification for tasks is equivalent to answering the question, *How much, how often, or how many times did a user perform the task?*",
+   "meaning": "A multi-dimension task measures how much or how often you did something, so the reward can depend on the amount rather than a single yes.",
+   "topic": "rewards",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/graphql-cred/introduction",
+   "quote": "**app.galxe.com**: When a user clicks \"Verify\" on the Quest page, Galxe sends the user's wallet address or other social media information as an input parameter.",
+   "meaning": "Clicking Verify can pass your wallet address or linked social account details to the project's own backend for checking.",
+   "topic": "security",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/graphql-cred/introduction",
+   "quote": "**Galxe Backend**: Based on the pre-configuration, Galxe sends an HTTP request containing the wallet address to your `GraphQL API` and waits for the response.",
+   "meaning": "On these tasks the Verify result depends on the project's own server answering Galxe's request.",
+   "topic": "verification",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/graphql-cred/introduction",
+   "quote": "`35.185.209.0` and `35.203.155.18` are our outbound IPs. Failure to whitelist these may result in 403 errors when accessing the service.",
+   "meaning": "If Verify errors on such a task, the cause can be the project's server blocking Galxe rather than anything you did.",
+   "topic": "verification",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/graphql-cred/single-config",
+   "quote": "It is suitable for  when task verification is equivalent to answering the question, *Did this particular user perform this task \u2014 yes or no?*",
+   "meaning": "A single-dimension GraphQL task is pass or fail on whether you did the task.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/graphql-cred/single-config",
+   "quote": "Galxe MSU Space requires holding at least 100 points",
+   "meaning": "A task can require a minimum loyalty-points balance in a Space, checked against your address.",
+   "topic": "loyalty points",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/graphql-cred/single-config",
+   "quote": "https://graphigo-business.prd.galaxy.eco/query\n```\n\n* **Headers**\n\n`No header`",
+   "meaning": "Galxe's own example reads a Space's loyalty points for an address from its GraphQL endpoint with no header, so a points balance looks readable without an access token.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/graphql-cred/multi-config",
+   "quote": "Control the time range of the credential, prohibiting new validations after the deadline.",
+   "meaning": "A task can have its own cutoff, after which new verifications are refused.",
+   "topic": "deadlines",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/graphql-cred/multi-config",
+   "quote": "Remind users of the frequency of API data source updates, such as once a day or once every two days.",
+   "meaning": "The data behind a task may refresh only once a day or every two days, so expect a delay before Verify succeeds.",
+   "topic": "verification",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/graphql-cred/multi-config",
+   "quote": "When a certain threshold condition is met (e.g., >0), assign a fixed points directly.",
+   "meaning": "Under a threshold rule, clearing the bar (for example holding anything above zero) earns a fixed number of points however far over it you are.",
+   "topic": "loyalty points",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/graphql-cred/multi-config",
+   "quote": "Enable users to claim rewards repeatedly once certain credentials are fulfilled, for example, a user earns 10 points for each 1 ETH they hold. If the user holds 5 ETH, they will earn 50 points.",
+   "meaning": "With Multiple Entries switched on, the reward grows with the measured amount, such as 10 points for each ETH held.",
+   "topic": "rewards",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/contract-query-cred/introduction",
+   "quote": "By specifying the blockchain network, contract address, and method to call, Galxe dynamically queries the data and evaluates results to determine if users meet the credential conditions.",
+   "meaning": "An on-chain task is checked live against one named chain and contract, so the asset or action has to be on that chain.",
+   "topic": "chains",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/contract-query-cred/introduction",
+   "quote": "**Reason**: Galxe only calls read-only methods, which do not modify the blockchain state.",
+   "meaning": "Galxe's check of an on-chain task only reads the blockchain and needs no transaction from your wallet.",
+   "topic": "security",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/contract-query-cred/introduction",
+   "quote": "**Use Case**: Retrieve on-chain data like token balances, NFT ownership, or staking status.",
+   "meaning": "On-chain tasks can check your token balances, NFT ownership or staking status.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/contract-query-cred/introduction",
+   "quote": "**Advantage**: No gas fee required for direct calls (off-chain queries only).",
+   "meaning": "Verifying an on-chain holding task costs you no gas, because Galxe's check is an off-chain read.",
+   "topic": "gas",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/contract-query-cred/introduction",
+   "quote": "**Requirement**: The method must accept an address (`address`) as a dynamic input parameter.\n   * **Use Case**: The address typically identifies the user's wallet, a smart contract, or the owner of an asset.",
+   "meaning": "The on-chain check runs for one specific address, normally the wallet you verify with, so assets held in another wallet do not count.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/contract-query-cred/config",
+   "quote": "Select the blockchain network to interact with (such as Ethereum, Polygon, BSC, and other EVM-compatible chains supported by Galxe).",
+   "meaning": "Contract-query tasks read one EVM chain such as Ethereum, Polygon or BSC, so the asset must be on the chain the task names.",
+   "topic": "chains",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/quest/credential-api/contract-query-cred/config",
+   "quote": "Guide users to specific operation pages to complete interactive tasks.",
+   "meaning": "The link on an on-chain task is set by the project and points to the page where it wants you to act.",
+   "topic": "security",
+   "kind": "verbatim",
+   "cluster": "Quest: Credential API (advanced credential configu",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-id/introduction",
+   "quote": "Galxe ID can be your universal username that will represent your multichain/multiwallet identities in Web3.",
+   "meaning": "One Galxe ID is meant to represent all of your wallets across different chains.",
+   "topic": "Galxe ID: multiple wallets",
+   "kind": "verbatim",
+   "cluster": "Galxe ID: introduction, Passport, OAuth integratio",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-id/introduction",
+   "quote": "Log in with your wallet & set your username",
+   "meaning": "You create your Galxe ID at app.galxe.com by logging in with a wallet and choosing a username.",
+   "topic": "Galxe ID: account setup",
+   "kind": "verbatim",
+   "cluster": "Galxe ID: introduction, Passport, OAuth integratio",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-id/introduction",
+   "quote": "Connect other identities with your Galxe ID in Account Settings",
+   "meaning": "Your other identities, such as extra wallets, are attached to the same Galxe ID from Account Settings.",
+   "topic": "Galxe ID: linking identities",
+   "kind": "verbatim",
+   "cluster": "Galxe ID: introduction, Passport, OAuth integratio",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-id/introduction",
+   "quote": "now you will be able to see eligible credentials attached to your Galxe ID",
+   "meaning": "Once your identities are linked, the credentials you qualify for show up on your Galxe ID.",
+   "topic": "eligibility: credentials",
+   "kind": "verbatim",
+   "cluster": "Galxe ID: introduction, Passport, OAuth integratio",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-id/introduction",
+   "quote": "You will be able to link your wallet addresses from supported blockchain networks with your Galxe ID. For the best developer experience, we recommend you to use an EVM wallet address as the primary address.",
+   "meaning": "You can link wallets from the supported chains to one Galxe ID, and Galxe recommends an EVM (Ethereum-style) address as the primary one.",
+   "topic": "Galxe ID: wallets and chains",
+   "kind": "verbatim",
+   "cluster": "Galxe ID: introduction, Passport, OAuth integratio",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-id/introduction",
+   "quote": "You can display the credentials collected in the Web3 world and showcase the history of your achievements.",
+   "meaning": "Your Galxe ID shows the credentials you have collected as a record of your achievements.",
+   "topic": "credentials",
+   "kind": "verbatim",
+   "cluster": "Galxe ID: introduction, Passport, OAuth integratio",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-id/introduction",
+   "quote": "As a metaverse DID, developers can integrate Galxe ID toolkit and offer customized features to users based on their digital credentials, or simply enrich user profiles in the product.",
+   "meaning": "Other apps can build on Galxe ID and shape what they offer you based on the credentials it holds.",
+   "topic": "third-party apps",
+   "kind": "verbatim",
+   "cluster": "Galxe ID: introduction, Passport, OAuth integratio",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-id/galxe-passport/introduction",
+   "quote": "Galxe Passport is the most trusted Web3 identity service for proof of personhood",
+   "meaning": "Passport is Galxe's tool for proving that you are one real person.",
+   "topic": "Passport",
+   "kind": "verbatim",
+   "cluster": "Galxe ID: introduction, Passport, OAuth integratio",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-id/galxe-passport/introduction",
+   "quote": "It stores your identity information securely and anonymously. You will be able to use this as your universal identity across different applications for compliance purposes.",
+   "meaning": "Passport keeps your verified identity, and other apps that need an identity check for compliance can reuse it.",
+   "topic": "Passport",
+   "kind": "verbatim",
+   "cluster": "Galxe ID: introduction, Passport, OAuth integratio",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-id/galxe-passport/introduction",
+   "quote": "You will also get your unique Galxe Passport Soulbound Token in your wallet to be distinguished as a verified individual. Enabling our partners to prevent Sybil attacks.",
+   "meaning": "A verified Passport puts a unique, non-transferable token in your wallet that marks you as one verified person, which projects use to block people running many accounts.",
+   "topic": "Passport: Sybil and multiple accounts",
+   "kind": "verbatim",
+   "cluster": "Galxe ID: introduction, Passport, OAuth integratio",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-id/galxe-passport/introduction",
+   "quote": "Users\u2019 private information will be encrypted with their password. These data are only accessible to the user, all others (including Galxe) can only access these data upon the user\u2019s permission.",
+   "meaning": "Your Passport details are locked with your own password, and nobody, Galxe included, can read them unless you give permission.",
+   "topic": "security: Passport data privacy",
+   "kind": "verbatim",
+   "cluster": "Galxe ID: introduction, Passport, OAuth integratio",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-id/galxe-passport/introduction",
+   "quote": "Users who want to obtain a Soulbound Token can do so by going through the verification process on Galxe which will then allow them to mint and claim the Galxe Passport Token.",
+   "meaning": "You can mint and claim the Passport token only after you complete Galxe's identity verification.",
+   "topic": "Passport: verification and claim",
+   "kind": "verbatim",
+   "cluster": "Galxe ID: introduction, Passport, OAuth integratio",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-id/galxe-passport/introduction",
+   "quote": "User on Galxe is now guided to construct Galxe Passport from PII collected from their approved verification on **Sumsub**. There are 3 steps with two separate signatures needed",
+   "meaning": "Your Passport is built from an identity check that Sumsub has approved, in three steps that need two separate signatures.",
+   "topic": "Passport: verification steps",
+   "kind": "verbatim",
+   "cluster": "Galxe ID: introduction, Passport, OAuth integratio",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-id/galxe-passport/introduction",
+   "quote": "(signing needed) Retrieve PII from **Sumsub**, signed by Galxe witness to ensure its integrity - let\u2019s call this a signed credential",
+   "meaning": "The first signed step pulls your verified details from Sumsub, and Galxe signs them to vouch that they are intact.",
+   "topic": "Passport: verification steps",
+   "kind": "verbatim",
+   "cluster": "Galxe ID: introduction, Passport, OAuth integratio",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-id/galxe-passport/introduction",
+   "quote": "Encrypt signed credential using user\u2019s own strong password of choice",
+   "meaning": "You choose your own strong password, and that password is what encrypts your Passport data.",
+   "topic": "security: Passport password",
+   "kind": "verbatim",
+   "cluster": "Galxe ID: introduction, Passport, OAuth integratio",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-id/galxe-passport/introduction",
+   "quote": "(signing needed) Pass the encrypted data back to Galxe for storage, and create the Galxe Passport",
+   "meaning": "The second signed step sends the encrypted data to Galxe to store and creates your Passport.",
+   "topic": "Passport: verification steps",
+   "kind": "verbatim",
+   "cluster": "Galxe ID: introduction, Passport, OAuth integratio",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-id/galxe-id-integration/galxe-id-oauth",
+   "quote": "Redirects users to Galxe to request their identity and authorize your app. This is the first step in the OAuth authorization code flow.",
+   "meaning": "When an outside app offers Sign in with Galxe, you are sent to Galxe (app.galxe.com/oauth) to approve sharing your identity with that app.",
+   "topic": "third-party apps: Sign in with Galxe",
+   "kind": "verbatim",
+   "cluster": "Galxe ID: introduction, Passport, OAuth integratio",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-id/galxe-id-integration/galxe-id-oauth",
+   "quote": "**scope whitelist**:\n\n* Email\n* Twitter\n* Discord\n* Github\n* Telegram\n* EVMAddress\n* SolanaAddress\n* SeiAddress\n* AptosAddress\n* InjectiveAddress\n* FlowAddress\n* GalxeID",
+   "meaning": "An app using Sign in with Galxe can request only these items: your email, your linked X, Discord, GitHub and Telegram accounts, your EVM, Solana, Sei, Aptos, Injective and Flow wallet addresses, and your Galxe ID.",
+   "topic": "third-party apps: data scopes",
+   "kind": "verbatim",
+   "cluster": "Galxe ID: introduction, Passport, OAuth integratio",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-id/galxe-id-integration/galxe-id-oauth",
+   "quote": "If not provided, scope defaults to an empty list for users that have not authorized any scopes for the application.",
+   "meaning": "An app sees only the identity items authorized for it, so if it requests none and you have authorized none, it gets an empty list.",
+   "topic": "third-party apps: consent",
+   "kind": "verbatim",
+   "cluster": "Galxe ID: introduction, Passport, OAuth integratio",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-id/galxe-id-integration/galxe-id-oauth",
+   "quote": "Fetches user data (e.g., Twitter and Discord usernames and IDs) using the access token. The scope parameter can be used to request specific user data scopes.",
+   "meaning": "An app you approve can read the X (Twitter) and Discord usernames and user IDs linked to your Galxe ID.",
+   "topic": "X (Twitter) and Discord: third-party apps",
+   "kind": "verbatim",
+   "cluster": "Galxe ID: introduction, Passport, OAuth integratio",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-id/galxe-id-integration/galxe-id-oauth",
+   "quote": "The client ID you received from Galxe when you registered.",
+   "meaning": "This identity API needs a client ID that Galxe issues when an app registers, so you cannot use it without registering an app with Galxe.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Galxe ID: introduction, Passport, OAuth integratio",
+   "verified": true
+  },
+  {
+   "url": "https://docs.galxe.com/identity/introduction",
+   "quote": "Within the current Galxe platform, Galxe designs and provides a variety of Credential Types for projects to utilize. Campaign owners then verify and issue the credentials to eligible participants, who become the Holders of those credentials.",
+   "meaning": "On Galxe today the campaign's owner checks whether you qualify and issues you the credential, built from credential types that Galxe provides.",
+   "topic": "eligibility requirements",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/introduction",
+   "quote": "Galxe issues a credential. A gaming partner then verifies this credential and subsequently issues a reward directly from their platform or from a third-party like Steam.",
+   "meaning": "In the protocol's stated vision (a scenario, not a current rule), a partner might check a credential you earned on Galxe and then pay the reward on its own platform or through a third party such as Steam, not on Galxe.",
+   "topic": "how rewards are decided and claimed",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/introduction",
+   "quote": "Conversely, a gaming partner might issue a credential to a user directly or through Steam, who can then redeem a reward directly on Galxe.",
+   "meaning": "The reverse is also envisioned (again a scenario, not a current rule): a partner or Steam gives you the credential and you redeem the reward on Galxe.",
+   "topic": "how rewards are decided and claimed",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/introduction",
+   "quote": "Galxe Identity Protocol also presents a diverse range of opportunities for builders to build Sybil prevention algorithms, reputation systems, credit systems, personal data markets, decentralized review systems, and beyond.",
+   "meaning": "One stated purpose of the protocol is to let builders make Sybil-prevention tools (Sybil means one person running many accounts), so the credentials you hold can feed anti-farming checks.",
+   "topic": "multiple accounts (Sybil)",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/introduction",
+   "quote": "Galxe Identity Protocol is a permissionless self-sovereign identity infrastructure. Powered by Zero-Knowledge Proof, you\u2019ll be able to own, manage, and share verifiable credentials securely and privately.",
+   "meaning": "The protocol is designed so you own and manage your credentials yourself and can share proof of them privately.",
+   "topic": "identity and privacy",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/introduction/concepts",
+   "quote": "An identity commitment is a public value, hiding two secret values: a secret identity and an internal nullifier. Both secret values are known only by the credential holder, while identity commitment can be public.",
+   "meaning": "Your credentials rest on two secrets that only you are meant to know, while the commitment built from them can be public.",
+   "topic": "security advice",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/introduction/concepts",
+   "quote": "However, this disadvantage can help to limit impersonation and fake profiles. For a credential, identity secrets cannot be shared without permanently sharing the ownership, while signatures can be shared with limited costs: one can temporarily transfer or lease the ownership of a credential to someone else, until the signature expires.",
+   "meaning": "If you share your identity secret with anyone, they own the credential permanently, and the page says this helps limit impersonation and fake profiles, unlike signatures, which can be lent or leased until they expire.",
+   "topic": "security advice / account sharing",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/introduction/concepts",
+   "quote": "a person can have multiple different identities across different platforms. For example, it is not uncommon that a user uses different nicknames, handles, and cryptographic IDs (namely addresses) for different platforms.",
+   "meaning": "The page treats one person using different names on X, on Discord and as a wallet address as normal, but it is about identities on different platforms and says nothing in favour of several accounts on the same platform.",
+   "topic": "X (Twitter) and Discord identities",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/introduction/concepts",
+   "quote": "The design must allow a user to connect all his owned identities in order to reveal or generate zero-knowledge proofs against a comprehensive profile, while not leaking any privacy, e.g., the connections of accounts, to any other party.",
+   "meaning": "The protocol is built to let you link the accounts you own across platforms into one profile without anyone else learning which accounts are linked.",
+   "topic": "X (Twitter) and Discord identities",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/introduction/roles",
+   "quote": "They are usually applications of gated services, allowing access only if the identities meet some specific requirements, like bouncers at bars. To host a verification, verifiers need to pick issuers that they can trust via a programmable trust schema, and verification requirements of credentials to be checked.",
+   "meaning": "Whoever runs a gated reward or service picks which credential issuers it trusts and what you must prove, and lets you in only if you meet those requirements.",
+   "topic": "eligibility requirements",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/introduction/roles",
+   "quote": "For each verification, verifiers should use a unique external nullifier and keep tracking of used nullifiers to prevent double-spending.",
+   "meaning": "Each verification is designed so a credential counts only once: the verifier keeps a record of used nullifiers, so the same proof cannot be used twice.",
+   "topic": "multiple accounts (double claims)",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/introduction/roles",
+   "quote": "To verify a proof, verifiers need to fetch verification key based on the type of the credential from blockchain, and check revocation status if there is any proof of revocable credentials.",
+   "meaning": "If a credential you hold is revocable, the verifier checks whether it has been revoked, so a revoked credential no longer passes.",
+   "topic": "what forfeits a reward (revocation)",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/introduction/roles",
+   "quote": "Any identity can issue non-revocable credentials to others without on-chain registration. However, for revocable credentials, issuers must be registered on-chain to manage credential validity by publishing the root hash of sparse merkle tree of revoked credentials.",
+   "meaning": "Anyone can issue you a non-revocable credential without registering, but revocable credentials come only from issuers registered on-chain, who can revoke them later by publishing a list of revoked credentials.",
+   "topic": "what forfeits a reward (revocation)",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/introduction/roles",
+   "quote": "Issuers must maintain a 1-to-1 mapping from users of the domain to identity commitments. The identity secret part can be changed with a zero-knowledge proof that ensures the internal nullifier remains the same.",
+   "meaning": "Each user of an issuer's platform is tied to exactly one identity commitment, and changing your secret keeps the same internal nullifier, so to verifiers you are still the same person.",
+   "topic": "multiple accounts",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/introduction/roles",
+   "quote": "In our design, issuers do not need to know any extra information of a holder, except for the identity commitment, which can be considered as a random number.",
+   "meaning": "In the protocol's design an issuer needs nothing from you except your identity commitment, which looks like a random number.",
+   "topic": "identity and privacy",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/introduction/roles",
+   "quote": "Holders do not need to register anything on-chain and the ownership of a credential is controlled by identity commitments constructed from secrets that are only known by their holders.",
+   "meaning": "As a holder you register nothing on-chain, and each credential is controlled by secrets only you know, so the credential stays yours only while you keep those secrets private.",
+   "topic": "security advice",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/introduction/roles",
+   "quote": "In the Galxe identity protocol, holders maintain total control over their digital identity by storing credentials in Galxe identity vault, an open-source application that runs on holders\u2019 local devices, e.g. browser, and native applications.",
+   "meaning": "The app the protocol names for holding credentials is the Galxe identity vault, an open-source program that runs on your own device, in the browser or as a native app.",
+   "topic": "third-party apps or clients",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/introduction/roles",
+   "quote": "Holders use the vault to manage different identity commitments for different issuers, and generate zero-knowledge proofs for verification based on owned credentials. By using ZKP, holders have the ability to reveal only requisite data under a deterministic and pseudonymous identity.",
+   "meaning": "You can keep a separate commitment for each issuer and reveal only what a check needs, but your pseudonym is deterministic (fixed, not freshly random), which is what lets a verifier spot a repeat.",
+   "topic": "multiple accounts / identity",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/introduction/roles",
+   "quote": "The community, comprising users, developers, and other stakeholders, actively participates in the evaluation and acceptance process. Through transparent discussions and GAL voting mechanisms, the community collectively determines which proposed credential types are incorporated into the official type.",
+   "meaning": "Ordinary users may join the discussion and GAL voting on which credential types become official, which is governance and not a rule about claiming.",
+   "topic": "governance (GAL voting)",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/use-cases/ideas",
+   "quote": "Sybil attack is one of the most prominent attack vectors in the digital space. Currently there is no foolproof solution to prevent sybil attacks. However, the greater amount of identity related data one can access, the easier it becomes to protect sybil attacks.",
+   "meaning": "Galxe calls one person running many accounts (a Sybil attack) one of the biggest threats, admits that no defence is foolproof, and says more identity data makes such attacks easier to stop.",
+   "topic": "multiple accounts (Sybil)",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/use-cases/ideas",
+   "quote": "One solution to protect sybil attacks is through the implementation of KYC (know-your-customer) mechanisms. However, current KYC solutions raise privacy concerns as centralized entities collect and store users\u2019 personal identity information such as address, nationality, name, etc.",
+   "meaning": "The page names KYC identity checks as one way to stop multi-account abuse, and warns that today's KYC means a central party collects and stores your name, address and nationality.",
+   "topic": "Passport (KYC)",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/use-cases/ideas",
+   "quote": "With the Galxe Identity Protocol, users can securely share their data with third parties in a privacy-preserving way using zero-knowledge-proof verification stacks.",
+   "meaning": "The protocol's alternative is that you prove facts about yourself to third parties with zero-knowledge proofs instead of handing over the raw personal data.",
+   "topic": "Passport (KYC) / privacy",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/use-cases/ideas",
+   "quote": "Other solutions such as Gitcoin Passport are also effective approaches to tackle sybil attacks. These solutions request and utilize multi-dimension behavior and social data from users to estimate the likelihood of them being real humans and provide quantitative results.",
+   "meaning": "Humanity scores like Gitcoin Passport (a different product from Galxe Passport) use your behaviour and social data to estimate how likely you are to be a real person, and give the result as a number.",
+   "topic": "Score and Humanity levels",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/use-cases/ideas",
+   "quote": "In contrast, with Galxe Identity Protocol, users\u2019 credentials are aggregated and controlled by the users by default. All developers can thus build such scoring systems without the need to collect additional information from the users.",
+   "meaning": "Any developer can build a humanity score from the credentials you already hold, without asking you for more data.",
+   "topic": "Score and Humanity levels",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: introduction, concepts, roles,",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/introduction",
+   "quote": "Build powerful Web3 experiences with Galxe's comprehensive GraphQL API",
+   "meaning": "Galxe Integration is a GraphQL API for people building Web3 products on Galxe. It is a developer tool, not something a participant does to earn or claim.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: introduction and getting starte",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/getting-started/authentication",
+   "quote": "Authenticate API requests by including an access token in the access-token header. This endpoint is used to send GraphQL queries to the Galxe API.",
+   "meaning": "Every API call has to carry your own Galxe access token in an access-token header, so the API cannot be used anonymously.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: introduction and getting starte",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/getting-started/authentication",
+   "quote": "* Use secret management systems (AWS Secrets Manager, HashiCorp Vault) * Never commit tokens to version control * Rotate tokens regularly * Use environment-specific tokens",
+   "meaning": "If you ever hold a Galxe API token, treat it as a secret: keep it in a secret manager, never commit it to a repository, and replace it regularly.",
+   "topic": "security advice",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: introduction and getting starte",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/getting-started/authentication",
+   "quote": "Store the Galxe access token in a .env file to avoid hardcoding it in code. This is a security best practice for local development.",
+   "meaning": "For local use, the docs say to keep the token in a .env file instead of writing it into code.",
+   "topic": "security advice",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: introduction and getting starte",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/getting-started/authentication",
+   "quote": "| `TOKEN_REQUIRED` | `AUTHENTICATION` | 401 | Access token missing | | `INVALID_TOKEN` | `AUTHENTICATION` | 401 | Access token invalid | | `QUOTA_EXCEEDED` | `RATE_LIMIT` | 429 | API quota exceeded | | `PERMISSION_DENIED` | `AUTHORIZATION` | 403 | Insufficient permissions |",
+   "meaning": "A missing or bad token gets error 401, going over quota gets 429, and even a valid token only reaches what it is allowed to see (403 otherwise).",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: introduction and getting starte",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/getting-started/authentication",
+   "quote": "\"message\": \"API quota exceeded: daily limit reached\", \"extensions\": { \"code\": \"QUOTA_EXCEEDED\", \"category\": \"RATE_LIMIT\", \"http_status\": 429, \"request_id\": \"req_123456789\", \"timestamp\": \"2024-01-01T00:00:00Z\", \"details\": [\"quota_type: daily\", \"limit: 1000\"]",
+   "meaning": "API use is metered. The docs' sample error shows a daily quota of 1000, and requests past it fail with QUOTA_EXCEEDED (HTTP 429).",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: introduction and getting starte",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/getting-started/authentication",
+   "quote": "**Solution**: Implement exponential backoff retry logic",
+   "meaning": "When the API rate limit is hit, slow down and retry with longer and longer waits instead of hammering it.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: introduction and getting starte",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/getting-started/quick-start",
+   "quote": "1. Visit [Galxe Dashboard Settings](https://dashboard.galxe.com) 2. Navigate to \"Server API\" section 3. Click \"Generate New API Tokens\" 4. Copy the token (save it securely - you can't view it again)",
+   "meaning": "You create the API token yourself in the Galxe Dashboard under Server API. It is shown only once, so save it securely when you create it.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: introduction and getting starte",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/getting-started/quick-start",
+   "quote": "Sends a minimal GraphQL query to the Galxe API to verify that the access token is working. Replace YOUR_ACCESS_TOKEN with the token generated in the dashboard. A successful response returns {\"data\": {\"__typename\": \"Query\"}}.",
+   "meaning": "A one-line test query that comes back with __typename Query tells you the token works.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: introduction and getting starte",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/getting-started/quick-start",
+   "quote": "Fetches quest details (name, status, participantsCount) using the quest ID GChdWUjXX3. Replace YOUR_ACCESS_TOKEN with your token. The expected response shows an active quest with 234163 participants.",
+   "meaning": "With a token you can look up a quest's name, status and participant count by its quest ID, a read-only way to check quests out.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: introduction and getting starte",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/getting-started/common-patterns",
+   "quote": "Sets up a fetch-based GraphQL client for the Galxe API endpoint https://graphigo-business.prd.galaxy.eco/query. Requires the GALXE_ACCESS_TOKEN environment variable. Throws an error if the GraphQL response contains errors.",
+   "meaning": "The docs' standard client sends every query to the graphigo-business endpoint and reads the token from an environment variable, never from the code.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: introduction and getting starte",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/getting-started/common-patterns",
+   "quote": "return quest.status === 'Active' && now >= quest.startTime && now <= quest.endTime; }; const getQuestPhase = (quest) => { const now = Date.now() / 1000; if (now < quest.startTime) return 'upcoming'; if (now <= quest.endTime) return 'active'; return 'ended';",
+   "meaning": "A quest is open only while its status is Active and the current time is between its start and end times (Unix seconds). After the end time it counts as ended.",
+   "topic": "reward windows and deadlines",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: introduction and getting starte",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/getting-started/common-patterns",
+   "quote": "GraphQL query checks eligibility for a quest by address, returning credential groups with condition and reward eligibility. JavaScript function checkEligibility executes the query and returns true if any group has both an eligible condition and an eligible reward.",
+   "meaning": "Eligibility is checked per wallet address against each credential group's conditions and rewards. This shortcut sample calls an address eligible if any group has one eligible condition and one eligible reward, so it is not the full rule for groups that need every condition met.",
+   "topic": "eligibility requirements",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: introduction and getting starte",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/getting-started/common-patterns",
+   "quote": "Implements a basic rate limiter that queues requests to stay within a configurable requests-per-second limit. The constructor defaults to 10 requests per second; the usage example creates a limiter with 5 requests per second and wraps an executeQuery call.",
+   "meaning": "The docs space API calls out at about 5 requests per second (default 10), so reads should be paced, not sent in bursts.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: introduction and getting starte",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/specification/workflow",
+   "quote": "Galxe identity vault or any apps that have integrated identity protocol SDk.",
+   "meaning": "You make identity proofs in Galxe's identity vault or in any app that has the protocol's SDK built in; this covers identity proofs only and says nothing about automating quest tasks.",
+   "topic": "third-party apps or clients",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: specification, tutorials, resou",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/specification/workflow",
+   "quote": "Owners can submit a proof to verifier that some statements about them is true.",
+   "meaning": "Where access is gated by the identity protocol, you hand the verifier a proof that you meet its condition, and the verifier alone accepts or rejects it.",
+   "topic": "eligibility requirements",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: specification, tutorials, resou",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/specification/technical-components",
+   "quote": "self-evident privacy safeguard: given that data is stored locally, users can ensure that their personal information is kept private. Data does not need to pass through or be stored on any external servers where it could potentially be accessed by unauthorized parties.",
+   "meaning": "Galxe's identity vault keeps your identity data on your own device instead of on an outside server, so you decide who sees it.",
+   "topic": "security advice",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: specification, tutorials, resou",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/specification/technical-components",
+   "quote": "Revoked: Signifies that all credentials signed with these keys are invalidated.",
+   "meaning": "If an issuer revokes the key it signed with, every identity credential signed with that key stops being valid, even though you did nothing wrong.",
+   "topic": "what invalidates a credential",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: specification, tutorials, resou",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/specification/technical-components",
+   "quote": "a full verification requires additional on-chain state validations, including: 1. Do type and context matches verifier\u2019s expectation? 2. Can the revealed credential expiration lower bound prove that the credential is not expired? (greater or equal to the current blocktime) 3. Is the public key still active for the expected issuer?",
+   "meaning": "An identity proof is turned down if it is for the wrong credential type or context, if the credential has expired, or if the issuer's signing key is no longer active.",
+   "topic": "verification and rejection",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: specification, tutorials, resou",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/specification/credential-format",
+   "quote": "An identifier of holder. For example, an EVM/Bitcoin/Solana/Cosmos/Mina address, a X (Twitter) handle, or a Discord handle.",
+   "meaning": "An identity credential can name a wallet address or an X (Twitter) or Discord handle as the person it is about.",
+   "topic": "X (Twitter) and Discord",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: specification, tutorials, resou",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/specification/credential-format",
+   "quote": "expiration (uint64): the UNIX timestamp of when the credential will be expired. This field is mandatory and you can fill-in an UINT64_MAX if the credential never expires.",
+   "meaning": "Every identity credential carries an expiry time set by its issuer (it may be 'never'), so check it is still in date before relying on it.",
+   "topic": "credential expiry",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: specification, tutorials, resou",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/specification/credential-format",
+   "quote": "At verification, a holder must generate a proof that he is the actual owner of the credential, by showing that he knows the secrets behind the commitment, and output a number representing the pseudonymous identity the verifier will see.",
+   "meaning": "Using an identity credential means proving you know the secrets behind it, so keep those secrets private, because knowing them is what makes the credential yours.",
+   "topic": "security advice",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: specification, tutorials, resou",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/specification/credential-format",
+   "quote": "Identity commitment will be used as the key to the power of creating a link from an identity to another one, e.g., from a twitter handle to an EVM address.",
+   "meaning": "The protocol is built to let a credential link one of your identities to another, such as your X (Twitter) handle to your wallet address.",
+   "topic": "X (Twitter) and Discord",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: specification, tutorials, resou",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/specification/type-dsl",
+   "quote": "By default, credential is non-revocable and its validity can only be managed using the intrinsic expiration field.",
+   "meaning": "Unless its type is marked revocable, an issuer cannot cancel a single identity credential, so it stays valid until it expires (unless the issuer revokes its whole signing key).",
+   "topic": "what invalidates a credential",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: specification, tutorials, resou",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/identity/tutorials/simple-workflow",
+   "quote": "The very first step is to create a user with a random identity. This should be done on user's device and the identity should be stored securely.",
+   "meaning": "The secret identity behind Galxe Identity Protocol credentials is created on your own device, and storing it securely is up to you.",
+   "topic": "security advice",
+   "kind": "verbatim",
+   "cluster": "Identity Protocol: specification, tutorials, resou",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/quests",
+   "quote": "| `NotStarted` | View details, set reminders | `Active` |",
+   "meaning": "Before a quest starts you can view it and set a reminder, but you cannot take part until it turns Active.",
+   "topic": "notification access; quest windows",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/quests",
+   "quote": "| `Active` | Participate, check eligibility | `Expired` or `CapReached` |\n| `CapReached` | View results only | `Expired` |\n| `Expired` | View results only | N/A |\n| `Deleted` | None (hidden) | N/A |",
+   "meaning": "You can take part and check eligibility only while a quest is Active; once it is full or expired you can only view results, and a deleted quest is hidden with nothing left to do.",
+   "topic": "reward windows and deadlines",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/quests",
+   "quote": "// Check capacity\n  if (quest.cap > 0 && quest.participantsCount >= quest.cap) return false;",
+   "meaning": "A quest with a cap above 0 stops taking participants once its participant count reaches the cap, so capped quests are first come, first served.",
+   "topic": "eligibility requirements; participant caps",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/quests",
+   "quote": "case 'Active':\n      if (quest.startTime && quest.endTime) {\n        const now = Math.floor(Date.now() / 1000);\n        if (now < quest.startTime) return 'scheduled';\n        if (now > quest.endTime) return 'ended_pending';\n      }\n      return 'active';",
+   "meaning": "A quest can still be labelled Active after its end time has passed (the guide calls this 'ended_pending'), so go by the end time, not the label.",
+   "topic": "reward windows and deadlines",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/quests",
+   "quote": "// Check conditions based on relation (ALL or ANY)\n    const conditionsMet = group.conditionRelation === 'ALL' \n      ? group.conditions.every(c => c.eligible)\n      : group.conditions.some(c => c.eligible);",
+   "meaning": "Each task group in a quest is set to need either ALL of its conditions or ANY one of them, so check which before doing every task.",
+   "topic": "eligibility requirements",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/quests",
+   "quote": "const isEligible = eligibilityResults.some(r => r.conditionsMet && r.eligibleRewards.length > 0);",
+   "meaning": "You count as eligible for a quest when at least one of its task groups has its conditions met and also holds a reward marked eligible for your address.",
+   "topic": "how rewards are decided",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/quests",
+   "quote": "const response = await fetch('https://graphigo-business.prd.galaxy.eco/query', {\n    method: 'POST',\n    headers: {\n      'Content-Type': 'application/json',\n      'access-token': accessToken\n    },",
+   "meaning": "Quest status, timing, caps and eligibility can be looked up through Galxe's business GraphQL endpoint, but only with a Galxe access token sent in an 'access-token' header.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/user-verification",
+   "quote": "\"name\": \"Twitter Follower Verification\",\n      \"eligible\": 1,\n      \"credType\": \"TWITTER\",\n      \"credSource\": \"TWITTER_FOLLOW\",\n      \"syncStatus\": \"SYNCED\"",
+   "meaning": "An X (Twitter) follow task is verified as a credential of type TWITTER with source TWITTER_FOLLOW, which shows 1 once Galxe counts it done for your address.",
+   "topic": "X (Twitter) tasks and verification",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/user-verification",
+   "quote": "Checks whether a given address is eligible for a specific credential. Returns a boolean-like integer (1 for eligible, 0 for not eligible) along with credential metadata.",
+   "meaning": "Every task credential is checked against your wallet address and comes back as a plain yes (1) or no (0).",
+   "topic": "eligibility requirements",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/user-verification",
+   "quote": "2. **Sync Status**: Check `syncStatus` field before relying on eligibility results",
+   "meaning": "A task's eligibility result can be out of date until its credential has synced, so a task you just did may not show as done yet; wait and re-check instead of redoing it.",
+   "topic": "task verification timing",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/user-verification",
+   "quote": "Polls credential sync status until SYNCED or timeout (default 60s). Returns synced flag and wait time. Use before eligibility checks to avoid stale data.",
+   "meaning": "Galxe's own guide gives a credential up to a minute to sync before trusting its eligibility result, so allow a fresh task time to verify.",
+   "topic": "task verification timing",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/user-verification",
+   "quote": "4. **Quest Context**: Use `campaignId` parameter for quest-specific verifications",
+   "meaning": "Some verifications are quest-specific (checked with that quest's campaignId), so confirm eligibility inside the quest you are actually claiming.",
+   "topic": "eligibility requirements",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/user-verification",
+   "quote": "const accessToken = process.env.GALXE_ACCESS_TOKEN;",
+   "meaning": "Running these eligibility checks yourself needs a Galxe access token, read from an environment variable rather than written into code.",
+   "topic": "API access; security",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/user-verification",
+   "quote": "1. **Caching**: Cache eligibility results for 5-10 minutes to reduce API calls",
+   "meaning": "A third-party tool built on this guide may show eligibility that is 5-10 minutes old, so it can lag a task you just finished.",
+   "topic": "third-party apps or clients",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/user-verification",
+   "quote": "5. **Rate Limiting**: Implement delays between batch requests (200-500ms)",
+   "meaning": "Anyone querying this API in bulk is expected to space requests 200-500 ms apart.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/leaderboards",
+   "quote": "- **rank** (Int) - The rank of the user.\n  - **points** (Int) - The loyalty points of the user.\n  - **address.username** (String) - The username of the user.\n  - **address.avatar** (String) - The avatar URL of the user.\n  - **address.address** (String) - The blockchain address of the user.",
+   "meaning": "A space's leaderboard ranks you by loyalty points and lists your rank with your Galxe username, avatar and wallet address.",
+   "topic": "loyalty points; leaderboards",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/leaderboards",
+   "quote": "Query sprint-specific leaderboard rankings for a given space and sprint. Returns a paginated list of ranks with points and user details.",
+   "meaning": "Sprints have their own leaderboard inside a space, separate from the overall ranking.",
+   "topic": "loyalty points; sprints",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/loyalty-program",
+   "quote": "Each quest can award loyalty points to participants:",
+   "meaning": "Loyalty points in a space come from its quests, and each quest can carry its own points award for participants.",
+   "topic": "loyalty points",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/loyalty-program",
+   "quote": "Query to retrieve loyalty points for a specific quest. Use this to check how many points a quest awards and its current status.",
+   "meaning": "The points a quest awards are set per quest and can be looked up before you do it, together with whether it is still open.",
+   "topic": "loyalty points",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/loyalty-program",
+   "quote": "- **spaceId** (Int!) - Required - The ID of the space (loyalty program).",
+   "meaning": "Each space is its own loyalty program, so points and rank are kept per space.",
+   "topic": "loyalty points",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/loyalty-program",
+   "quote": "Sprint information must come from external sources as sprint management is not available through this API.",
+   "meaning": "Sprint dates and rules are not available through this API, so read them from the space's own page or announcements.",
+   "topic": "reward windows and deadlines; sprints",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/loyalty-program",
+   "quote": "Pagination through the Galxe loyalty leaderboard to find a user's points and rank. Uses the GraphQL query GetLeaderboard with cursor-based pagination, a 20-page search limit, and a 100ms delay between pages for rate limiting.",
+   "meaning": "A points checker built this way only searches the first 20 leaderboard pages, so 'not found' from such a tool does not mean you have no points; check on Galxe itself.",
+   "topic": "third-party apps or clients; loyalty points",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/starboards",
+   "quote": "* **`TWITTER`**: Twitter-based influence tracking\n* **`ONCHAIN`**: Blockchain activity-based rankings",
+   "meaning": "A Starboard ranks people either by X (Twitter) influence or by on-chain activity, depending on its type.",
+   "topic": "Starboards; X (Twitter) tasks",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/starboards",
+   "quote": "Fetches leaderboard rankings for a starboard with pagination support. Returns user profiles, rank, influence score, and trend changes over 24 hours, 7 days, and 30 days.",
+   "meaning": "On a Starboard you are ranked by an influence score, with your rank and score movement tracked over 24 hours, 7 days and 30 days.",
+   "topic": "Starboards; ranking",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/starboards",
+   "quote": "Searches for a specific user within a starboard's leaderboard using their Twitter ID. Returns the user's profile, rank, and influence score.",
+   "meaning": "On an X Starboard you are looked up by your X account's Twitter ID, not your wallet, so it is the X account that is ranked.",
+   "topic": "X (Twitter) tasks; Starboards",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/starboards",
+   "quote": "`xUserProfile` - User profile details: `id`, `name`, `username`, `profileImageUrl`, `followersCount`, `verifiedType`.",
+   "meaning": "An X Starboard records each ranked account's follower count and X verification type alongside its rank.",
+   "topic": "X (Twitter) tasks; Starboards",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/starboards",
+   "quote": "- **data.starboard.basicInfo.reward.startTime** (Int) - Reward start time (Unix timestamp).\n- **data.starboard.basicInfo.reward.endTime** (Int) - Reward end time (Unix timestamp).",
+   "meaning": "A Starboard's reward has its own start and end time, so check that window before putting effort in.",
+   "topic": "reward windows and deadlines; Starboards",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/guides/starboards",
+   "quote": "1. **Caching**: Cache leaderboard data for 1-2 minutes to reduce API calls",
+   "meaning": "Apps built on this guide may show Starboard rankings that are 1-2 minutes old.",
+   "topic": "third-party apps or clients",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: guides",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/quest",
+   "quote": "Check these conditions before allowing participation:\n\n1. `status` must be `\"Active\"`\n2. `participantsCount` must be less than `cap` (if cap > 0)\n3. Current time must be between `startTime` and `endTime`",
+   "meaning": "You can only join a quest while its status is Active, before its participant cap (if it has one) fills, and between its start and end times.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/quest",
+   "quote": "| `Active` | Quest is live and accepting participants |\n| `NotStarted` | Quest scheduled but not started |\n| `Expired` | Quest period has ended |\n| `CapReached` | Maximum participants reached |\n| `Deleted` | Quest has been removed |",
+   "meaning": "Only an Active quest accepts participants; a quest that is NotStarted, Expired (its period has ended), CapReached (its participant limit is full) or Deleted cannot be joined.",
+   "topic": "reward-window",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/quest",
+   "quote": "When all `conditions.eligible` are `true`, the user meets quest requirements.",
+   "meaning": "You meet a quest's requirements only when every one of its conditions shows as eligible for your wallet.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/quest",
+   "quote": "Checks whether a user is eligible for a quest by evaluating credential groups and their conditions.",
+   "meaning": "Galxe decides whether you qualify for a quest by evaluating its groups of credentials (the tasks) and their conditions against your account.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/quest",
+   "quote": "- **address** (String!) - Required - The user's wallet address.",
+   "meaning": "Quest eligibility is checked for one specific wallet address, so it is the wallet you connect that must have done the tasks.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/quest",
+   "quote": "Returns the quest object with credentialGroups, each containing id, name, conditionRelation, conditions (expression, eligible), and rewards (expression, eligible, rewardType, rewardCount).",
+   "meaning": "Each group of tasks in a quest has its own reward rule with a reward type and amount, and Galxe marks you eligible or not for each reward separately.",
+   "topic": "reward-rules",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/quest",
+   "quote": "Returns the quest object with fields: id, name, type, status, description, startTime, endTime, cap, participantsCount, loyaltyPoints, gasType, space (id, name), chain.",
+   "meaning": "Each quest publishes its own start and end time, participant cap, loyalty points, gas type and chain, so the claim window, the cap and any gas cost are set quest by quest.",
+   "topic": "reward-terms",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/quest",
+   "quote": "\"gasType\": \"Gasless\",",
+   "meaning": "The docs' sample quest has gas type Gasless, so whether a claim needs gas is a per-quest setting worth checking before you claim.",
+   "topic": "gas-and-chain",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/quest",
+   "quote": "Sends a GraphQL query via cURL to the Galxe GraphQL endpoint to fetch quest details. Requires an access token in the 'access-token' header.",
+   "meaning": "Quest details can be read from Galxe's GraphQL endpoint only with an access token sent in the 'access-token' header.",
+   "topic": "api-access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/space",
+   "quote": "HTTP endpoint for executing GraphQL queries against the Galxe Space API. This example demonstrates a basic leaderboard query using curl, requiring an access token in the header.",
+   "meaning": "A space's leaderboard can be read over Galxe's Space API, but every request needs an access token.",
+   "topic": "api-access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/space",
+   "quote": "Retrieves the loyalty points leaderboard for a space, with support for cursor-based pagination and optional sprint filtering. Returns total count, pagination info, and a list of ranked users with their points and profile details.",
+   "meaning": "Each space keeps a loyalty points leaderboard, all-time or for a single sprint, that ranks every participant by their points.",
+   "topic": "loyalty-points",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/space",
+   "quote": "- **list.address.username** (String) - User's username.\n- **list.address.address** (String) - User's wallet address.\n- **list.address.avatar** (String) - User's avatar URL.",
+   "meaning": "A space's loyalty leaderboard shows each ranked user's username, wallet address and avatar, so your Galxe name and wallet are visible together to anyone who reads it through the API.",
+   "topic": "security-privacy",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/credential",
+   "quote": "Checks whether a user is eligible for a credential, optionally within the context of a specific campaign. Returns a value of 1 if the user has the credential, 0 if not.",
+   "meaning": "Each task is a credential that Galxe checks as a plain yes (1) or no (0) for your account, optionally for one specific campaign.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/credential",
+   "quote": "- **address** (String!) - Required - The user's wallet address or account identifier.",
+   "meaning": "A credential check is made for one wallet address or account identifier, so a task counts only for the exact wallet or account that holds it.",
+   "topic": "eligibility",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/credential",
+   "quote": "\"name\": \"Twitter Follower Verification\",\n      \"eligible\": 1,\n      \"credType\": \"TWITTER\",\n      \"credSource\": \"TWITTER_FOLLOW\",",
+   "meaning": "An X (Twitter) follow task is checked as a credential of type TWITTER whose verification method is TWITTER_FOLLOW, and it reads 1 once your account holds it.",
+   "topic": "x-task-verification",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/credential",
+   "quote": "| `SYNCED` | Data is current and reliable |\n| `SYNCING` | Data is being updated, may be stale |",
+   "meaning": "While a credential is SYNCING its data may be stale, so a task you just finished may not show as done until it reads SYNCED.",
+   "topic": "task-verification",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/credential",
+   "quote": "- **credType** (CredType!) - Credential platform/type\n- **credSource** (CredSource!) - Verification method\n- **syncStatus** (SyncStatus!) - Data synchronization status\n- **lastSync** (Int) - Last sync timestamp",
+   "meaning": "Every credential records its platform, its verification method, whether its data is in sync and when it last synced, which tells you how fresh a check of your task is.",
+   "topic": "task-verification",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/credential",
+   "quote": "POST request to the Galxe GraphQL endpoint with an access token to check eligibility. Replace YOUR_ACCESS_TOKEN and address.",
+   "meaning": "With a Galxe access token, the GraphQL endpoint can be queried to check whether a given address holds a credential.",
+   "topic": "api-access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/credential",
+   "quote": "- **chain** (String) - Blockchain network",
+   "meaning": "A credential can name a blockchain network, so check which chain an on-chain task is measured on before doing it.",
+   "topic": "gas-and-chain",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/starboard",
+   "quote": "Fetch a paginated leaderboard with user profiles, rank, influence score, and change metrics over 24H, 7D, and 30D.",
+   "meaning": "A Starboard ranks people by an influence score and tracks how their rank and score moved over the last 24 hours, 7 days and 30 days.",
+   "topic": "starboard",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/starboard",
+   "quote": "| `xUserProfile` | `XUserProfile` | Twitter user information |\n| `rank` | `StarboardMetricValue` | User's ranking position |\n| `influenceScore` | `StarboardMetricValue` | User's influence score |",
+   "meaning": "Starboard entries are X (Twitter) accounts, each given a ranking position and an influence score.",
+   "topic": "starboard",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/starboard",
+   "quote": "Returns the `starboard` object containing `basicInfo` with fields: `id`, `name`, `projectName`, `description`, `tags`, `type`, and `reward` (with `name`, `description`, `startTime`, `endTime`).",
+   "meaning": "A Starboard can carry a reward with its own start and end time, so its reward window can be checked before you compete for rank.",
+   "topic": "reward-window",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/starboard",
+   "quote": "- **Twitter user not found** - User not tracked - Check if user is in starboard",
+   "meaning": "Only X accounts that a Starboard tracks appear on it; an untracked handle comes back as 'Twitter user not found' and has no rank there.",
+   "topic": "starboard",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/starboard",
+   "quote": "| `twitterHandleByEvmAddress` | `TwitterHandleByEvmAddress` | Twitter handle lookup by EVM address |\n| `userDetail` | `StarboardUserDetail` | Detailed user metrics for EVM address |",
+   "meaning": "Galxe's API can look up the X handle linked to an EVM wallet address and that address's detailed Starboard metrics, so once linked, your wallet and X account can be matched by anyone with API access.",
+   "topic": "security-privacy",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/starboard",
+   "quote": "- **Rate limit exceeded** - Too many requests - Implement retry logic",
+   "meaning": "Galxe's API refuses requests when too many are sent, so any lookup tool has to stay within its rate limit.",
+   "topic": "api-access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/api-reference/starboard",
+   "quote": "Queries a starboard's basic information and leaderboard data using GraphQL. Requires an access token for authentication.",
+   "meaning": "Reading Starboard data through Galxe's GraphQL API requires an access token.",
+   "topic": "api-access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: API reference (quest, space, cr",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/loyalty-points/getting-started/introduction",
+   "quote": "This system allows loyalty point issuers (such as brands or event organizers) to create custom loyalty point tokens that are fully verifiable and transferable on-chain. By interacting with this system, users can earn, transfer, and manage their loyalty points seamlessly, with full control over token issuance and burning.",
+   "meaning": "Onchain loyalty points are tokens a project issues to your wallet that can be verified on-chain, but the same page later says they are non-transferable by default, so the 'transfer' promised here depends on the project.",
+   "topic": "loyalty points",
+   "kind": "verbatim",
+   "cluster": "Loyalty Points (onchain points on Gravity)",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/loyalty-points/getting-started/introduction",
+   "quote": "Loyalty points are represented as ERC-20 tokens, which can be customized by the issuer. Each loyalty point contract is created using the factory method and is managed by a designated admin.",
+   "meaning": "Each project's points are a separate ERC-20 token run by an admin that project designates, so that project sets how its points behave.",
+   "topic": "loyalty points",
+   "kind": "verbatim",
+   "cluster": "Loyalty Points (onchain points on Gravity)",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/loyalty-points/getting-started/introduction",
+   "quote": "Custom token names and symbols, which can be updated as needed.",
+   "meaning": "A project can later change its points token's name and symbol, so the name shown is not a fixed identifier for it.",
+   "topic": "loyalty points",
+   "kind": "verbatim",
+   "cluster": "Loyalty Points (onchain points on Gravity)",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/loyalty-points/getting-started/introduction",
+   "quote": "Loyalty points are issued (minted) by entities with the `MINTER_ROLE` and can be burned by the same. This ensures that only authorized entities can control the issuance and removal of points. Minting and burning can be done individually or in batches, allowing for flexibility in managing large groups of users.",
+   "meaning": "Only the project's authorized minters can add points to your wallet, and those same minters can remove points, one wallet at a time or in bulk, so a balance can go down as well as up.",
+   "topic": "loyalty points: minting and burning",
+   "kind": "verbatim",
+   "cluster": "Loyalty Points (onchain points on Gravity)",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/loyalty-points/getting-started/introduction",
+   "quote": "Admins have the ability to toggle the transferability of loyalty points. By default, points are non-transferable, but this setting can be changed by the admin. This feature is useful for programs where points can only be redeemed but not traded or transferred between users.",
+   "meaning": "Points normally stay in the wallet that earned them: you cannot move or pool them between wallets unless the project's admin turns transfers on, and some programs only let you redeem them.",
+   "topic": "loyalty points: transferability",
+   "kind": "verbatim",
+   "cluster": "Loyalty Points (onchain points on Gravity)",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/loyalty-points/getting-started/api",
+   "quote": "Query the leaderboard for a Loyalty Point contract deployed via the factory on Gravity chains. Returns a paginated list of addresses with their points and ranks.",
+   "meaning": "Galxe documents a query that lists each wallet's points and rank on a Gravity onchain loyalty-point leaderboard, so a wallet's standing there can be looked up.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Loyalty Points (onchain points on Gravity)",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/loyalty-points/getting-started/api",
+   "quote": "Use this GraphQL query to fetch the loyalty point leaderboard for a specific contract address. The endpoint is https://graphigo-business.prd.galaxy.eco/query. The query requires the loyaltyPointAddress and supports a limit parameter; the response includes totalCount and a list of entries with address, points, and rank.",
+   "meaning": "The lookup needs the points contract's address and goes to Galxe's business GraphQL endpoint; this page mentions no access token, but Galxe's integration authentication page says that endpoint requires one.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Loyalty Points (onchain points on Gravity)",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/loyalty-points/contracts/loyalty-point",
+   "quote": "Mints new loyalty points to a specified address. Only callable by an address with the MINTER_ROLE.",
+   "meaning": "New points are created only by an address holding the project's minter role and sent to a named address; this function gives a participant no way to mint their own.",
+   "topic": "loyalty points: minting and burning",
+   "kind": "verbatim",
+   "cluster": "Loyalty Points (onchain points on Gravity)",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/loyalty-points/contracts/loyalty-point",
+   "quote": "Burns loyalty points from a specified account. Only callable by an address with the MINTER_ROLE.",
+   "meaning": "The project's minter can burn points from any account it names, so the project can remove points already in your wallet.",
+   "topic": "loyalty points: minting and burning",
+   "kind": "verbatim",
+   "cluster": "Loyalty Points (onchain points on Gravity)",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/loyalty-points/contracts/loyalty-point",
+   "quote": "Sets whether the token is transferable.",
+   "meaning": "One on/off setting in the contract decides whether points can move between wallets (the introduction page says the admin controls it and it starts switched off).",
+   "topic": "loyalty points: transferability",
+   "kind": "verbatim",
+   "cluster": "Loyalty Points (onchain points on Gravity)",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/loyalty-points/contracts/loyalty-point",
+   "quote": "Admin can add or revoke roles using `grantRole` and `revokeRole`.",
+   "meaning": "The project's admin can change which addresses are allowed to issue and burn points.",
+   "topic": "loyalty points",
+   "kind": "verbatim",
+   "cluster": "Loyalty Points (onchain points on Gravity)",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/loyalty-points/contracts/loyalty-point",
+   "quote": "This contract follows the ERC20 token standard, making it interoperable with other blockchain systems.",
+   "meaning": "Your onchain points are a standard ERC-20 token, so the balance can be read on-chain like any other token (the contract exposes balanceOf).",
+   "topic": "loyalty points",
+   "kind": "verbatim",
+   "cluster": "Loyalty Points (onchain points on Gravity)",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/resources/rate-limits",
+   "quote": "| Endpoint | Rate Limit | Monthly Quota |\n| - | - | - |\n| [https://graphigo-business.prd.galaxy.eco/query](https://graphigo-business.prd.galaxy.eco/query) | 10 QPS | 100,000 requests |",
+   "meaning": "On the free tier, Galxe's business API endpoint (graphigo-business.prd.galaxy.eco/query) accepts at most 10 requests a second and 100,000 requests a month, so anything reading Galxe through it must stay under both numbers.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: resources (rate limits, error h",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/resources/rate-limits",
+   "quote": "When your application exceeds the rate limit (10 QPS), the API will return a `HTTP 429 Too Many Requests` response code. You should implement exponential backoff and retry logic to handle these responses.",
+   "meaning": "Sending more than 10 requests a second gets a 429 refusal, and the documented fix is to wait longer before each retry, not to push harder.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: resources (rate limits, error h",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/resources/rate-limits",
+   "quote": "When you reach your monthly quota (100k requests), the API will return a `HTTP 429 Too Many Requests` response code until the next billing cycle begins.",
+   "meaning": "After 100,000 requests in a month every call is refused with a 429 until the next billing cycle begins; an example error on the authentication page shows a daily limit of 1,000 instead, so the docs do not settle the exact quota.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: resources (rate limits, error h",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/resources/rate-limits",
+   "quote": "Need higher limits? Contact our team for enterprise pricing that includes:\n\n* **Higher Rate Limits**: Up to 1000+ QPS\n* **Increased Quotas**: 10 Millions of requests per month\n* **Priority Support**: Dedicated technical support\n* **SLA Guarantees**: Uptime and response time guarantees",
+   "meaning": "Limits above the free tier (up to 1000+ requests a second and 10 million a month) and priority support come only with paid enterprise pricing, arranged by contacting Galxe's team.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: resources (rate limits, error h",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/resources/error-handling",
+   "quote": "**Cause**: Exceeded monthly API quota or rate limits.\n\n**Solution**: Implement exponential backoff retry logic. Monitor usage and consider upgrading to higher rate limits if needed.",
+   "meaning": "A QUOTA_EXCEEDED error means the per-second or monthly API allowance is used up, and Galxe's remedy is to back off, watch usage, or upgrade to higher limits.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: resources (rate limits, error h",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/resources/error-handling",
+   "quote": "Always check the `extensions.category` field to understand the type of error:\n\n* **`AUTHENTICATION`/`AUTHORIZATION`** - Fix token/permissions, don't retry\n* **`VALIDATION`** - Fix request parameters, don't retry\n* **`RATE_LIMIT`** - Implement backoff and retry\n* **`NOT_FOUND`** - Verify resource exists, don't retry\n* **`INTERNAL`/`UNAVAILABLE`** - Retry with backoff",
+   "meaning": "A token or permission refusal should be fixed, not retried, and only rate-limit and server errors get retried with growing waits, so a well-behaved reader never keeps hitting an endpoint that has refused it.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: resources (rate limits, error h",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/resources/error-handling",
+   "quote": "2. **Check Authentication**\n   * Access token valid and not expired\n   * Token has permissions for requested resources\n   * Headers properly formatted",
+   "meaning": "An API access token can expire, and it works only on the resources it has permission for.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: resources (rate limits, error h",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/resources/error-handling",
+   "quote": "4. **Monitor Limits**\n   * Stay within rate limits (10 QPS for free tier)\n   * Keep query complexity reasonable\n   * Use pagination for large datasets",
+   "meaning": "Callers are told to stay under 10 requests a second on the free tier, keep queries modest, and page through large result sets instead of pulling them all at once.",
+   "topic": "API access",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: resources (rate limits, error h",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/resources/support",
+   "quote": "> **[Discord Community](https://discord.gg/galxe)**\n>\n> Get real-time help from the community and team\n\n> **[Email Support](mailto:support@galxe.com)**\n>\n> Direct support for complex technical issues",
+   "meaning": "The help channels Galxe documents are its Discord at discord.gg/galxe and the address support@galxe.com; check any contact that claims to be Galxe support against these.",
+   "topic": "support and appeals",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: resources (rate limits, error h",
+   "verified": false
+  },
+  {
+   "url": "https://docs.galxe.com/galxe-integration/resources/support",
+   "quote": "**[support@galxe.com](mailto:support@galxe.com)**\n\n**What to Include:**\n\n* Clear description of the issue\n* Steps to reproduce the problem\n* Expected vs. actual behavior\n* Code snippets (if applicable)\n* Error messages and stack traces\n* Your environment details",
+   "meaning": "Galxe asks that an email to support@galxe.com include a clear description, the steps that led to the problem, what was expected versus what happened, and the exact error messages; the page presents this as developer support.",
+   "topic": "support and appeals",
+   "kind": "verbatim",
+   "cluster": "Galxe Integration: resources (rate limits, error h",
+   "verified": false
+  }
+ ]
+}

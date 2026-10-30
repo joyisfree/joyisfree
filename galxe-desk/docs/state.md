@@ -1,11 +1,14 @@
-# State — 29 Oct 2026 (the Galxe Desk)
+# State — 30 Oct 2026 (the Galxe Desk)
 - **Goal:** claim real prizes with one clean account and a specialist team; never enter worthless or unclaimable quests.
-- **Decided (Leif, 28 Oct):** Path 2; an existing aged personal X account, never the studio's; Galxe domains allowed in the cloud environment.
-- **Done:** the Prize Gate, the ledger and the rulebook crawler with 42 tests; 7 specialists and the `galxe-claim` skill; the rulebook first pass (RULES.md, CLAIMING.md); the verdict and the team in README.
-- **Not yet proven:** the rulebook crawl (the hosts were still blocked from this cloud session on 29 Oct); whether the API token answers for quests outside one's own Space (RULES §C3).
+- **Decided (Leif, 28 Oct):** desk without a bot; an existing aged personal X account, never the studio's; the Galxe hosts allowed in the cloud environment.
+- **Done (first pass, 28 to 29 Oct):** Prize Gate, ledger, crawler, 7 specialists, the galxe-claim routine, rulebook first pass.
+- **Done (second pass, 30 Oct, "Try again" against Leif's standard):** gate on Galxe's official quest shape (best eligible reward per quest, on-chain capital and gas, speed games, excluded countries, project KYC, published point conversions); weekly Do card (ending-soon first, one shared $25 wallet cap); 75 tests, 27 of 27 guards bite; six legal points confirmed word for word; data-path rule from the Terms; the pre-token "Voyage" lane built, cross-checked by the panel, and dropped on the Linea backtest.
+- **Live scouting (30 Oct):** 0 verifiable quests from about 160 searches; StarPhone flagged as a likely scam (docs/scouting-2026-10-30.md).
+- **Official read (30 Oct, stopped before synthesis at Leif's word):** 270 findings in rulebook/read-2026-10-30.json, 137 docs quotes re-found by two checkers; 59 of 126 listed pages read.
+- **Not yet proven:** the full crawl and any live shortlist (hosts still refused on 30 Oct); RULES.md still has 30 unconfirmed lines.
 - **Next:**
-  1. When the hosts are reachable: `npm run desk:crawl`, then the rules counsel reads every page, marks INDEX read, updates RULES.md and CLAIMING.md; `npm run desk:check` complete.
-  2. On the Mac: the "Galxe desk" Brave profile; Leif signs in to the aged X account and the Galxe account there, creates the wallet, funds at most $25 of G on Gravity L1 (nothing on Alpha, which shuts 1 Nov); `account.json` filled from the real account.
-  3. First Monday: scout, analyst, guardian; the first shortlist; the daily 10-minute pass starts; day 30 panel.
-- **Blocked:** nothing on Claude's side; the crawl waits on the network setting.
-- **Traps:** a flag ends the run by itself; Gigapot tickets void after 7 days; raffle claims close after 15 days (RECHECK); G on Alpha fails a claim; the gate refuses anything recorded as unknown, so the scout records facts, never guesses.
+  1. Fold read-2026-10-30.json into RULES.md and CLAIMING.md; `npm run desk:check` counts what is left.
+  2. When the hosts answer: `npm run desk:crawl`, the full read, then a manual live run (official API token or a normal browser read) and the first real Do card.
+  3. On the Mac: the "Galxe desk" Brave profile, Leif's sign-ins, the $25 wallet, `account.json` filled from the real account (country AU to confirm).
+- **Skipped at Leif's word (30 Oct):** the adversarial review workflow over the second pass.
+- **Traps:** a flag ends the run; Gravity Alpha shuts 1 Nov (no G there); patch files with split/join, never String.replace; new agent files register only at the next session start.
