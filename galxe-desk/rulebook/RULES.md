@@ -115,7 +115,7 @@ about 1,400 wallets a raffle.
 
 §B10. **Earndrop** (Jan 2025) distributes a project's tokens to addresses the project chose, filtered by Passport and
 Score; projects can ban addresses and a ban is irreversible; a claim fee may apply; tokens "have no guaranteed
-value". help/10899990 DIGEST; legal VERIFIED.
+value". help/10899990 DIGEST; legal VERIFIED. An Earndrop claim costs network gas plus a Galxe claim service fee tiered from $0.05 (claim worth $1 to $5) to $5.00 (claim worth $1,000 or more), paid in the network's native token for unlisted tokens (help/10899990, DIGEST, found by the 30 Oct scouts).
 
 **What the desk takes from B:** OATs, points, GG and XP are refused by the Prize Gate as worthless unless a Space
 publishes a dated points-to-token conversion. Only token, stablecoin, ETH and published-odds rewards are valued.
