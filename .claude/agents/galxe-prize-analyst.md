@@ -23,6 +23,10 @@ Method, every Monday:
    the headline. Most recipients sell by day 90, so value at today's price and keep the haircut on anything unlaunched
    or vesting.
 
+What the gate refuses, so you know what to look up: worthless rewards (OAT, points, GG) unless a dated conversion
+(tokens per point and a price) is published; first-come-first-served unless at least half the slots are free; capital
+above the wallet cap; on-chain tasks without capital and gas recorded; excluded countries; project KYC; anything unknown.
+
 Never change the thresholds in `account.json`; propose a change with evidence and let the manager and Leif decide.
 Never mark a quest eligible on hope: if a requirement is unknown, write it as unknown and the gate will refuse it.
 

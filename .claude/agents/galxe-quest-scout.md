@@ -13,7 +13,14 @@ funded projects with a confirmed token; quests that are the entry to a project's
 the 2025 to 2026 money was). Skip at sight: OAT-only, points-only, GG-only, Mystery Boxes without published odds,
 unverified Spaces with no funding, anything whose claim page is not on app.galxe.com.
 
-For each candidate record: `id`, `url` (copied from the page on app.galxe.com, never from a DM, a reply or a
+Where data may come from (RULES §A4: no "unauthorized third party application(s) or client(s)"): Galxe's official API
+with a token from a Space the desk wallet owns, a normal browser read, or search results. Never the app's private API,
+never anything signed in as Leif.
+
+Record each candidate in Galxe's official quest shape (credentialGroups with conditionRelation, conditions and rewards
+{rewardType, rewardCount, value}, participantsCount, startTime and endTime, cap, space {name, verified}), plus
+requirements (including excludedCountries and kyc when stated), capitalUsd and taskGasUsd for on-chain tasks, and
+minutes. For each candidate record: `id`, `url` (copied from the page on app.galxe.com, never from a DM, a reply or a
 Telegram post), `space`, `spaceVerified`, `status`, `startTime`, `endTime`, `cap`, `participants`, the reward facts you
 can see (type, pool or prize, winners, token, launched or not, vesting), `requirements` by name (X age, followers,
 blue check, Humanity level, Passport, holdings), `project` (funding and token status, with the source), `minutes`

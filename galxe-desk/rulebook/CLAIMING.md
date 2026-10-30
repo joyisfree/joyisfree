@@ -47,11 +47,16 @@ Legend: first pass 28 Oct 2026, from RULES.md. Every line marked RECHECK is conf
 | Token unlaunched or vesting, headline value never realised | §B10 | 50% haircut in the gate; count only realised dollars in the ledger |
 | Prize withheld as a rule violation, decision final | §A5, §A6 | Nothing to appeal if the rules were kept; one appeal with evidence if not |
 
-## 4. The claim day, in order
+## 4. The weekly pass, in order
 
-1. `npm run desk:status`: anything OVERDUE or due today is first.
-2. Guardian checklist on the exact URL from `shortlist.md`.
-3. Re-run the eligibility check if the API token works; otherwise re-read the requirements on the page.
-4. Leif clicks: tasks, then verify, then claim. Signs only a readable sign-in message or the exact claim transaction.
-5. Ledger at once: `claimed` with fee, gas and minutes; later `realised` with the cash amount after selling.
-6. Any notice, odd prompt or failure: `flag` in the ledger, stop, risk officer reviews.
+1. `npm run desk:status`: anything OVERDUE, or due before next week, comes first.
+2. The Do card (`npm run desk:card`) lists the week: quests that end before next week first, all inside the one
+   wallet cap, with each exact URL and the tasks in order.
+3. The guardian checks each exact URL; contract addresses come from the project's own docs and are noted before signing.
+4. If the API token works, re-run the eligibility check (RULES §C2); otherwise re-read the requirements on the page.
+5. Leif clicks: tasks, then Verify, then claim. He signs only a readable sign-in message or the exact claim or task
+   transaction, with exact-amount approvals.
+6. After each on-chain task the approval is revoked; claimed prizes leave the desk wallet the same day.
+7. Leif says in one line what he did; Claude writes the ledger (`claimed` with fee, gas and minutes; later `realised`
+   with the cash amount after selling).
+8. Any notice, odd prompt or failure: `flag` in the ledger, stop, the risk officer reviews.

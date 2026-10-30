@@ -1,51 +1,72 @@
 ---
 name: galxe-claim
-description: The Galxe desk's routine. Use on Monday to produce the week's shortlist, each day for the 10-minute claim pass on the Mac, after any bot notice or odd prompt, and at day 30, 60 and 90 for the critic panel. Not for the studio app.
+description: The Galxe desk's routine. Use on Monday to produce the week's shortlist and Do card, after Leif's weekly pass to write the ledger, after any bot notice or odd prompt, and at day 30, 60 and 90 for the critic panel. Not for the studio app.
 ---
 
 # Galxe claim routine
 
 The desk enters only quests whose prize is real, open, eligible, claimable and worth the minutes. Judgement is
-Claude's; the clicks on the account are Leif's, because Galxe defines a bot as a program acting "without real human
-involvement" and flags scripted-looking activity even by hand. Everything below runs from `galxe-desk/`.
+Claude's; the clicks on the account are Leif's, because X forbids scripting its website, Galxe flags automated quest
+interaction (RULES §A1, §A2) and its Terms bar any "unauthorized third party application(s) or client(s)" (§A4).
 
-## Monday, about 30 minutes, two helpers at most
+## Where live data may come from (RULES §A4)
 
-1. `galxe-quest-scout` writes `candidates.json` from the feeds (Galxe Explore, DefiLlama airdrops, CryptoRank
-   Drophunting, Bankless monthly, Airdrop Alert).
-2. `galxe-prize-analyst` values each candidate and runs the gate:
+Galxe's official API with a token issued from a Space the desk wallet owns, or a normal browser read of a public page.
+Never a script posing as the app, never the app's private API, never anything signed in as Leif. Anything that reads
+untrusted text (quest pages, crypto news, search results) runs as a reader with no write tools and none of Leif's
+connectors: `galxe-reader` once the session has it, otherwise `galxe-quest-scout` told not to write, with
+`git status` checked afterwards.
+
+## Monday: the shortlist and the Do card (about 30 minutes of helpers, at most three)
+
+1. `galxe-quest-scout` records candidates in Galxe's official quest shape (`credentialGroups`, `participantsCount`,
+   times, `requirements`, `project`, `capitalUsd`, `taskGasUsd`). A fact it cannot find stays absent: the gate refuses
+   unknowns, so a guess can only let a bad quest through.
+2. `galxe-prize-analyst` prices the rewards and runs the gate:
    `node galxe-desk/scripts/rank.mjs --candidates galxe-desk/candidates.json --account galxe-desk/account.json --out galxe-desk/shortlist.md`
-3. `galxe-security-guardian` checks every line of `shortlist.md`; a veto removes the quest.
-4. If the rulebook crawl ran (`npm run desk:crawl` where the hosts are reachable), `galxe-rules-counsel` reads
-   `rulebook/CHANGES.md` and updates `RULES.md` and `CLAIMING.md`.
-5. The manager (the main session) shows Leif the shortlist: quest, net EV, minutes, claim window. Nothing else.
+3. `galxe-security-guardian` checks every pass; a veto removes it, whatever its value.
+4. `npm run desk:card -- --shortlist galxe-desk/shortlist.json` writes the Do card: the week's minutes filled with the
+   quests that end before next week first, all inside the one wallet cap.
+5. The main session shows Leif the Do card. Nothing else.
 
-## Each day, 10 minutes, on the Mac
+## Leif's one weekly pass (about 30 minutes, on the Mac)
 
-1. In the desk's own Brave profile ("Galxe desk": only the aged personal X account, the Galxe account and the
-   throwaway wallet live there), Claude in Brave opens the next shortlisted quest at its exact `app.galxe.com` URL,
-   re-checks the requirements against `account.json`, and leaves the page ready.
-2. Leif does the task clicks and the claim click. Signs only a readable sign-in message or the exact claim.
-   Refuses any approval, Permit or unlimited-allowance prompt and says so.
-3. Record it at once:
-   `node galxe-desk/scripts/ledger.mjs add --quest ID --space NAME --action entered --minutes N --fee 0.08`
-   A win: `--action won --amount USD --deadline YYYY-MM-DD`, the window taken from `rulebook/CLAIMING.md` section 2
-   (raffle 15 days per help/9645630, RECHECK until the crawl; Gigapot 7 days; Earndrop as announced).
-   A claim: `--action claimed --fee USD --gas USD --minutes N`. Cash out: `--action realised --amount USD`.
-4. `npm run desk:status` prints claims due, anything OVERDUE, and the kill rule. An overdue claim is worked first.
+1. In the "Galxe desk" Brave profile (only the aged personal X account, the Galxe account and the throwaway wallet
+   live there), he works the Do card top to bottom.
+2. He signs only a readable sign-in message or the exact claim or task transaction, with exact-amount approvals.
+   Any approval, Permit or unlimited-allowance prompt is refused and reported.
+3. He tells Claude in one line what he did ("did 1 and 2"). Claude writes the ledger:
+   `node galxe-desk/scripts/ledger.mjs add --quest ID --space NAME --action entered --minutes N --fee 0.08`;
+   a win `--action won --amount USD --deadline YYYY-MM-DD` (window from `rulebook/CLAIMING.md` section 2);
+   a claim `--action claimed --fee USD --gas USD --minutes N`; a sale `--action realised --amount USD`.
+4. `npm run desk:status` shows claims due, anything OVERDUE (worked first next pass) and the kill rule.
 
 ## Standing rules, never bent
 
-- One person, one account, one device, no scripts touching the account, no VPN, no bursts, human pace.
+- One person, one account, one device; no scripts on the account; no VPN (§A9); no bursts; human pace.
 - Never the studio's X handle, business email, phone, domain, card or main browser profile.
-- The wallet holds at most `walletCapUsd` from `account.json` and nothing the desk would mind losing.
-- Passport and Score only when a shortlisted quest requires one, and only with Leif's yes.
-- On "Bot activity detected", any restriction, or any unexpected prompt:
-  `node galxe-desk/scripts/ledger.mjs add --quest ID --action flag --note "what it said"`; stop the day; the risk
-  officer reviews before anything resumes.
+- The wallet holds at most `walletCapUsd`, shared by every quest at once. Contract addresses come from the project's
+  own docs and are noted before signing; approvals are revoked after each on-chain task; claimed prizes leave the desk
+  wallet the same day.
+- Passport, Score and any project KYC only with Leif's yes.
+- On "Bot activity detected", any restriction or any unexpected prompt:
+  `node galxe-desk/scripts/ledger.mjs add --quest ID --action flag --note "what it said"`. That stops the desk by
+  itself, and the risk officer reviews before anything resumes.
+
+## The full read (first session where the official hosts answer)
+
+`npm run desk:crawl`; one `galxe-rules-counsel` reads every claim-relevant page in full and marks each INDEX row with
+a one-line note (a second counsel only past about 150 such pages); the Verifier samples 15 notes against the saved
+pages; RULES.md and CLAIMING.md are confirmed line by line. `npm run desk:check` is complete only at zero unconfirmed
+rule lines. That count proves no rule rests on a search summary, and the notes and the sample prove the reading.
+
+## No unattended engine until a manual run earns it
+
+A recurring scheduled run is created only after one manual networked run has produced a real shortlist. When it is,
+it runs as a fresh session with no connectors, in an environment limited to named hosts, with access to this repo only.
 
 ## Day 30, 60, 90: the critic panel
 
-Run `crypto-desk-lead`, `web3-growth-lead` and `crypto-risk-officer` on the ledger (three at most, Sonnet), record
-their verdicts in `docs/state.md`, and obey the kill rule in `npm run desk:status`: day 30 under $10 realised stops;
-day 60 under the hourly bar stops; a flag stops at once. Stopping keeps the capability; it only ends the questing.
+`crypto-desk-lead`, `web3-growth-lead` and `crypto-risk-officer` judge the ledger (three at most, Sonnet), their
+verdicts go in `docs/state.md`, and `npm run desk:status` applies the kill rule: day 30 under $10 realised stops; day
+60 under the hourly bar stops; a flag stops at once. Stopping keeps the capability; it only ends the questing.

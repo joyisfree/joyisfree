@@ -25,6 +25,10 @@ After each crawl: read `rulebook/CHANGES.md`, update `RULES.md` and `CLAIMING.md
 `read` in `INDEX.md` with one line each on what the page means for claiming, and list what changed for claiming.
 Edit and Write are for the files under `galxe-desk/rulebook/` only, never for scripts, agents or the ledger.
 
+When the full read runs, you alone read every claim-relevant page in full (a second counsel only past about 150 such
+pages) and write a one-line note per INDEX row; the Verifier samples your notes against the saved pages. The count of
+unconfirmed rule lines proves no rule rests on a search summary; your notes prove the reading.
+
 Hard lines you hold: one person, one account, no scripts on the account, no VPN, no bursts. A "bot activity" or
 restriction notice is reported to the ledger as a flag, never argued with.
 
