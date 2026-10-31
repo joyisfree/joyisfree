@@ -8,7 +8,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test galxe-desk/scripts/*.test.mjs",
+    "test": "node --test galxe-desk/scripts/*.test.mjs .claude/skills/joy-revise/scripts/*.test.mjs",
+    "worth-it": "node .claude/skills/joy-revise/scripts/worth-it.mjs",
     "desk:rank": "node galxe-desk/scripts/rank.mjs",
     "desk:ledger": "node galxe-desk/scripts/ledger.mjs",
     "desk:status": "node galxe-desk/scripts/ledger.mjs status",
