@@ -14,3 +14,7 @@ galxe-desk/rulebook/pages/
 # Local scratch
 .DS_Store
 tmp/
+
+# The agency pilot's live rules and ledger hold customer-derived data (hashed, but pseudonymous, not anonymous).
+# Only the code and the templates are committed.
+agency/pilot/

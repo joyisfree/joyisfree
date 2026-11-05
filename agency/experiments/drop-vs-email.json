@@ -1,0 +1,23 @@
+{
+  "name": "limited drop vs plain email, same list",
+  "_read_me_first": "Run `npm run ab:test -- --preflight --list-size <your list> --metric orders` BEFORE editing this. On a list under about 39,000 it will say TOO SMALL, and the plain email stands: do not send this as an experiment. Fill in decidedOn and the planned dates, replace baselineRate with Joyisfree's own CAMPAIGN placed-order rate if you have one (never a flow), then run `npm run ab:test -- --check --file agency/experiments/drop-vs-email.json` before sending anything.",
+  "preRegistered": {
+    "decidedOn": "2026-11-06",
+    "metric": "conversion_rate",
+    "baselineRate": 0.0012,
+    "baselineSource": "SUMMARY, not verified: Klaviyo 2026 benchmark, campaign placed-order rate per delivered email 0.12% clothing and accessories, 0.13% home and garden; older Klaviyo apparel 0.07%; Omnisend 2025 all ecommerce 0.08%. Range 0.07% to 0.13%. Taken from search summaries; the pages were not opened. Flows run 15 to 20 times higher and must never be used here.",
+    "minLiftPct": 100,
+    "alpha": 0.05,
+    "power": 0.8,
+    "plannedPerArm": 19586,
+    "conversionWindowDays": 7,
+    "analyseOn": "2026-11-17",
+    "defaultArm": "plain email"
+  },
+  "dataCollectedFrom": "2026-11-10",
+  "analysedOn": null,
+  "arms": [
+    { "name": "plain email", "recipients": null, "conversions": null, "revenueUsd": null },
+    { "name": "limited drop", "recipients": null, "conversions": null, "revenueUsd": null }
+  ]
+}
