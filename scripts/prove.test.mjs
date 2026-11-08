@@ -5,15 +5,19 @@ import { secretHits } from './prove.mjs';
 
 const line = (text) => ({ where: 'f:1', text });
 
+// The fixtures are assembled at runtime from pieces, so this file's own source never contains a secret shape and
+// `npm run prove`'s scan of the repo stays clean. 8 Nov 2026: written as literals, they made prove flag itself.
+const j = (...parts) => parts.join('');
+
 test('real secret shapes are caught', () => {
   for (const t of [
-    '-----BEGIN OPENSSH PRIVATE KEY-----',
-    `const k = "sk_live_${'a'.repeat(24)}"`,
-    `token: ghp_${'A'.repeat(36)}`,
-    `github_pat_${'B'.repeat(40)}`,
-    `SLACK=xoxb-${'1'.repeat(20)}`,
-    'AKIAABCDEFGHIJKLMNOP',
-    `wallet key 0x${'f'.repeat(64)}`,
+    j('-----BEGIN OPENSSH ', 'PRIVATE', ' KEY-----'),
+    j('const k = "', 'sk', '_live_', 'a'.repeat(24), '"'),
+    j('token: ', 'gh', 'p_', 'A'.repeat(36)),
+    j('gith', 'ub_pat_', 'B'.repeat(40)),
+    j('SLACK=', 'xo', 'xb-', '1'.repeat(20)),
+    j('AK', 'IA', 'ABCDEFGHIJKLMNOP'),
+    j('wallet key ', '0', 'x', 'f'.repeat(64)),
   ]) assert.equal(secretHits([line(t)]).length, 1, t);
 });
 
