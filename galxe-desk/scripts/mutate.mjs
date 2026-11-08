@@ -4,18 +4,37 @@
 // survives its removal with the suite still green is a guard with no test behind it, and this command exits 1 and
 // names it. This is how "the guards are shown to fail" (studio rule 3) is proven by one command, not asserted.
 //
-//   node galxe-desk/scripts/mutate.mjs            # run every mutation, report killed / survived
-//   node galxe-desk/scripts/mutate.mjs --list     # just list the mutations
+//   node galxe-desk/scripts/mutate.mjs                 # run every mutation in the repo, report killed / survived
+//   node galxe-desk/scripts/mutate.mjs --only agency   # only the mutations whose file path contains "agency"
+//   node galxe-desk/scripts/mutate.mjs --list          # just list the mutations
 //
 // Each mutation is a single, exact string swap that neutralises one guard. `from` must occur once in its file.
+// It covers the whole repo, not only the desk: a bare file name means galxe-desk/scripts/<name>; anything with a
+// slash is a path from the repo root. Each mutation runs in a full throwaway copy of the repo, against the test
+// suite of the directory the file lives in.
 
-import { cpSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, dirname, resolve, relative, sep } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
+const REPO = resolve(DIR, '..', '..');
+
+// The test files each directory's guards are judged by. execFileSync would not expand a '*.test.mjs' glob without a
+// shell, so they are listed; a missing file is skipped, and a directory whose suite is empty refuses to run.
+export const SUITES = {
+  'galxe-desk/scripts': ['gate.test.mjs', 'ledger.test.mjs', 'crawl.test.mjs', 'do-card.test.mjs', 'verify-link.test.mjs', 'gigapot.test.mjs'],
+  'agency/scripts': ['ab-test.test.mjs', 'creator-pilot.test.mjs', 'orders.test.mjs'],
+  '.claude/skills/joy-revise/scripts': ['worth-it.test.mjs'],
+  scripts: ['prove.test.mjs'],
+};
+
+export const relPath = (file) => (file.includes('/') ? file : `galxe-desk/scripts/${file}`);
+
+// Never copied into a mutation's throwaway repo: history, dependencies, fetched pages and the pilot's private data.
+const SKIP = ['.git', 'node_modules', join('galxe-desk', 'rulebook', 'pages'), join('agency', 'pilot')];
 
 // name | file | from (exact, unique) | to
 export const MUTATIONS = [
@@ -87,33 +106,53 @@ export const MUTATIONS = [
   // gigapot.mjs
   ['an unpriceable lottery is refused', 'gigapot.mjs', 'if (missing.length) {', 'if (false) {'],
   ['GG is never priced from a non-number', 'gigapot.mjs', 'if (!Number.isFinite(n) || n < 0) return null;', 'if (false) return null;'],
+  // .claude/skills/joy-revise/scripts/worth-it.mjs — the positive-move verdict
+  ...[
+    ['unknowns must be an explicit list', "if (!Array.isArray(d.unknowns)) cannot.push(", 'if (false) cannot.push('],
+    ['a named unknown refuses the verdict', 'for (const u of unknowns) cannot.push(`unknown: ${u}`);', 'for (const u of []) cannot.push(`unknown: ${u}`);'],
+    ['a missing number is never zero', 'if (!Number.isFinite(v[key])) cannot.push(', 'if (false) cannot.push('],
+    ['probability stays between 0 and 1', 'if (Number.isFinite(v.probability) && (v.probability < 0 || v.probability > 1)) {', 'if (false) {'],
+    ['haircut stays between 0 and 1', 'if (!Number.isFinite(haircut) || haircut < 0 || haircut > 1) cannot.push(', 'if (false) cannot.push('],
+    ['capital at risk is never assumed zero', 'if (!Number.isFinite(capital) || capital < 0) cannot.push(', 'if (false) cannot.push('],
+    ['the cheapest decisive test is required', "if (!String(d.cheapestTest ?? '').trim()) {", 'if (false) {'],
+    ['no kill rule, no verdict', "if (!String(k.metric ?? '').trim() || !Number.isFinite(killNumber) || !String(k.by ?? '').trim()) {", 'if (false) {'],
+    ['the kill date must be a date', '} else if (Number.isNaN(Date.parse(k.by))) {', '} else if (false) {'],
+    ['capital at risk is counted in full', 'const netUsd = evUsd - v.costs - timeCostUsd - capital;', 'const netUsd = evUsd - v.costs - timeCostUsd;'],
+  ].map(([name, from, to]) => [name, '.claude/skills/joy-revise/scripts/worth-it.mjs', from, to]),
+  // agency/scripts — ab-test.mjs, creator-pilot.mjs and orders.mjs. Added once the round-2 builders have finished,
+  // because each pattern must match the final file exactly.
 ];
 
 // Apply one mutation to a throwaway copy of the scripts and run the suite there. KILLED = a test went red.
-function runOne(m, scriptsDir) {
+function runOne(m, root) {
   const [name, file, from, to] = m;
-  const p = join(scriptsDir, file);
+  const rel = relPath(file);
+  const p = join(root, rel);
+  if (!existsSync(p)) return { name, status: 'NO_MATCH', detail: `${rel} does not exist` };
   const src = readFileSync(p, 'utf8');
   const i = src.indexOf(from);
-  if (i < 0) return { name, status: 'NO_MATCH', detail: `pattern not found in ${file}` };
-  if (src.indexOf(from, i + 1) >= 0) return { name, status: 'AMBIGUOUS', detail: `pattern occurs more than once in ${file}` };
+  if (i < 0) return { name, status: 'NO_MATCH', detail: `pattern not found in ${rel}` };
+  if (src.indexOf(from, i + 1) >= 0) return { name, status: 'AMBIGUOUS', detail: `pattern occurs more than once in ${rel}` };
   writeFileSync(p, src.slice(0, i) + to + src.slice(i + from.length));
-  // execFileSync would not expand a '*.test.mjs' glob without a shell, so the test files are listed by hand.
-  const testFiles = ['gate.test.mjs', 'ledger.test.mjs', 'crawl.test.mjs', 'do-card.test.mjs', 'verify-link.test.mjs', 'gigapot.test.mjs'].map((f) => join(scriptsDir, f));
+  const dir = dirname(rel).split(sep).join('/');
+  const testFiles = (SUITES[dir] || []).map((f) => join(root, dir, f)).filter((f) => existsSync(f));
+  // A guard with no suite to judge it cannot be said to bite. Fail closed rather than report it killed.
+  if (!testFiles.length) return { name, status: 'NO_SUITE', detail: `no test file exists for ${dir}` };
   try {
-    execFileSync(process.execPath, ['--test', ...testFiles], { stdio: 'pipe' });
+    execFileSync(process.execPath, ['--test', ...testFiles], { stdio: 'pipe', cwd: root });
     return { name, status: 'SURVIVED', detail: 'the suite stayed green with this guard removed' };
   } catch {
     return { name, status: 'KILLED' };
   }
 }
 
-export function run() {
+export function run({ only } = {}) {
   const results = [];
-  for (const m of MUTATIONS) {
+  const chosen = only ? MUTATIONS.filter((m) => relPath(m[1]).includes(only)) : MUTATIONS;
+  for (const m of chosen) {
     const work = mkdtempSync(join(tmpdir(), 'mutate-'));
     try {
-      cpSync(DIR, work, { recursive: true });
+      cpSync(REPO, work, { recursive: true, filter: (src) => !SKIP.some((s) => relative(REPO, src) === s || relative(REPO, src).startsWith(s + sep)) });
       results.push(runOne(m, work));
     } finally {
       rmSync(work, { recursive: true, force: true });
@@ -122,13 +161,14 @@ export function run() {
   return results;
 }
 
-const isMain = (() => { try { return import.meta.url === new URL(`file://${process.argv[1]}`).href || import.meta.url.endsWith('mutate.mjs'); } catch { return false; } })();
+const isMain = (() => { try { return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href; } catch { return false; } })();
 if (isMain) {
   if (process.argv.includes('--list')) {
-    for (const [name, file] of MUTATIONS) console.log(`- ${name} (${file})`);
+    for (const [name, file] of MUTATIONS) console.log(`- ${name} (${relPath(file)})`);
     console.log(`\n${MUTATIONS.length} mutations.`);
   } else {
-    const results = run();
+    const oi = process.argv.indexOf('--only');
+    const results = run({ only: oi >= 0 ? process.argv[oi + 1] : undefined });
     const killed = results.filter((r) => r.status === 'KILLED');
     const bad = results.filter((r) => r.status !== 'KILLED');
     for (const r of bad) console.log(`${r.status}: ${r.name} — ${r.detail}`);
