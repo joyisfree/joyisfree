@@ -68,7 +68,8 @@ as xlsx into the scratchpad and split into one CSV per tab.
   - Colleagues never get the same note.
 - **pack:** keeps Sheet1's row order with a key column, defuses cell text that would run as a formula, and shows
   missing, orphan and changed rows.
-- **privacy:** no real address, person, brand or creator name in a tracked file.
+- **privacy:** no real address, person, brand or creator name in a tracked file. It refuses to run without its names
+  and terms lists, because a gate with nothing to look for would pass a leak.
 
 ## Where data lives
 

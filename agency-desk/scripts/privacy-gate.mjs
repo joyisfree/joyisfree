@@ -44,6 +44,11 @@ function main() {
   const a = args();
   const names = a.names ? readFileSync(a.names, 'utf8').split('\n').filter(Boolean) : [];
   const terms = a.terms ? readFileSync(a.terms, 'utf8').split('\n').filter(Boolean) : [];
+  // Fail closed: with no names and no terms the gate could only see addresses, and would pass a leaked name.
+  if (!a['emails-only'] && (!names.length || !terms.length)) {
+    console.error('privacy gate: refusing to run without a names list and a terms list (--names, --terms); pass --emails-only to check addresses alone');
+    process.exit(2);
+  }
   const paths = a._.length ? a._ : DEFAULT_PATHS;
   const files = listFiles(paths);
   let total = 0;

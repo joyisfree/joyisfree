@@ -68,7 +68,11 @@ export function buildWorklist(data, { skipKeys = new Set(), rules = {}, connecti
     const tier = isWarm ? 'warm' : CORE.test(text) ? 'core' : HOME.test(text) ? 'home' : 'other';
     const ppl2 = g.people.filter((p) => !skipKeys.has(p.key)).map((p) => {
       const c = connections.get(token(p.name));
-      const companyMatch = c && (token(c.company).includes(brandKey(label)) || brandKey(label).includes(token(c.company)) || token(c.company).includes(stem(g.domain)));
+      const co = c ? token(c.company) : '';
+      const bk = brandKey(label);
+      const st = stem(g.domain);
+      // A blank or tiny company field must never count as a match ("".includes is always true).
+      const companyMatch = co.length >= 3 && ((bk.length >= 3 && (co.includes(bk) || bk.includes(co))) || (st.length >= 3 && co.includes(st)));
       return {
         row: p.row, key: p.key, name: p.name,
         address: p.domain ? relation(g.domain, p.domain, p.brand) : 'none',

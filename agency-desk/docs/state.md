@@ -1,4 +1,4 @@
-# State — 8 Nov 2026 (the Agency Desk)
+# State — 8 Nov 2026, after the team meeting (the Agency Desk)
 - **Goal:** every brand contact Leif adds on LinkedIn gets a true, sourced note and DM that earns a reply; email only after a yes (Spam Act).
 - **Done:**
   - 5 specialists and the `agency-personalise` routine.
@@ -9,9 +9,20 @@
   - Confidence: 0 High, 17 Medium, 283 Low.
   - About 288 titles are unconfirmed, because public search cannot see LinkedIn profiles.
   - 14 rows have dated hooks; 24 rows fell back to an honest role-check DM.
-- **Next (biggest lever):**
-  - Leif exports LinkedIn Connections. `agency:worklist --connections` then confirms titles, and wave 1 re-runs in a fresh session, which has a fresh search budget.
-  - Then a mower creator and US creators for the brands that keep asking, and reply learning once the Reply column fills.
+- **Team meeting (8 Nov, 7 seats):** the plan scored 2.3/5 for "signed deals in 30 days". Deals will come from the warm brands, not cold notes. Strategy now: warm first, true numbers before reach, and nothing looks ready unless it is.
+- **Next (week 1):**
+  - Send the 3 ready warm drafts, one a day. The 4 drafts marked [WAIT] in their subject go after their confirmations.
+  - A creator yes-check: roster creators, the creators who already said yes, and US scouts. Each sends a screenshot of recent views and audience countries.
+  - Leif's LinkedIn export (Connections, Messages, Invitations) for titles and a tracker.
+  - Today v2: about 10 honest fits, measured numbers only, openers by role.
+  - LinkedIn at about 15 invites a day and no more than 100 a week.
+  - Freeze the old engine until its LIVE checks pass.
+- **Next (weeks 2 to 4):**
+  - Measure every creator: the median of the last 12 videos, 30 days fresh.
+  - A price rule: median views times 20 to 25 per 1,000.
+  - The mower lane (one brand per creator per season) and the US creator lane (YouTube Creator Partnerships, public business contacts).
+  - The tracker, a daily Today card, the follow-up clock, the reply playbook, a one-pager template and a scoreboard by hook type.
+  - Move the finishing logic from the scratchpad into the repo.
 - **Blocked:**
   - The website audit: both domains are refused by the environment's network policy.
   - LIVE email waits for a postal address.

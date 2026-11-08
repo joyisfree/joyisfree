@@ -114,6 +114,22 @@ test('the LinkedIn export joins by name and confirms the company', () => {
   assert.equal(brand.people[0].connection.match, 'confirmed');
 });
 
+test('the LinkedIn export never confirms someone whose company is blank', () => {
+  const text = 'First Name,Last Name,URL,Email Address,Company,Position,Connected On\nAva,Sample,https://x.example/in/ava,,,Marketing Manager,01 Nov 2026\n';
+  const dir = mkdtempSync(join(tmpdir(), 'agency-conn2-'));
+  const li = join(dir, 'li'); mkdirSync(li);
+  writeFileSync(join(li, 'Sheet1.csv'), toCSV([S1, ['Acme Mowers', 'Ava Sample', at('ava', 'acmemowers.test'), '', '', '', '', '', 'Valid', '']]));
+  const [brand] = buildWorklist(loadSheets({ li }), { connections: parseConnections(text) });
+  assert.equal(brand.people[0].connection.match, 'name only: check');
+});
+
+test('the privacy gate refuses to run without its names and terms lists', () => {
+  let code = 0;
+  try { execFileSync(process.execPath, [join(here, 'privacy-gate.mjs')], { stdio: 'pipe' }); } catch (e) { code = e.status; }
+  assert.equal(code, 2);
+  execFileSync(process.execPath, [join(here, 'privacy-gate.mjs'), '--emails-only'], { stdio: 'pipe' });
+});
+
 test('the privacy gate passes reserved domains and catches real addresses and sheet names', () => {
   assert.deepEqual(scanText(`write to ${at('team', 'example.com')} or ${at('a', 'acme.test')}`), []);
   const hits = scanText(`contact ${at('jane.doe', 'realbrand.com')} now`, { names: ['Jane Doe', 'Jo'] });
