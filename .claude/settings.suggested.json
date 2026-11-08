@@ -1,0 +1,28 @@
+{
+  "_comment": [
+    "NOT ACTIVE. Copy this to .claude/settings.json to switch it on:",
+    "    cp .claude/settings.suggested.json .claude/settings.json",
+    "It is inert on purpose. These rules widen what a session may do without asking, and an agent",
+    "must not be able to widen its own permissions, so the harness refuses to let a session write its",
+    "own active settings file. You activate it; a session never does. See .claude/README.md.",
+    "",
+    "permissions.allow pre-approves only the three read-only desk commands (the proof gate, the ledger",
+    "read, the rulebook-completeness check), so they stop prompting. The write/network commands",
+    "(desk:rank, desk:crawl, desk:ledger, desk:card) are left out on purpose and still ask.",
+    "permissions.deny keeps .env and its local variants away from the Read tool, matching the studio",
+    "repo. This repo keeps No secrets, ever (CLAUDE.md), so there should be nothing to read; the rule",
+    "is defence in depth for Mac and cloud sessions alike. .env.example (names only) stays readable."
+  ],
+  "permissions": {
+    "allow": [
+      "Bash(npm test)",
+      "Bash(npm run desk:status)",
+      "Bash(npm run desk:check)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.local)",
+      "Read(./.env.*.local)"
+    ]
+  }
+}
