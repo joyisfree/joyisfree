@@ -7,7 +7,9 @@
 // against a timestamp, a strict command line, an exit-code test for every verdict, and the run-sheet's figures
 // checked against the tool. The third added: an arm past its plan, the interval at the registered level, a floor
 // figure never rounded up to the floor, the clock asked as well as analysedOn (and the two dates written alike), the
-// strictDate ranges for minutes, seconds and offset minutes, and the false-winner figures measured again.
+// strictDate ranges for minutes, seconds and offset minutes, and the false-winner figures measured again. The fourth
+// added: the plan the preflight names is the plan the analysis reads (a 44,000 list end to end), the band --check
+// prints is the band read, and an arm past its plan says the default stands.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -335,6 +337,9 @@ test('TOO_EARLY: an arm more than 5% over plan is not the planned test either (s
   has(ten, /^plain email has 15,490 recipients against 1,549 planned, more than 5% over: /);
   has(ten, /^limited drop has 15,490 recipients against 1,549 planned, more than 5% over: /);
   has(ten, /^no p-value and no rates are shown for a test other than the one planned, by design$/);
+  // TOO_EARLY reads as "wait", but no later run can read an arm past its plan, so it says so and names the default.
+  has(ten, /^no later run reads this test, on any date: an arm past its plan stays past it\. The pre-registered default arm, "plain email", stands\.$/);
+  assert.equal(ten.defaultArm, 'plain email');
   assert.doesNotMatch(format(ten), /p =|\d\.\d\d%|\$/);
   // Exactly 5% over is inside the tolerance; one more is not (1,638 is 1,560 and 5%).
   const at = (n) => run(exp({ preOver: { plannedPerArm: 1560 }, arms: [arm('plain email', 1560, 75, 7500), arm('limited drop', n, 120, 9000)] })).verdict;
@@ -501,6 +506,16 @@ test('--check refuses a plan with no room for the 5% the analysis tolerates, and
   has(at(1549, 'check'), /1,549 per arm are planned, against the 1,549 that lets 5% bounce/);
   // After the send the plan cannot be changed, so only the bare minimum is held to.
   assert.equal(at(1471, 'analyse').verdict, 'PRE_REGISTERED');
+  // The plan is a size, not a minimum: --check names the band each arm must land in, and it is the band read.
+  has(at(1549, 'check'), /^each arm is read only if it has 1,472 to 1,626 recipients, 5% under to 5% over the plan, so plannedPerArm must be the number each arm will actually get \(half the list, split 50\/50\), not a minimum$/);
+  for (const plannedPerArm of [1549, 1560, 1561, 20617, 22000]) {
+    const line = checkPreRegistration(exp({ preOver: { plannedPerArm } }), { now: NOW }).reasons.find((x) => x.startsWith('each arm is read only'));
+    const [lo, hi] = (/has ([\d,]+) to ([\d,]+) recipients/.exec(line ?? '') ?? []).slice(1).map((x) => Number(x.split(',').join('')));
+    const read = (a, b) => run(exp({ preOver: { plannedPerArm }, arms: [arm('plain email', a, 75, 7500), arm('limited drop', b, 120, 9000)] })).verdict;
+    assert.notEqual(read(lo, hi), 'TOO_EARLY', `${plannedPerArm}: ${line}`);
+    assert.equal(read(lo - 1, hi), 'TOO_EARLY', `${plannedPerArm}: ${line}`);
+    assert.equal(read(lo, hi + 1), 'TOO_EARLY', `${plannedPerArm}: ${line}`);
+  }
   // The floor is grossed up too: 1,000 for 10 expected conversions at 1% becomes 1,053.
   const floor = (plannedPerArm) => checkPreRegistration(exp({ preOver: { baselineRate: 0.01, minLiftPct: 600, plannedPerArm } }), { now: NOW });
   has(floor(1052), /under the 1,000 needed\. Plan at least 1,053 per arm/);
@@ -593,7 +608,7 @@ test('preflight: BIG ENOUGH starts at the figure to plan, not at the bare 19,586
   assert.equal(preflight({ listSize: 41232, metric: 'orders' }).verdict, 'TOO_SMALL');
   const r = preflight({ listSize: 41234, metric: 'orders' });
   assert.equal(r.verdict, 'BIG_ENOUGH');
-  has(r, /^BIG ENOUGH: pre-register the rule with plannedPerArm at least 20,617, run --check, then send\.$/);
+  has(r, /^BIG ENOUGH: pre-register the rule with plannedPerArm 20,617, half the list and the number each arm will get \(at least 20,617\); the analysis refuses an arm more than 5% under or 5% over it\. Run --check, then send\.$/);
 });
 
 test('preflight: clicks use the Omnisend 2025 baseline, and a list big enough says so', () => {
@@ -607,7 +622,53 @@ test('preflight: clicks use the Omnisend 2025 baseline, and a list big enough sa
   const big = preflight({ listSize: 80000, metric: 'orders' });
   assert.equal(big.verdict, 'BIG_ENOUGH');
   assert.equal(big.ok, true);
-  has(big, /^BIG ENOUGH: pre-register the rule with plannedPerArm at least 20,617/);
+  has(big, /^BIG ENOUGH: pre-register the rule with plannedPerArm 40,000, half the list and the number each arm will get \(at least 20,617\);/);
+});
+
+// The plan the preflight names is the plan the analysis reads. It once said "plannedPerArm at least 20,617", the
+// template shipped 20,617, and an arm more than 5% over plan is refused: so every honest 50/50 test on a list of
+// 43,296 or more ended TOO_EARLY after the send, exit 1, with no later run able to read it.
+const plannedFrom = (text) => {
+  const line = text.split('\n').find((x) => x.includes('BIG ENOUGH'));
+  const m = /plannedPerArm\D*?(\d{1,3}(?:,\d{3})*)/.exec(line ?? '');
+  return { line, figure: m ? Number(m[1].split(',').join('')) : NaN };
+};
+
+test('preflight to analysis: on a list of 44,000, a plan built from the printed figure reads at 22,000 per arm', () => {
+  const pf = cli(['--preflight', '--list-size', '44000', '--metric', 'orders']);
+  assert.equal(pf.code, 0, pf.out);
+  const { line, figure } = plannedFrom(pf.out);
+  const t = JSON.parse(readFileSync(TEMPLATE, 'utf8'));
+  const plan = { ...t, preRegistered: { ...t.preRegistered, decidedOn: '2026-10-01', analyseOn: '2026-10-12', plannedPerArm: figure }, dataCollectedFrom: '2026-10-05' };
+  const dir = mkdtempSync(join(tmpdir(), 'ab-test-'));
+  try {
+    const p = join(dir, 'plan44k.json');
+    writeFileSync(p, JSON.stringify(plan));
+    const check = cli(['--check', '--file', p]);
+    assert.equal(check.code, 0, check.out);
+    writeFileSync(p, JSON.stringify({ ...plan, analysedOn: '2026-10-13', arms: [arm('plain email', 22000, 20, 2000), arm('limited drop', 22000, 52, 5200)] }));
+    const r = cli(['--file', p]);
+    assert.doesNotMatch(r.out, /TOO_EARLY/, `planned at ${figure} from "${line}": ${r.out}`);
+    assert.match(r.out, /^VERDICT {2}WINNER — limited drop$/m);
+    assert.equal(r.code, 0, r.out);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  assert.equal(figure, 22000);
+  assert.match(line, /more than 5% under or 5% over it/);
+});
+
+test('preflight to analysis: every list big enough, odd or even, reads at the plan the preflight names', () => {
+  for (const n of [41234, 41235, 43295, 43296, 44001, 50000, 80000, 1000001]) {
+    const pf = preflight({ listSize: n, metric: 'orders' });
+    assert.equal(pf.verdict, 'BIG_ENOUGH', String(n));
+    const { figure } = plannedFrom(pf.reasons.join('\n'));
+    const e = exp({ preOver: { baselineRate: 0.0012, minLiftPct: 100, plannedPerArm: figure }, arms: [arm('plain email', Math.floor(n / 2), 20, 2000), arm('limited drop', n - Math.floor(n / 2), 52, 5200)] });
+    const c = checkPreRegistration(e, { now: NOW });
+    assert.equal(c.verdict, 'PRE_REGISTERED', `${n}: ${JSON.stringify(c.reasons)}`);
+    const r = run(e);
+    assert.notEqual(r.verdict, 'TOO_EARLY', `${n}, planned at ${figure}: ${JSON.stringify(r.reasons)}`);
+  }
 });
 
 test('preflight: a list past the formula but under 10 expected conversions per arm is still TOO SMALL', () => {
@@ -861,6 +922,12 @@ test('CLI: --check passes the shipped template, whose plannedPerArm is the figur
   assert.equal(r.code, 0, r.out);
   assert.match(r.out, /CHECK {2}PRE_REGISTERED/);
   assert.match(t._read_me_first, new RegExp(`under ${(pf.planPerArm * 2).toLocaleString('en-AU')} \\(${pf.planPerArm.toLocaleString('en-AU')} per arm`));
+  // 20,617 is the smallest plan, not the plan for every list: the template and RUNBOOK 2.2 say to plan half the list.
+  assert.match(t._read_me_first, /set plannedPerArm to half the list being split, the number each arm will actually get/);
+  assert.match(t._read_me_first, /refuses an arm more than 5% under or over plannedPerArm/);
+  const runbook = readFileSync(join(HERE, '..', 'RUNBOOK.md'), 'utf8');
+  assert.match(runbook, /Set `plannedPerArm` to half the list being\s+split, the number each arm will actually get/);
+  assert.doesNotMatch(runbook, /to at least the plan\s+figure/);
 });
 
 test('CLI: --preflight on 2,000 orders prints TOO SMALL with 19,586 needed and 20,617 to plan, and exits 1', () => {

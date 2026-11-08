@@ -1,6 +1,6 @@
 {
   "name": "limited drop vs plain email, same list",
-  "_read_me_first": "Run `npm run ab:test -- --preflight --list-size <your list> --metric orders` BEFORE editing this. On a list under 41,234 (20,617 per arm, which lets 5% bounce) it will say TOO SMALL: send the plain email and stop, and do not send this as an experiment. Fill in decidedOn and the planned dates, replace baselineRate with Joyisfree's own CAMPAIGN placed-order rate if you have one (never a flow), then run `npm run ab:test -- --check --file agency/experiments/drop-vs-email.json` before sending anything.",
+  "_read_me_first": "Run `npm run ab:test -- --preflight --list-size <your list> --metric orders` BEFORE editing this. On a list under 41,234 (20,617 per arm, which lets 5% bounce) it will say TOO SMALL: send the plain email and stop, and do not send this as an experiment. On BIG ENOUGH, set plannedPerArm to half the list being split, the number each arm will actually get (the preflight prints it): 20,617 below is the smallest plan, and the analysis refuses an arm more than 5% under or over plannedPerArm, so a bigger list split against 20,617 is never read. Fill in decidedOn and the planned dates, replace baselineRate with Joyisfree's own CAMPAIGN placed-order rate if you have one (never a flow), then run `npm run ab:test -- --check --file agency/experiments/drop-vs-email.json` before sending anything.",
   "preRegistered": {
     "decidedOn": "2026-11-06",
     "metric": "conversion_rate",

@@ -65,9 +65,12 @@ npm run ab:test -- --preflight --list-size <N> --metric orders
    way (both dates, or both timestamps with an offset): a bare date has no hour, so its order against a timestamp
    cannot be told, and the tool refuses the pair.
 2. Replace `baselineRate` with Joyisfree's own **campaign** placed-order rate if there is one, never a flow's, because
-   flows run 15 to 20 times higher and would make any list look big enough. Set `plannedPerArm` to at least the plan
-   figure the preflight printed.
-3. This must pass before anything is sent; it refuses a plan with no room for bounces:
+   flows run 15 to 20 times higher and would make any list look big enough. Set `plannedPerArm` to half the list being
+   split, the number each arm will actually get, as the preflight's BIG ENOUGH line prints it; never just "at least"
+   the plan figure. The analysis refuses an arm more than 5% under or over `plannedPerArm`, and over is final: planned
+   at 20,617, a list of 44,000 split 50/50 gives 22,000 an arm and is never read, so the one send is spent.
+3. This must pass before anything is sent; it refuses a plan with no room for bounces, and prints the band of
+   recipients each arm must land in to be read:
 
    ```bash
    npm run ab:test -- --check --file <your copy>

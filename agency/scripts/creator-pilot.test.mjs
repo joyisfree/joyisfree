@@ -726,6 +726,39 @@ test('round 3: a refund dated on or before day 30 but written after the day-30 d
   assert.deepEqual(s.rejected.map((x) => [x.ref, x.reason]), [['1001', 'REFUNDED']]);
 });
 
+// The latch's edges, on stoppedB as it stood by day 30 (before its day-35 orders): $35 an order, so B stops on day 31.
+const stoppedBBy30 = () => build([CB, order('2001', 'JOYB', 2, 200), signup('SB1', 'JOYB', 3)], nowAt(30));
+
+test('round 4: a refund dated day 30 counts toward the day-30 decision, and one dated day 31 does not', () => {
+  const L = stoppedBBy30();
+  // Dated and written on day 30, the $50 refund is known by the end of day 30: B is at $27.50 an order, stays ACTIVE,
+  // and B's day-31 order is paid ($22.50 + $5 + $15).
+  const on30 = build([order('2031', 'JOYB', 31)], nowAt(31), build([refund('2001', 30, 50)], nowAt(30), L));
+  const s30 = status(on30, PILOT, nowAt(31));
+  assert.equal(creatorOf(s30, 'B').state, 'ACTIVE');
+  assert.deepEqual(reasonsOf(s30, '2031'), []);
+  assert.equal(creatorOf(s30, 'B').payableUsd, 42.5);
+  // Dated day 31, the same refund nets its own order and moves no stop: B is stopped at $35 an order, 2031 unpaid.
+  const s31 = status(build([refund('2001', 31, 50), order('2031', 'JOYB', 31)], nowAt(31), L), PILOT, nowAt(31));
+  assert.equal(creatorOf(s31, 'B').state, 'STOPPED_DAY30');
+  assert.equal(creatorOf(s31, 'B').stop.share, 0.35);
+  assert.deepEqual(reasonsOf(s31, '2031'), ['CREATOR_STOPPED']);
+  assert.equal(creatorOf(s31, 'B').payableUsd, 27.5);
+});
+
+test('round 4: the back-dated-refund guard holds at its edges: a refund dated day 30, and one written on day 31', () => {
+  const refusal = (day) => `the day-30 decision is taken and JOYB is STOPPED_DAY30; this refund is dated ${at(day)}, on or before day 30, so it would re-take that decision and make JOYB ACTIVE. Date it after day 30 (the CLI dates it now unless --ts is given): it then nets order 2001 and moves no stop`;
+  // Written on day 40, a refund dated day 30 would lift B's stop and pay the ten day-35 orders; dated day 31 it moves none.
+  const L = stoppedB();
+  assert.deepEqual(checkAppend(L, PILOT, refund('2001', 30, 50), nowAt(40)).reasons, [refusal(30)]);
+  assert.equal(checkAppend(L, PILOT, refund('2001', 31, 50), nowAt(40)).ok, true);
+  // The decision is taken once day 30 is over: on day 31 a refund dated day 25 that would lift the stop is refused,
+  // and on day 30, before the decision, the same refund is taken and moves it.
+  const L30 = stoppedBBy30();
+  assert.deepEqual(checkAppend(L30, PILOT, refund('2001', 25, 50), nowAt(31)).reasons, [refusal(25)]);
+  assert.equal(checkAppend(L30, PILOT, refund('2001', 25, 50), nowAt(30)).ok, true);
+});
+
 test('round 3: one spelling of an email before it is hashed: case, a +tag, Gmail dots and googlemail.com are one inbox', () => {
   const cases = [
     [' Ana@GMAIL.com ', 'ana@gmail.com'],
@@ -994,6 +1027,25 @@ test('CLI round 3: --self-ids takes hashes and stores them as given; every email
     assert.match(st.out, /Fraud: 0 duplicates, 4 self-use/);
     // No address reaches the ledger (a handle such as @ana is not an address).
     assert.doesNotMatch(ledgerText(dir), /\w@\w/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('CLI round 4: import-orders refuses a row whose email column holds no address, instead of hashing it as a buyer', () => {
+  const dir = sandbox(build([CA], nowAt(3)));
+  try {
+    const before = ledgerText(dir);
+    writeFileSync(join(dir, 'export.json'), JSON.stringify([
+      { id: '1001', code: 'JOYA', value: 100, buyerEmail: 'guest', ts: at(2) },
+      { id: '1002', code: 'JOYA', value: 100, email: 'no-email', ts: at(2) },
+    ]));
+    const r = cli(dir, 'import-orders', ...paths, '--from', 'export.json', '--now', at(3, 12));
+    assert.equal(r.code, 1);
+    assert.match(r.err, /refused row 1: canonicalEmail: an email address must be one mailbox/);
+    assert.match(r.err, /refused row 2: canonicalEmail: an email address must be one mailbox/);
+    assert.doesNotMatch(r.err, /guest|no-email/);
+    assert.equal(ledgerText(dir), before);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

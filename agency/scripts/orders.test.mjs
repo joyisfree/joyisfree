@@ -360,6 +360,40 @@ test('no refusal echoes a cell: an order is named by its row, and a column of cu
   }
 });
 
+test('every per-order refusal is driven with a marked cell and a marked order number, and no reason holds either', () => {
+  // No space or hyphen in either marker, so lower-casing, upper-casing or the status's own tidying cannot hide an echo.
+  const CELL = 'QzCellJane';
+  const ORDER = '#QzOrd1005';
+  const at = rowOf(5);
+  const echoes = (why) => ['qzcell', 'qzord'].filter((m) => why.toLowerCase().includes(m));
+  assert.equal(report(shopifyCsv(withOrder(5, { Name: ORDER }))).orders, 42, 'the marked order number is itself read');
+  const cases = [
+    [{ Subtotal: CELL }, `the order on row ${at}: Subtotal is not an amount of money`],
+    [{ Shipping: CELL }, `the order on row ${at}: Shipping is not an amount of money`],
+    [{ Total: CELL }, `the order on row ${at}: Total is not an amount of money`],
+    [{ 'Refunded Amount': CELL }, `the order on row ${at}: Refunded Amount is not an amount of money`],
+    [{ Subtotal: '' }, `the order on row ${at} has no Subtotal on any of its rows`],
+    [{ Currency: CELL }, `the order on row ${at} has no three-letter currency code in Currency`],
+    [{ Currency: '' }, `the order on row ${at} has no three-letter currency code in Currency`],
+    [{ 'Financial Status': CELL }, `the order on row ${at}: its Financial Status is not one this knows`],
+    [{ 'Financial Status': '' }, `the order on row ${at} has no Financial Status`],
+    [{ 'Accepts Marketing': CELL }, `the order on row ${at} has no yes or no in Accepts Marketing`],
+    [{ 'Accepts Marketing': '' }, `the order on row ${at} has no yes or no in Accepts Marketing`],
+    [{ 'Created at': CELL }, `the order on row ${at}: Created at is not a date written year first`],
+    [{ later: { Subtotal: CELL } }, `the order on row ${at} carries two different Subtotal values (rows ${at} and ${at + 1})`],
+    [{ 'Accepts Marketing': CELL, later: { 'Accepts Marketing': 'yes' } }, `the order on row ${at} carries two different Accepts Marketing values`],
+    [{ later: { Name: '' } }, `row ${at + 1} has no Name`],
+    // Order 5 is not on the first data row, so the order-number checks are shown to run on every row, not the first.
+    [{ Name: 'QzOrdJane' }, `the Name column holds a value with no digit in it on row ${at},`],
+    [{ Name: 'QzOrd5@shop.test' }, 'the Name column holds email addresses'],
+  ];
+  for (const [over, expected] of cases) {
+    const why = refusal(shopifyCsv(withOrder(5, { Name: ORDER, ...over })));
+    assert.ok(why.includes(expected), `${JSON.stringify(over)} gave: ${why}`);
+    assert.deepEqual(echoes(why), [], `${JSON.stringify(over)} echoed a cell: ${why}`);
+  }
+});
+
 test('an order-number column holding names is refused: two orders by one customer would merge into one', () => {
   // Every customer has a name of their own, but the first two orders are Jane Smith's and identical in every field.
   const n = (o) => Number(o.Name.slice(1)) - 1001;

@@ -23,7 +23,8 @@
 //   INVALID_DATA         a count is blank, malformed or impossible, revenue and orders do not match, or analysedOn
 //                        is not written the same way as analyseOn (both bare dates, or both timestamps)
 //   TOO_EARLY            the clock has not reached analyseOn, the reading is dated before it, or an arm is more
-//                        than 5% short of plan or more than 5% over it; no p-value is shown at all
+//                        than 5% short of plan or more than 5% over it; no p-value is shown at all. Over it is
+//                        final: no later run reads it, and the default arm stands
 //   INSUFFICIENT_SAMPLE  an arm below the required n, or under 10 expected conversions; the default arm stands
 //   INCONCLUSIVE_DEFAULT not significant; the default arm stands, and the list could not tell the arms apart
 //   NO_CLEAR_WIN         significant on conversion, but the other arm earns more per recipient
@@ -376,6 +377,10 @@ export function checkPreRegistration(e = {}, { now = Date.now(), stage = 'check'
     baseline, minLift, alpha: a.level, za: a.z, power: b.level, need, minimum, toPlan, planned, window,
     decided, from, analyseOn, names, defaultIndex, defaultArm: names[defaultIndex],
   };
+  // The band the analysis will read, by its own whole-number arithmetic. plannedPerArm is the number each arm will
+  // get, not a floor: planned at 20,617, a 50/50 split of 44,000 gave 22,000 an arm and was refused after the send.
+  const fewest = Math.ceil((planned * (100 - SHORTFALL * 100)) / 100);
+  const most = Math.floor((planned * (100 + OVERRUN * 100)) / 100);
   return {
     verdict: 'PRE_REGISTERED',
     ok: true,
@@ -384,6 +389,7 @@ export function checkPreRegistration(e = {}, { now = Date.now(), stage = 'check'
     reasons: [
       `metric: conversion rate, two-sided at alpha ${a.level.toFixed(2)}, power ${b.level.toFixed(2)}`,
       `${thousands(need)} per arm detect a ${minLift}% lift on a ${pct(baseline)} baseline; ${thousands(planned)} per arm are planned, against the ${thousands(toPlan)} that lets ${SHORTFALL * 100}% bounce`,
+      `each arm is read only if it has ${thousands(fewest)} to ${thousands(most)} recipients, ${SHORTFALL * 100}% under to ${OVERRUN * 100}% over the plan, so plannedPerArm must be the number each arm will actually get (half the list, split 50/50), not a minimum`,
       `rule fixed ${decided.text}, sending from ${from.text}, ${window}-day conversion window, one look on ${analyseOn.text}`,
       `if the test cannot decide, "${names[defaultIndex]}" stands`,
     ],
@@ -444,14 +450,18 @@ export function analyse(e = {}, { now = Date.now() } = {}) {
   const early = [];
   const datedEarly = earlier(analysedOn, plan.analyseOn);
   if (datedEarly) early.push(`the results are due on ${plan.analyseOn.text}, and this reading is dated ${analysedOn.text}. One look only: come back then.`);
+  let over = false;
   for (const a of parsed) {
     if (a.recipients * 100 < plan.planned * (100 - SHORTFALL * 100)) {
       early.push(`${a.name} has ${thousands(a.recipients)} recipients against ${thousands(plan.planned)} planned, more than ${SHORTFALL * 100}% short: this is not the test that was planned`);
     }
     if (a.recipients * 100 > plan.planned * (100 + OVERRUN * 100)) {
+      over = true;
       early.push(`${a.name} has ${thousands(a.recipients)} recipients against ${thousands(plan.planned)} planned, more than ${OVERRUN * 100}% over: sending to more after the planned size is a second look, and this is not the test that was planned`);
     }
   }
+  // Waiting cannot bring an arm back under its plan, so TOO_EARLY here is final, and it says so.
+  if (over) early.push(`no later run reads this test, on any date: an arm past its plan stays past it. The pre-registered default arm, "${plan.defaultArm}", stands.`);
   if (early.length) {
     return {
       verdict: 'TOO_EARLY',
@@ -589,7 +599,9 @@ export function preflight({ listSize, metric, baselineRate, minLiftPct = 100, al
   if (problems.length) return { verdict: 'INVALID', ok: false, headline: 'PRE-FLIGHT  INVALID', reasons: problems };
 
   // Big enough means big enough to plan: the planning figure already holds the expected-conversions floor and the
-  // 5% that may bounce, so a list that clears it can be pre-registered and pass --check.
+  // 5% that may bounce, so a list that clears it can be pre-registered and pass --check. The plan it names is half
+  // the list, the number each arm will get: an arm more than 5% over plannedPerArm is never read, so "at least the
+  // planning figure" lost every honest test on a list of 43,296 or more after the send.
   const perArm = Math.floor(size / 2);
   const toPlan = planFor(need, p);
   const detectable = detectableLiftPct({ perArm, baselineRate: p, alpha: a.level, power: b.level });
@@ -603,7 +615,7 @@ export function preflight({ listSize, metric, baselineRate, minLiftPct = 100, al
     `with ${thousands(perArm)} per arm you could only detect ${detectable == null ? 'no lift at all, even to a 100% rate' : `a lift of about ${detectable.toFixed(0)}% or more`}`,
     `expected ${what} per arm: ${expected.toFixed(1)}, against a floor of ${MIN_EXPECTED_CONVERSIONS}`,
     bigEnough
-      ? `BIG ENOUGH: pre-register the rule with plannedPerArm at least ${thousands(toPlan)}, run --check, then send.`
+      ? `BIG ENOUGH: pre-register the rule with plannedPerArm ${thousands(perArm)}, half the list and the number each arm will get (at least ${thousands(toPlan)}); the analysis refuses an arm more than ${SHORTFALL * 100}% under or ${OVERRUN * 100}% over it. Run --check, then send.`
       : 'TOO SMALL: do not run this as a decision. Send the cheaper arm (the one you would name as defaultArm) and stop.',
   ];
   return {
