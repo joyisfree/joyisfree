@@ -406,21 +406,30 @@ Totals are rounded to whole dollars.
 - **Verdicts.** None of the five states what it would earn in dollars. So the worth-it gate returns CANNOT_VALUE for
   every one, at both prices. That is not zero: it means the payoff is the missing fact. The 90-day order export (an
   order count and an average order value) is what lets #3 and #5 be priced at all.
-- **FRAGILE: none of the five.** A verdict can only flip if there is a verdict at each price, and there is none yet.
-  When the export lands, the five are run through the gate again at both prices. Any play whose verdict differs
-  between A$25 and A$50 is then marked FRAGILE here.
-- **Ranked by what they cost, cheapest first.** The order is the same at both prices:
-  - #3 first.
-  - Then #2 and #5. Which of the two comes first depends on where #2's subscription lands in its $0-30 range and how
-    long #5's two sittings run, not on the price of an hour.
-  - #1 last.
+- **No FRAGILE verdict among the five.** A verdict can only flip if there is a verdict at each price, and there is
+  none yet. When the export lands, the five are run through the gate again at both prices. Any play whose verdict
+  differs between A$25 and A$50 is then marked FRAGILE here.
+- **Ranked by what they cost, cheapest first.** Only #3's place holds at both prices. (Corrected 8 Nov 2026: this
+  said the order was the same at both prices and did not depend on the price of an hour. The table shows otherwise.)
+  - #3 first: one hour and no cash, where #1, #2 and #5 each take at least 1.75 hours.
+  - Then #2 and #5, in an order that is **FRAGILE**, because it turns on the price of an hour too. #2 costs 1.75 hours
+    plus its cash; #5 costs its hours alone. So #5 is cheaper only while #2's 90-day cash is more than (#5's hours
+    minus 1.75) times the price of an hour. At #5's stated 2 hours, that is A$6.25 at A$25 and A$12.50 at A$50. A
+    subscription between those two figures puts #5 first at A$25 and #2 first at A$50.
+  - #1 last is not proven. #5 costs more than #1 once its day-30 and day-60 sittings together run over 2.25 hours
+    (longer, if #1 pays for its subscription). At A$25, #2 costs more than #1 if #2's cash runs more than A$62.50
+    above #1's: with A$90 for #2 and none for #1, #2 is A$133.75 and #1 A$106.25. At A$50 the gap would have to
+    pass A$125, which the $0-90 ranges cannot reach.
   - #4 cannot be ranked until its absorbed postage has a figure.
 
   This ranks cost, not value: without a payoff, the cheapest is not shown to be the best.
 - **What the price of an hour does change.**
   - The five take 6.5 hours to set up. That is A$162.50 at A$25 and A$325 at A$50, against $97.50 at the old $15.
-  - Over 90 days they take 10 hours, which is A$250 or A$500.
-  - #1's weekly quarter-hour of upkeep is the largest cost of his time among the five.
+  - Over 90 days they take at least 10 hours, so at least A$250 or A$500. #5's later sittings have no stated length.
+  - On the stated hours, #1 takes the most of his time: 4.25 hours, 3.25 of them its weekly quarter-hour of upkeep.
+    That stops being true if #5's two later sittings together run over 2.25 hours.
+- **Only the first five are priced here.** The plan (`docs/plan-2026-11-08.md`, wave 0 item 7) asked for all 23 at
+  both prices. The other 18 have not been re-priced, so that item is done for five of the 23.
 
 ---
 

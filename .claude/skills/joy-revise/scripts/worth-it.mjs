@@ -18,7 +18,11 @@
 //     or is half a year away, stops nothing;
 //   - a decision may carry decidedOn (never in the future), and is then judged on that day, so a committed record still
 //     reproduces its own verdict later; once its kill date has gone it can still say no, but it can never say yes;
-//   - the cheapest test needs at least four words, or a named command (`npm run orders` is a whole test in three);
+//   - the cheapest test needs four different words, not digits alone, or is one command that exists here
+//     (`npm run orders` is a whole test in three; `npm run nothing-here` and `node x.mjs` are not), and a placeholder
+//     such as TBD or "to be decided" is refused, as is a kill rule that cannot fire: a number of 0 or below, no metric;
+//   - a number is a number, or a string written as one. Number() reads " ", [] and [""] as 0, so a blank or a list is
+//     refused. Hours of 0 are refused like a bar of 0; a 0 typed for costs, capital or the first dollar is a real 0;
 //   - daysToFirstDollar is optional, a whole number of days, reported as stated and never guessed;
 //   - the hourly bar is stored once, in joy.config.json at the repo root. It is used only when a decision gives no
 //     bar, with a line saying it is a default and not Leif's choice. A stored bar that cannot be read, or that is in
@@ -34,22 +38,23 @@
 //   "haircut": 0.5,             // 0..1 multiplier on anything unlaunched, vesting, promised or uncertain
 //   "costs": 25,                // money out: fees, gas, deposits, subscriptions
 //   "capitalAtRisk": 0,         // money that could be lost outright, counted in full
-//   "hours": 10,                // Leif's hours
+//   "hours": 10,                // Leif's hours, above 0
 //   "hourlyBar": 25,            // what an hour of his time must earn; left out, the stored default is used and said so
 //   "daysToFirstDollar": 14,    // optional: whole days to the first realised dollar
 //   "unknowns": [],             // any named unknown refuses the whole thing
-//   "cheapestTest": "...",      // the one check that would change the answer: four words or more, or a command
-//   "killRule": { "metric": "realised dollars", "number": 100, "by": "2026-12-31" }
+//   "cheapestTest": "...",      // the one check that would change the answer: four different words, or a real command
+//   "killRule": { "metric": "realised dollars", "number": 100, "by": "2026-12-31" }  // the number above 0
 // }
 
-import { readFileSync, realpathSync } from 'node:fs';
-import { basename } from 'node:path';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const VERDICTS = new Set(['PURSUE', 'REFUSE', 'CANNOT_VALUE']);
 
 // Found from this file, not from the working directory, so the same bar is read wherever the command runs.
 export const CONFIG_FILE = fileURLToPath(new URL('../../../../joy.config.json', import.meta.url));
+const REPO = fileURLToPath(new URL('../../../../', import.meta.url));
 export const MAX_KILL_DAYS = 180;
 export const MIN_TEST_WORDS = 4;
 const DAY = 86_400_000;
@@ -62,12 +67,14 @@ const NUMERIC = [
   ['hourlyBar', 'what an hour of his time must earn'],
 ];
 
-/** A field is only a number if it really is one: a missing field or the string "unknown" is never zero. */
+// A decimal written out. Number() reads " ", "\t", [] and [""] as 0 and [500] as 500; none of them is a number here.
+const DECIMAL = /^\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?\s*$/i;
+
+/** A field is only a number if it really is one: a missing field, "unknown", a blank or a list is never zero. */
 function num(v) {
-  if (v === null || v === undefined || v === '') return NaN;
-  if (typeof v === 'boolean') return NaN;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : NaN;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : NaN;
+  if (typeof v !== 'string' || !DECIMAL.test(v)) return NaN;
+  return Number(v);
 }
 
 const inWords = (v) => typeof v === 'string' && v.trim() !== '';
@@ -121,10 +128,23 @@ export function readHourlyBar(path = CONFIG_FILE) {
   try { return checkHourlyBar(JSON.parse(text), path); } catch (err) { return { error: `${basename(path)} is not valid JSON (${err.message})` }; }
 }
 
-// Words carry letters or digits; a run of dashes is not a test.
-const words = (s) => s.trim().split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
-// A named command is decisive however short it is: `npm run orders` is a whole test.
-const namesCommand = (s) => /\bnpm (?:run [\w:.-]+|test)\b|\bnode [\w./-]+\.m?js\b/.test(s);
+// Words carry letters or digits, a word said twice counts once, and digits alone are not a test: "- -- --- ----",
+// "TBD TBD TBD TBD" and "1 2 3 4" are not four words, while "check 20 abandoned checkouts" is.
+const words = (s) => {
+  const counted = s.toLowerCase().split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w));
+  return /\p{L}/u.test(s) ? new Set(counted).size : 0;
+};
+// A named command is decisive however short it is, `npm run orders` is a whole test, but only when it is the whole
+// test and is real here: a script in package.json, or a file in the repo.
+const COMMAND = /^`?(?:npm (?:run )?([\w:.-]+)|node ([\w./-]+\.m?js))(?:\s[^`]*)?`?$/;
+const namesCommand = (s) => {
+  const m = COMMAND.exec(s.trim());
+  if (!m) return false;
+  if (m[2] !== undefined) return existsSync(join(REPO, m[2]));
+  try { return Object.hasOwn(JSON.parse(readFileSync(join(REPO, 'package.json'), 'utf8')).scripts ?? {}, m[1]); } catch { return false; }
+};
+// Obvious placeholders only: this does not judge prose, it refuses a test or a stop that says it is not decided yet.
+const PLACEHOLDER = /\b(?:tbd|tba|tbc|todo|placeholder)\b|\bn\/a\b|\bto be (?:decided|determined|confirmed|agreed)\b|^\W*no (?:test|check)\b/i;
 
 /**
  * Judge one decision. Returns { verdict, reasons, notes, evUsd, timeCostUsd, netUsd, perHourUsd, daysToFirstDollar,
@@ -164,6 +184,7 @@ export function worthIt(d = {}, { now = Date.now(), defaultBar } = {}) {
     else if (v[key] < 0) cannot.push(`${key} cannot be negative`);
   }
   if (v.hourlyBar === 0) cannot.push("hourlyBar is 0: an hour of Leif's time is never free, and a zero bar passes anything");
+  if (v.hours === 0) cannot.push('hours is 0: every plan takes some of his time, at least the sitting that decides it, and zero hours zero the time cost as a zero bar would');
   if (Number.isFinite(v.probability) && (v.probability < 0 || v.probability > 1)) {
     cannot.push('probability must be between 0 and 1');
   }
@@ -183,6 +204,8 @@ export function worthIt(d = {}, { now = Date.now(), defaultBar } = {}) {
     cannot.push('cheapestTest is missing: name the one check that would change the answer, and do it before spending');
   } else if (typeof d.cheapestTest !== 'string' || (words(d.cheapestTest) < MIN_TEST_WORDS && !namesCommand(d.cheapestTest))) {
     cannot.push(`cheapestTest ${JSON.stringify(d.cheapestTest)} is under ${MIN_TEST_WORDS} words and names no command: say what is checked and how, or name the command that checks it`);
+  } else if (PLACEHOLDER.test(d.cheapestTest)) {
+    cannot.push(`cheapestTest ${JSON.stringify(d.cheapestTest)} is a placeholder, not a test: decide the check before the verdict, not after`);
   }
 
   // 5. The dates. Today is Sydney's calendar day; a decision dated in the past is judged on the day it was decided.
@@ -202,6 +225,8 @@ export function worthIt(d = {}, { now = Date.now(), defaultBar } = {}) {
   if (!String(k.metric ?? '').trim() || !Number.isFinite(killNumber) || !String(k.by ?? '').trim()) {
     cannot.push('killRule needs a metric, a number and a date: a plan with no point at which it stops is not a plan');
   } else {
+    if (killNumber <= 0) cannot.push(`killRule.number is ${killNumber}: "${k.metric} under ${killNumber}" can never fire on a count or on realised dollars; write the smallest result that would justify carrying on`);
+    if (PLACEHOLDER.test(k.metric) || !/\p{L}{2}/u.test(k.metric)) cannot.push(`killRule.metric ${JSON.stringify(k.metric)} is a placeholder: name what is counted, such as realised dollars or orders`);
     by = strictDate(k.by);
     const from = asOf == null ? '' : `${dayText(asOf)}, ${anchored ? 'the day it was decided' : 'today in Sydney'}`;
     if (by == null) cannot.push(`killRule.by must be a date written YYYY-MM-DD (got ${JSON.stringify(k.by)}): a bare number, a slash date or a month name is read by guesswork`);
@@ -215,7 +240,7 @@ export function worthIt(d = {}, { now = Date.now(), defaultBar } = {}) {
   const evUsd = v.payoff * v.probability * haircut;
   const timeCostUsd = v.hours * v.hourlyBar;
   const netUsd = evUsd - v.costs - timeCostUsd - capital;
-  const perHourUsd = v.hours > 0 ? (evUsd - v.costs - capital) / v.hours : null;
+  const perHourUsd = (evUsd - v.costs - capital) / v.hours; // hours above 0 is checked in step 3
 
   // 7. A past decision whose stop has gone is reproduced, never re-approved: it can still say no, never yes.
   const expired = by <= today;
@@ -227,8 +252,8 @@ export function worthIt(d = {}, { now = Date.now(), defaultBar } = {}) {
   const reasons = [
     `expected realised value $${evUsd.toFixed(2)} = $${v.payoff.toFixed(2)} x ${v.probability} chance x ${haircut} haircut`,
     `against $${v.costs.toFixed(2)} costs, $${timeCostUsd.toFixed(2)} of time (${v.hours} h at $${v.hourlyBar}/h)${capital > 0 ? `, $${capital.toFixed(2)} at risk` : ''}`,
+    `returns $${perHourUsd.toFixed(2)} an hour against a $${v.hourlyBar} bar`,
   ];
-  if (perHourUsd != null) reasons.push(`returns $${perHourUsd.toFixed(2)} an hour against a $${v.hourlyBar} bar`);
   if (days != null) reasons.push(`first realised dollar expected in ${days} day${days === 1 ? '' : 's'} (as stated, not computed)`);
   reasons.push(netUsd >= 0
     ? `net $${netUsd.toFixed(2)}: it clears, so it is worth a bounded try with the kill rule set`

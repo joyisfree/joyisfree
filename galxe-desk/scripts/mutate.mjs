@@ -423,6 +423,19 @@ export const MUTATIONS = [
   ["an export ending over 120 days before the start is refused","agency/scripts/orders.mjs","if (!(gapDays <= MAX_GAP_DAYS)) return no(","if (false) return no("],
   ["an export spanning under 28 days is refused","agency/scripts/orders.mjs","if (!(report.span.days >= MIN_SPAN_DAYS)) return no(","if (false) return no("],
   ["a median of 0 is never written as the baseline","agency/scripts/orders.mjs","if (!(aovCents > 0)) return no(","if (false) return no("],
+  // .claude/skills/joy-revise/scripts/worth-it.mjs — no blank read as a number, no placeholder as a test (8 Nov 2026)
+  ["a blank is never read as a number",".claude/skills/joy-revise/scripts/worth-it.mjs","if (typeof v !== 'string' || !DECIMAL.test(v)) return NaN;","if (typeof v !== 'string') return NaN;"],
+  ["a list is never read as a number",".claude/skills/joy-revise/scripts/worth-it.mjs","if (typeof v !== 'string' || !DECIMAL.test(v)) return NaN;","if (!DECIMAL.test(v)) return NaN;"],
+  ["hours of 0 are refused",".claude/skills/joy-revise/scripts/worth-it.mjs","if (v.hours === 0) cannot.push(","if (false) cannot.push("],
+  ["a word said twice counts once",".claude/skills/joy-revise/scripts/worth-it.mjs","return /\\p{L}/u.test(s) ? new Set(counted).size : 0;","return /\\p{L}/u.test(s) ? counted.length : 0;"],
+  ["digits alone are not a test",".claude/skills/joy-revise/scripts/worth-it.mjs","return /\\p{L}/u.test(s) ? new Set(counted).size : 0;","return new Set(counted).size;"],
+  ["a placeholder is not a test",".claude/skills/joy-revise/scripts/worth-it.mjs","} else if (PLACEHOLDER.test(d.cheapestTest)) {","} else if (false) {"],
+  ["a short command must be the whole test",".claude/skills/joy-revise/scripts/worth-it.mjs","const COMMAND = /^`?","const COMMAND = /`?"],
+  ["a named node file must exist",".claude/skills/joy-revise/scripts/worth-it.mjs","if (m[2] !== undefined) return existsSync(join(REPO, m[2]));","if (m[2] !== undefined) return true;"],
+  ["a named npm script must exist",".claude/skills/joy-revise/scripts/worth-it.mjs","try { return Object.hasOwn(JSON.parse(readFileSync(join(REPO, 'package.json'), 'utf8')).scripts ?? {}, m[1]); } catch { return false; }","return true;"],
+  ["a kill number must be above 0",".claude/skills/joy-revise/scripts/worth-it.mjs","if (killNumber <= 0) cannot.push(","if (false) cannot.push("],
+  ["a kill metric is not a placeholder",".claude/skills/joy-revise/scripts/worth-it.mjs","if (PLACEHOLDER.test(k.metric) || !/\\p{L}{2}/u.test(k.metric)) cannot.push(","if (!/\\p{L}{2}/u.test(k.metric)) cannot.push("],
+  ["a kill metric names something",".claude/skills/joy-revise/scripts/worth-it.mjs","if (PLACEHOLDER.test(k.metric) || !/\\p{L}{2}/u.test(k.metric)) cannot.push(","if (PLACEHOLDER.test(k.metric)) cannot.push("],
 ];
 
 // Apply one mutation to a throwaway copy of the scripts and run the suite there. KILLED = a test went red.

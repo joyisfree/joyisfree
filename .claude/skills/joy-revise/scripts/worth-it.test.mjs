@@ -107,6 +107,47 @@ test('an empty decision refuses everything rather than returning zero', () => {
   assert.equal(worthIt().verdict, 'CANNOT_VALUE');
 });
 
+// ------------------------------------------------------------------ nothing typed is read as zero (wave 0)
+
+// Number() reads ' ', '\t', [] and [''] as 0 and [500] as 500. Each must refuse in every field, by that field's name.
+const NOT_NUMBERS = [' ', '\t', [], [''], [500], '0x10'];
+const FIELD_GAP = [
+  ['payoff', /^payoff is not a number/], ['probability', /^probability is not a number/], ['costs', /^costs is not a number/],
+  ['hours', /^hours is not a number/], ['hourlyBar', /^hourlyBar is not a number/], ['haircut', /^haircut must be between 0 and 1/],
+  ['capitalAtRisk', /^capitalAtRisk is not a number/], ['daysToFirstDollar', /^daysToFirstDollar must be a whole number/],
+];
+
+test('a blank, a tab, a list or a hex string is never read as a number, in any field', () => {
+  for (const v of NOT_NUMBERS) {
+    for (const [key, re] of FIELD_GAP) {
+      const r = judge(good({ [key]: v }));
+      assert.equal(r.verdict, 'CANNOT_VALUE', `${key} = ${JSON.stringify(v)} gave ${r.verdict}`);
+      assert.ok(r.reasons.some((x) => re.test(x)), `${key} = ${JSON.stringify(v)}: ${JSON.stringify(r.reasons)}`);
+    }
+    const k = judge(good({ killRule: { metric: 'realised dollars', number: v, by: '2026-12-31' } }));
+    assert.equal(k.verdict, 'CANNOT_VALUE', `killRule.number = ${JSON.stringify(v)} gave ${k.verdict}`);
+    assert.ok(k.reasons.some((x) => /killRule needs a metric, a number and a date/.test(x)), JSON.stringify(k.reasons));
+  }
+  // A number written out, padded or with an exponent, is still read.
+  assert.equal(judge(good({ costs: ' 5 ', payoff: '5e2' })).netUsd, 30);
+});
+
+test('hours of 0 are refused like a bar of 0: either one makes the time cost vanish', () => {
+  for (const h of [0, '0', '0.0']) {
+    const r = judge(good({ hours: h }));
+    assert.equal(r.verdict, 'CANNOT_VALUE', JSON.stringify(h));
+    assert.ok(r.reasons.some((x) => /^hours is 0: every plan takes some of his time/.test(x)), JSON.stringify(r.reasons));
+  }
+  assert.equal(judge(good({ hours: 0.1 })).verdict, 'PURSUE');
+});
+
+test('a 0 typed as a number is a real 0 where it can be: no cash, nothing at risk, no payoff', () => {
+  // Costs and capital of 0 are genuine (a play with no cash out); a 0 payoff, chance or haircut can only refuse.
+  assert.equal(judge(good({ costs: 0 })).netUsd, 35);
+  assert.equal(judge(good({ capitalAtRisk: '0' })).verdict, 'PURSUE');
+  for (const key of ['payoff', 'probability', 'haircut']) assert.equal(judge(good({ [key]: 0 })).verdict, 'REFUSE', key);
+});
+
 test('the per-hour return is reported against the bar', () => {
   const r = judge(good({ hours: 2 }));
   // (50 - 5 - 0) / 2 = 22.50 an hour against a $15 bar.
@@ -233,6 +274,51 @@ test('a cheapest test needs four words, or a named command', () => {
   }
 });
 
+test('a repeated word, a run of dashes or digits alone is not four words', () => {
+  for (const t of ['TBD TBD TBD TBD', 'x x x x', 'list list List LIST', 'n/a n/a n/a n/a', '- -- --- ----', 'check -- --- ----', '1 2 3 4']) {
+    const r = judge(good({ cheapestTest: t }));
+    assert.equal(r.verdict, 'CANNOT_VALUE', t);
+    assert.ok(r.reasons.some((x) => /under 4 words and names no command/.test(x)), JSON.stringify(r.reasons));
+  }
+  // Digits still count beside words, and a word said twice is one word, not zero.
+  for (const t of ['check 20 abandoned checkouts', 'email the email list first']) assert.equal(judge(good({ cheapestTest: t })).verdict, 'PURSUE', t);
+});
+
+test('an obvious placeholder is not a test, however many words it has', () => {
+  for (const t of ['to be decided later', 'no test needed here', 'TBD: email the list first', 'email the list, details to be confirmed', 'N/A for this one plan', 'todo write the real test']) {
+    const r = judge(good({ cheapestTest: t }));
+    assert.equal(r.verdict, 'CANNOT_VALUE', t);
+    assert.ok(r.reasons.some((x) => /is a placeholder, not a test/.test(x)), JSON.stringify(r.reasons));
+  }
+  // Narrow: "no" or "test" inside a real check is not a placeholder.
+  for (const t of ['count the checkouts with no email', 'test one send to the list']) assert.equal(judge(good({ cheapestTest: t })).verdict, 'PURSUE', t);
+});
+
+test('a short command counts only when it is the whole test and is real here', () => {
+  for (const t of ['npm run nothing-here', 'node x.mjs', '`node agency/scripts/missing.mjs`', 'maybe npm test', 'npm install']) {
+    const r = judge(good({ cheapestTest: t }));
+    assert.equal(r.verdict, 'CANNOT_VALUE', t);
+    assert.ok(r.reasons.some((x) => /under 4 words and names no command/.test(x)), JSON.stringify(r.reasons));
+  }
+  for (const t of ['npm run orders', 'npm test', 'npm run worth-it -- --file x.json', '`node agency/scripts/orders.mjs`']) {
+    assert.equal(judge(good({ cheapestTest: t })).verdict, 'PURSUE', t);
+  }
+});
+
+test('a kill rule that can never fire is refused: a number of 0 or below, or a placeholder for a metric', () => {
+  for (const number of [0, '0', -1, -0.5]) {
+    const r = judge(good({ killRule: { metric: 'realised dollars', number, by: '2026-12-31' } }));
+    assert.equal(r.verdict, 'CANNOT_VALUE', JSON.stringify(number));
+    assert.ok(r.reasons.some((x) => /^killRule\.number is -?[\d.]+: "realised dollars under -?[\d.]+" can never fire/.test(x)), JSON.stringify(r.reasons));
+  }
+  for (const metric of ['x', '?', '1', 'TBD', 'n/a', 'metric to be decided']) {
+    const r = judge(good({ killRule: { metric, number: 100, by: '2026-12-31' } }));
+    assert.equal(r.verdict, 'CANNOT_VALUE', metric);
+    assert.ok(r.reasons.some((x) => /^killRule\.metric .* is a placeholder/.test(x)), JSON.stringify(r.reasons));
+  }
+  assert.equal(judge(good({ killRule: { metric: 'orders', number: 1, by: '2026-12-31' } })).verdict, 'PURSUE');
+});
+
 test('daysToFirstDollar is optional, a whole number, and reported as stated', () => {
   const none = judge(good());
   assert.equal(none.daysToFirstDollar, null);
@@ -352,6 +438,24 @@ test('the command: --unknowns given empty is not a list of none', () => {
   const p = run(...live(), '--hourly-bar', '25', '--unknowns');
   assert.equal(p.status, 1, p.stdout + p.stderr);
   assert.match(p.stdout, /unknowns must be a list/);
+});
+
+// The live arguments with one flag's value swapped out.
+const withArg = (flag, value) => { const a = live(); return a.map((x, i) => (a[i - 1] === flag ? value : x)); };
+
+test('the command: --hours " " is not 0 hours', () => {
+  const p = run(...withArg('--hours', ' '));
+  assert.equal(p.status, 1, p.stdout + p.stderr);
+  assert.match(p.stdout, /hours is not a number/);
+  assert.doesNotMatch(p.stdout, /0 h at/);
+});
+
+test('the command: a TBD test and a kill number of 0 are refused, not approved', () => {
+  const p = run(...withArg('--cheapest-test', 'TBD TBD TBD TBD').map((x, i, a) => (a[i - 1] === '--kill-number' ? '0' : x)));
+  assert.equal(p.status, 1, p.stdout + p.stderr);
+  assert.match(p.stdout, /VERDICT {2}CANNOT_VALUE/);
+  assert.match(p.stdout, /cheapestTest "TBD TBD TBD TBD" is under 4 words/);
+  assert.match(p.stdout, /killRule\.number is 0/);
 });
 
 test('the command: an unreadable stored bar refuses', () => {
