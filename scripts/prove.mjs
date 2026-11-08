@@ -13,13 +13,15 @@
 //   1. tests       every *.test.mjs in the repo, run together, green, and at least one test per suite directory
 //   2. mutations   every guard in the repo is removed in turn and some test goes red (galxe-desk/scripts/mutate.mjs)
 //   3. secrets     no key, token, seed phrase or private-key shape in the tree (tracked, and untracked but not
-//                  ignored) or in any line or message ever committed (`git log -p --all`). One list of shapes.
+//                  ignored), in what the next commit would record (the index), or in any line or message ever
+//                  committed (`git log -p --all`). One list of shapes. A binary file skipped is counted in the PASS.
 //   4. privacy     agency/pilot/ (customer-derived data) is ignored and nothing under it is tracked
-//   5. studio      the studio repo (joyisfree1) is clean and has no claude/galxe-* branch, local or remote.
-//                  NOTE, never PASS, when it is not on this machine: a repo that is not here was not checked.
+//   5. studio      the studio repo (joyisfree1) is clean, and no claude/galxe-* branch, local or remote, holds a
+//                  commit its main does not. NOTE, never PASS, when it is not on this machine.
 //   6. decisions   agency/calendar.json exists, reads as a calendar, and no open item's date is before today in Sydney
 //   7. state       docs/state.md exists in 15 lines or fewer, and CLAUDE.md's first instruction names it
-//   8. leif-pages  Leif's pages hold no terminal step: no "npm run", no node command, no shell command in backticks
+//   8. leif-pages  Leif's pages hold no terminal step: no "npm run", npm, npx or git command, no node command, no
+//                  shell command in backticks, <code> or a code block
 //   9. facts       agency/facts.json: every fact has a source and a date. NOTE when its asOf is over 14 days old.
 // Reported, never failed:
 //  10. rulebook    `desk:check` is honestly incomplete until the live crawl runs; it is shown, not hidden
@@ -86,10 +88,14 @@ export function sydneyDay(now) {
 }
 
 // ----------------------------------------------------------------------------------------------------------- secrets
-// The shapes never allowed in this repo, in the tree or in its history. This is the only list. The scan reads the
-// files itself instead of pre-filtering with git grep, because until 8 Nov 2026 that pre-filter was a second,
-// hand-copied regex and a shape added here could never fire. Each shape has a fixture in prove.test.mjs and a
+// The shapes never allowed in this repo: in the tree, in the index or in its history. This is the only list. The scan
+// reads the files itself instead of pre-filtering with git grep, because until 8 Nov 2026 that pre-filter was a
+// second, hand-copied regex and a shape added here could never fire. Each shape has a fixture in prove.test.mjs and a
 // mutation in mutate.mjs. Stripe publishable keys (pk_live_, pk_test_) are public by design and are not on it.
+// 8 Nov 2026, second audit: a camelCase or short label before a 64-hex key, xprv and WIF keys, a URL holding a
+// password, Bearer, npm, Telegram, whsec_ and GOCSPX- tokens and "API key:" with a space all passed, and are on it now.
+// A URL password and a Bearer token count only with a letter and a digit in them, as labelled-secret does, so
+// placeholders such as `user:password@` and `Bearer YOUR_TOKEN` stay out.
 export const SECRET_SHAPES = [
   { name: 'private-key-pem', re: /-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----/ },
   { name: 'jwt', re: /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}/ },
@@ -108,9 +114,17 @@ export const SECRET_SHAPES = [
   { name: 'x-session-cookie', re: /\b(?:auth_token|ct0)["'`]?\s*[:=]\s*["'`]?[A-Fa-f0-9]{32,}/ },
   { name: 'solana-base58-key', re: /(?<![A-Za-z0-9])[1-9A-HJ-NP-Za-km-z]{86,88}(?![A-Za-z0-9])/ },
   { name: 'keypair-byte-array', re: /\[\s*(?:\d{1,3}\s*,\s*){63}\d{1,3}\s*\]/ },
-  { name: 'labelled-hex-key', re: /(?<![A-Za-z0-9])(?:private|secret|key)[\w ]{0,20}?["'`]?\s*[:=]?\s*["'`]?(?<![A-Fa-f0-9])[A-Fa-f0-9]{64}(?![A-Za-z0-9])/i },
+  { name: 'labelled-hex-key', re: /(?:privatekey|privkey|secretkey|(?<![A-Za-z0-9])(?:private|secret|key|(?:priv|pk)(?![a-z]))|_pk(?![a-z]))[\w ]{0,20}?["'`]?\s*[:=]?\s*["'`]?(?<![A-Fa-f0-9])[A-Fa-f0-9]{64}(?![A-Za-z0-9])/i },
   { name: 'labelled-seed', re: /\b(?:seed|mnemonic|recovery)(?:[ _-]?(?:phrase|words?))?["'`]?\s*[:=]\s*["'`]?(?:[a-z]+[\s,]+){11,}[a-z]+/i },
-  { name: 'labelled-secret', re: /(?:api[_-]?key|api[_-]?secret|access[_-]?key|secret[_-]?key|client[_-]?secret|token|secret|passw(?:or)?d)["'`]?\s*[:=]\s*["'`]?(?=[\w+/=-]*\d)(?=[\w+/=-]*[A-Za-z])[\w+/=-]{20,}/i },
+  { name: 'labelled-secret', re: /(?:api[ _-]?key|api[ _-]?secret|access[ _-]?key|secret[ _-]?key|client[ _-]?secret|token|secret|passw(?:or)?d)["'`]?\s*[:=]\s*["'`]?(?=[\w+/=-]*\d)(?=[\w+/=-]*[A-Za-z])[\w+/=-]{20,}/i },
+  { name: 'extended-private-key', re: /\b[xyzt]prv[1-9A-HJ-NP-Za-km-z]{100,}/ },
+  { name: 'wif-key', re: /(?<![A-Za-z0-9+/=])(?:5[HJK][1-9A-HJ-NP-Za-km-z]{49}|[KL][1-9A-HJ-NP-Za-km-z]{51})(?![A-Za-z0-9+/=])/ },
+  { name: 'url-password', re: /\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:(?![$<[{%*])(?=[^\s@/\\]*\d)(?=[^\s@/\\]*[A-Za-z])[^\s@/\\]{6,}@/i },
+  { name: 'bearer-token', re: /\b[Bb]earer\s+(?=[\w.~+/-]*\d)(?=[\w.~+/-]*[A-Za-z])[\w.~+/-]{20,}/ },
+  { name: 'npm-token', re: /\bnpm_[A-Za-z0-9]{36}(?![A-Za-z0-9])/ },
+  { name: 'telegram-bot-token', re: /\b\d{8,10}:AA[\w-]{33}(?![\w-])/ },
+  { name: 'webhook-secret', re: /\bwhsec_[A-Za-z0-9+/=]{24,}/ },
+  { name: 'google-oauth-secret', re: /\bGOCSPX-[\w-]{24,}/ },
 ];
 
 // A 0x-prefixed 64-hex string is a wallet's private key until shown otherwise. A public DAO proposal id inside a
@@ -425,16 +439,29 @@ export function seedRun(text) {
   return best;
 }
 
-/** How many words a line holds when it is nothing but BIP39 words, numbering and bullets (one row of a seed written down a page); else 0. */
-export function seedRow(text) {
-  let words = 0;
-  for (const raw of String(text).trim().split(/\s+/)) {
-    if (!raw || /^(?:\d{1,2}[.):]?|[-*•])$/.test(raw)) continue;
-    const t = raw.replace(/^\d{1,2}[.):]/, '').replace(/^["'`([]+|[,;.)"'`\]]+$/g, '');
-    if (!BIP39.has(t.toLowerCase())) return 0;
-    words += 1;
-  }
-  return words;
+// Numbering and bullets around seed words neither count nor break a row: 1  1.  1)  1:  #1  (1)  and, once quotes are
+// dropped, a JSON key "1":. Anything else that is not a BIP39 word breaks it, `//` and `##` included.
+const SEED_NUMBER = /^(?:#?\d{1,2}[.):]?|\(\d{1,2}\)[.:]?)$/;
+const SEED_BULLET = /^[-*•]+$/;
+
+/** One token of a row: 1 for a BIP39 word, 0 for numbering, a bullet or nothing, -1 for anything else. */
+function seedMark(raw) {
+  const t = raw.split(/["'`]/).join('');
+  if (!t || SEED_NUMBER.test(t) || SEED_BULLET.test(t)) return 0;
+  const w = t.replace(/^(?:#?\d{1,2}[.):]|\(\d{1,2}\))/, '').replace(/^[([{]+|[,;.:)\]}]+$/g, '');
+  return BIP39.has(w.toLowerCase()) ? 1 : -1;
+}
+
+/**
+ * One line read as a row of a seed: how many BIP39 words lead it, how many end it, and how many it holds when it is
+ * nothing but BIP39 words, numbering, bullets, table bars and JSON punctuation (else 0). Spaces and `|` separate
+ * tokens, so a markdown table's cells read as words.
+ */
+export function seedEnds(text) {
+  const marks = String(text).split(/[\s|]+/).map(seedMark).filter(Boolean);
+  const first = marks.indexOf(-1);
+  if (first < 0) return { lead: marks.length, trail: marks.length, words: marks.length };
+  return { lead: first, trail: marks.length - 1 - marks.lastIndexOf(-1), words: 0 };
 }
 
 /** The secret shapes one line holds, by name. Pure, so the scanner itself is testable. */
@@ -453,39 +480,59 @@ const place = (where) => {
 
 /**
  * Every line that holds a secret shape, as { where, kinds }; never the text itself, so a report cannot leak it.
- * Lines arrive in order, each `where` ending in ":<line>". Consecutive lines of one file that are nothing but seed
- * words are added up, so a seed written one word, or four words, to a line is caught as well.
+ * Lines arrive in order, each `where` ending in ":<line>". A run of seed words is added up down the lines of one file:
+ * the words that end a line, every line that is nothing but seed words, and the words that lead the line after. So a
+ * seed written one word or four to a line, in a table, as JSON, or wrapped mid-sentence onto the next line is caught,
+ * and the run may cross one blank line (two blocks of six), never two.
  */
 export function secretHits(lines) {
   const hits = [];
   let run = null;
   for (const { where, text } of lines) {
     const kinds = secretKinds(text);
-    const words = seedRow(text);
     const at = place(where);
-    if (words && run && run.file === at.file && at.n === run.n + 1) {
-      run.words += words;
-      run.n = at.n;
-    } else {
-      run = words ? { where, file: at.file, n: at.n, words, told: kinds.includes('bip39-seed') } : null;
+    const next = run !== null && run.file === at.file && at.n === run.n + 1;
+    if (!String(text).trim()) {
+      run = next && !run.blank ? { ...run, n: at.n, blank: true } : null;
+      continue;
     }
-    if (run && !run.told && run.words >= SEED_WORDS) {
-      hits.push({ where: run.where, kinds: ['bip39-seed'] });
+    const { lead, trail, words } = seedEnds(text);
+    const own = kinds.includes('bip39-seed');
+    if (next && !run.told && run.words + lead >= SEED_WORDS) {
+      if (!own) hits.push({ where: run.where, kinds: ['bip39-seed'] });
       run.told = true;
     }
+    if (next && words) run = { ...run, n: at.n, words: run.words + words, blank: false };
+    else run = trail ? { where, file: at.file, n: at.n, words: trail, told: own, blank: false } : null;
     if (kinds.length) hits.push({ where, kinds });
   }
   return hits;
 }
 
-/** The tree's lines, read from disk for each path git lists. Binary files are skipped; a path that cannot be read is named, never passed over. */
+/**
+ * A file's text, or null when it is binary. UTF-16 is text: Windows PowerShell 5's `>` and Notepad's "Unicode" both
+ * write it, with a byte-order mark, and until 8 Nov 2026 its NUL bytes had it skipped as binary, a seed phrase and all.
+ */
+export function decodeText(buf) {
+  if (buf[0] === 0xff && buf[1] === 0xfe) return buf.subarray(2).toString('utf16le');
+  if (buf[0] === 0xfe && buf[1] === 0xff) return Buffer.from(buf.subarray(2, buf.length - (buf.length % 2))).swap16().toString('utf16le');
+  return buf.subarray(0, 8000).includes(0) ? null : buf.toString('utf8');
+}
+
+/**
+ * The tree's lines, read from disk for each path git lists. A binary file is skipped and named in `binary`, so a PASS
+ * can say what it did not read; a path that cannot be read is named in `unread`, never passed over.
+ */
 export function treeLines(root, paths) {
   const lines = [];
   const unread = [];
+  const binary = [];
   let files = 0;
   for (const p of paths) {
     const file = join(root, p);
-    if (!existsSync(file)) continue; // deleted on disk but still in the index: the history scan holds it
+    // Deleted on disk but still in the index: what the index holds is read by the staged scan where it differs from
+    // HEAD, and by the history scan where it does not. The disk has nothing to read.
+    if (!existsSync(file)) continue;
     let buf;
     try {
       buf = readFileSync(file);
@@ -493,23 +540,32 @@ export function treeLines(root, paths) {
       unread.push(p);
       continue;
     }
-    if (buf.subarray(0, 8000).includes(0)) continue;
+    const text = decodeText(buf);
+    if (text === null) {
+      binary.push(p);
+      continue;
+    }
     files += 1;
-    buf.toString('utf8').split('\n').forEach((text, i) => lines.push({ where: `${p}:${i + 1}`, text }));
+    text.split('\n').forEach((t, i) => lines.push({ where: `${p}:${i + 1}`, text: t }));
   }
-  return { lines, files, unread };
+  return { lines, files, unread, binary };
 }
 
+// With --text, git prints a UTF-16 blob byte for byte, a NUL beside every ASCII letter. Dropped, the letters read as
+// the text they are, so a seed committed from Notepad is caught in history as well as on disk.
+const noNul = (s) => s.split('\u0000').join('');
+
 /**
- * Every line ever added, and every commit message line, from `git log -p -m --all --pretty=medium`, as
+ * Every line ever added, and every commit message line, from `git log -p -m --all --text --pretty=medium`, as
  * { where: "<sha7>:<path>:<line>" or "<sha7>:message:<n>", text }. Hunk headers are counted rather than trusted to
  * a line's first character, so an added line that itself begins "++ " is read as content, not as a file header.
+ * A diff with no commit header (`git diff --cached`) is read the same way, its lines placed under `label`.
  */
-export function historyLines(log) {
+export function historyLines(log, label = '?') {
   const lines = [];
   let commits = 0;
   let added = 0;
-  let commit = '?';
+  let commit = label;
   let path = '?';
   let inMessage = false;
   let msg = 0;
@@ -519,7 +575,7 @@ export function historyLines(log) {
   for (const raw of String(log).split('\n')) {
     if (oldLeft > 0 || newLeft > 0) {
       if (raw.startsWith('+')) {
-        lines.push({ where: `${commit}:${path}:${n}`, text: raw.slice(1) });
+        lines.push({ where: `${commit}:${path}:${n}`, text: noNul(raw.slice(1)) });
         added += 1;
         n += 1;
         newLeft -= 1;
@@ -549,34 +605,45 @@ export function historyLines(log) {
   return { lines, commits, added };
 }
 
+// The three places a secret can sit: the disk, the index (what `git commit` records next, which until 8 Nov 2026 was
+// never read, so a key staged and then deleted or edited back on disk passed), and history. --text on both diffs, so a
+// blob git calls binary (a NUL in it, or `-diff` in .gitattributes) is printed instead of "Binary files differ".
 export function secrets(ctx) {
   if (!bip39Intact(ctx.words ?? BIP39_WORDS)) return fail('the built-in BIP39 list is not the published one, so a seed phrase could pass unseen');
   let paths;
   let log;
+  let staged;
   try {
     paths = ctx.git(['ls-files', '-z', '--cached', '--others', '--exclude-standard']).split('\0').filter(Boolean);
   } catch (e) {
     return fail(`git ls-files failed, so the tree was not read: ${firstLine(e)}`);
   }
   try {
-    log = ctx.git(['log', '-p', '-m', '--all', '--no-color', '--no-ext-diff', '--no-textconv', '--src-prefix=a/', '--dst-prefix=b/', '--pretty=medium']);
+    log = ctx.git(['log', '-p', '-m', '--all', '--text', '--no-color', '--no-ext-diff', '--no-textconv', '--src-prefix=a/', '--dst-prefix=b/', '--pretty=medium']);
   } catch (e) {
     return fail(`git log failed, so history was not read: ${firstLine(e)}`);
   }
+  try {
+    staged = ctx.git(['diff', '--cached', '-U0', '--text', '--no-color', '--no-ext-diff', '--no-textconv', '--src-prefix=a/', '--dst-prefix=b/']);
+  } catch (e) {
+    return fail(`git diff --cached failed, so what the next commit would record was not read: ${firstLine(e)}`);
+  }
   const tree = treeLines(ctx.root, [...new Set(paths)]);
   const history = historyLines(log);
+  const index = historyLines(staged, 'staged');
   if (tree.unread.length) return fail(`could not read ${tree.unread.slice(0, 3).join(', ')}: a file not read is not a clean file`);
   if (!tree.files) return fail('no file was read, so nothing was checked');
   if (!history.commits) return fail('git log gave no commit, so history was not checked');
   if (!history.added) return fail('git log gave commits but no added line, so the diffs were not read');
   const past = withoutKnownFakes(history.lines, ctx.fakes ?? KNOWN_FAKES);
-  const hits = [...secretHits(tree.lines), ...secretHits(past.lines)];
+  const hits = [...secretHits(tree.lines), ...secretHits(index.lines), ...secretHits(past.lines)];
   if (hits.length) {
     const shown = hits.slice(0, 5).map((h) => `${h.where} (${h.kinds.join(', ')})`).join('; ');
     return fail(`secret-shaped text at ${shown}${hits.length > 5 ? `; and ${hits.length - 5} more` : ''}`);
   }
+  const skipped = tree.binary.length ? `: ${tree.binary.slice(0, 3).join(', ')}${tree.binary.length > 3 ? ', ...' : ''}` : '';
   const fakes = past.allowed ? `, ${past.allowed} known fake fixture line(s) let through` : '';
-  return pass(`clean: ${tree.files} file(s) in the tree and ${history.lines.length} committed line(s) over ${history.commits} commit(s), ${SECRET_SHAPES.length + 2} shapes${fakes}`);
+  return pass(`clean: ${tree.files} file(s) read in the tree, ${tree.binary.length} binary file(s) not read${skipped}; ${index.lines.length} staged line(s) not yet committed; ${history.lines.length} committed line(s) over ${history.commits} commit(s); ${SECRET_SHAPES.length + 2} shapes${fakes}`);
 }
 
 // ----------------------------------------------------------------------------------------------------------- privacy
@@ -595,17 +662,32 @@ export function privacy(ctx) {
 // "Nothing from here enters the studio repo." A clean tree alone proved too little: this container's studio clone sat
 // on this session's Galxe branch, and that branch was on the studio's remote, where a commit would land outside the
 // studio's own proof and push flow. A dirty tree is reported as dirty, cause unknown: it may be Leif's own work.
+// The branch itself is not the harm; a commit on it is. The cloud session harness checks out its designated branch in
+// the studio clone, locally and on the remote, at every start, so an empty claude/galxe-* branch is named, not failed:
+// failing it kept prove red for good here, and invited deleting a branch on the studio's remote, which faces outward.
+// One holding any commit the studio's main lacks (origin/main, else main; neither is a FAIL) still fails.
 export const STUDIO_BRANCH_BAN = /^refs\/(?:heads|remotes\/[^/]+)\/claude\/galxe-/;
+export const STUDIO_MAINS = ['refs/remotes/origin/main', 'refs/heads/main'];
 
-/** The studio verdict from what was read. Absent is a NOTE: a repo that is not on this machine was not checked. */
-export function studioVerdict({ present, dir = 'joyisfree1', branch = '?', head = '?', dirty = [], refs = [] }) {
+/** A count git printed, or NaN: an empty or garbled answer is never read as 0. */
+export const countOf = (s) => (/^\d+$/.test(String(s).trim()) ? Number(String(s).trim()) : NaN);
+
+/**
+ * The studio verdict from what was read: `base` is the main the galxe refs were measured against (null if there is
+ * none), and `ahead` maps each such ref to how many of its commits `base` lacks. Absent is a NOTE: a repo that is not
+ * on this machine was not checked.
+ */
+export function studioVerdict({ present, dir = 'joyisfree1', branch = '?', head = '?', dirty = [], refs = [], base = null, ahead = {} }) {
   if (!present) return note(`studio repo not on this machine (${dir}), so nothing was checked: not a pass`);
   const banned = refs.filter((r) => STUDIO_BRANCH_BAN.test(r));
+  const carrying = banned.filter((r) => ahead[r] !== 0);
   const problems = [];
   if (dirty.length) problems.push(`uncommitted changes, cause unknown: ${dirty.slice(0, 3).join('; ')}`);
-  if (banned.length) problems.push(`claude/galxe-* branch present: ${banned.join(', ')}`);
+  if (banned.length && !base) problems.push(`claude/galxe-* branch present and no main to measure it against: ${banned.join(', ')}`);
+  else if (carrying.length) problems.push(`claude/galxe-* branch holds commits ${base} does not: ${carrying.map((r) => `${r} (${Number.isInteger(ahead[r]) ? ahead[r] : 'count unknown'})`).join(', ')}`);
   const at = `HEAD ${head} on ${branch}`;
-  return problems.length ? fail(`${at}; ${problems.join('; ')}`) : pass(`${at}, clean, no claude/galxe-* branch`);
+  if (problems.length) return fail(`${at}; ${problems.join('; ')}`);
+  return pass(banned.length ? `${at}, clean; claude/galxe-* branch with no commit beyond ${base}: ${banned.join(', ')}` : `${at}, clean, no claude/galxe-* branch`);
 }
 
 export function studio(ctx) {
@@ -614,13 +696,19 @@ export function studio(ctx) {
   try {
     const g = (args) => ctx.git(['-C', dir, ...args]).trim();
     const list = (s) => s.split('\n').map((l) => l.trim()).filter(Boolean);
+    const refs = list(g(['for-each-ref', '--format=%(refname)', 'refs/heads', 'refs/remotes']));
+    const base = STUDIO_MAINS.find((m) => refs.includes(m)) ?? null;
+    const ahead = {};
+    if (base) for (const r of refs) if (STUDIO_BRANCH_BAN.test(r)) ahead[r] = countOf(g(['rev-list', '--count', `${base}..${r}`]));
     return studioVerdict({
       present: true,
       dir,
       branch: g(['rev-parse', '--abbrev-ref', 'HEAD']),
       head: g(['rev-parse', '--short', 'HEAD']),
       dirty: list(g(['status', '--porcelain'])),
-      refs: list(g(['for-each-ref', '--format=%(refname)', 'refs/heads', 'refs/remotes'])),
+      refs,
+      base,
+      ahead,
     });
   } catch (e) {
     return fail(`could not read the studio repo at ${dir}: ${firstLine(e)}`);
@@ -724,31 +812,45 @@ export function state(ctx) {
 
 // -------------------------------------------------------------------------------------------------------- leif-pages
 // Leif's pages are read by Leif, who does not use a terminal. A command on one is a step handed to the one person
-// who cannot take it, so it belongs in a runbook only Claude uses.
+// who cannot take it, so it belongs in a runbook only Claude uses. 8 Nov 2026: "type npm install", "npx prove",
+// "git pull", a 4-space code block, <code>, `./setup.sh` and the Windows and platform tools (`powercfg` is the PC-sleep
+// step this account's session-lifeline skill hands Leif) all passed. Words that are also plain English (open, start,
+// make, code, yarn) are left off the lists, because a fenced email draft starts lines with them.
 export const LEIF_PAGES = ['docs/leif.md', 'agency/RUN-drop-vs-email.md', 'agency/drafts/*.md'];
-const SHELL = 'npm|npx|node|git|gh|cd|ls|cat|curl|wget|bash|sh|zsh|python3?|pip3?|brew|rm|mv|cp|mkdir|chmod|sudo|export|echo|yarn|pnpm|bun|deno|ssh|scp|docker|grep|sed|awk|claude';
+const SHELL = 'npm|npx|node|git|gh|cd|ls|cat|curl|wget|bash|sh|zsh|python3?|pip3?|brew|rm|mv|cp|mkdir|chmod|sudo|export|echo|yarn|pnpm|bun|deno|ssh|scp|docker|grep|sed|awk|claude|powershell|pwsh|winget|choco|powercfg|nvm|fnm|vercel|supabase|netlify';
 const NPM_RUN = /\bnpm\s+run\b/;
+const PROSE_COMMAND = /\b(?:npm|pnpm)\s+(?:install|i|ci|test|t|start|exec|update|init)\b|\bnpx\s+[\w@.-]|\bgit\s+(?:pull|push|clone|commit|checkout|switch|status|add|fetch|reset|stash|merge|rebase|log|diff|init|restore)\b/i;
 const NODE_COMMAND = /\bnode\s+(?:--?[a-z]|[\w./-]*\.[cm]?js\b|[\w.-]*\/)/i;
-const SHELL_START = new RegExp(`^\\s*(?:\\$\\s*)?(?:${SHELL})\\s+\\S`);
+const SCRIPT = '(?:\\.{1,2}[\\\\/]|~[\\\\/])?[\\w.\\\\/-]*\\w\\.(?:sh|ps1|bat|cmd|command)\\b';
+const SHELL_START = new RegExp(`^\\s*(?:\\$\\s*)?(?:(?:${SHELL})\\s+\\S|${SCRIPT})`);
 const INLINE_CODE = /`([^`\n]+)`/g;
+const HTML_CODE = /<(?:code|kbd)>([^<\n]+)<\/(?:code|kbd)>/gi;
 const FENCE = /^\s*(?:`{3,}|~{3,})\s*([\w+-]*)/;
-const SHELL_FENCE = /^(?:sh|bash|zsh|shell|console|terminal|shell-session|powershell|ps1?|cmd|bat)$/i;
+const SHELL_FENCE = /^(?:sh|bash|zsh|shell|console|terminal|shell-session|powershell|pwsh|ps1?|cmd|bat)$/i;
+const INDENTED = /^(?: {4}|\t)/;
 
 /** Lines on one page that hand Leif a terminal step, as { where: "file:line", why }. */
 export function terminalSteps(file, text) {
   const hits = [];
   let fenced = false;
+  let indented = false; // inside a markdown code block made by indenting: 4 spaces or a tab, after a blank line
+  let blank = true;
   String(text).split('\n').forEach((line, i) => {
     let why = null;
     const f = FENCE.exec(line);
+    indented = !fenced && !f && INDENTED.test(line) && (blank || indented);
     if (f) {
       fenced = !fenced;
       if (fenced && SHELL_FENCE.test(f[1])) why = `a ${f[1]} code block`;
     } else if (fenced && (/^\s*\$\s/.test(line) || SHELL_START.test(line))) why = 'a command in a code block';
+    else if (indented && (/^\s*\$\s/.test(line) || SHELL_START.test(line))) why = 'a command in an indented code block';
     if (!why && NPM_RUN.test(line)) why = '"npm run"';
     if (!why && NODE_COMMAND.test(line)) why = 'a node command';
     if (!why && [...line.matchAll(INLINE_CODE)].some((m) => SHELL_START.test(m[1]))) why = 'a shell command in backticks';
+    if (!why && [...line.matchAll(HTML_CODE)].some((m) => SHELL_START.test(m[1]))) why = 'a shell command in <code>';
+    if (!why && PROSE_COMMAND.test(line)) why = 'an npm, npx or git command';
     if (why) hits.push({ where: `${file}:${i + 1}`, why });
+    blank = !line.trim();
   });
   return hits;
 }

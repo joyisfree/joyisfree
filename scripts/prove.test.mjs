@@ -1,17 +1,20 @@
 // `npm run prove` is the repo's one "is it true?" command, and each of its checks is itself a guard, so each is shown
 // to catch what it should: on fixture repos in temp dirs, with a fixed clock and a stand-in for git, never the real
-// repo, the real studio or the machine's own clock.
+// repo, the real studio or the machine's own clock. Where only git itself can show the case (what the index holds,
+// how it prints a blob it calls binary), a real git repo is made in a temp dir and thrown away.
 import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { devNull, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   BIP39_WORDS, CHECKS, KNOWN_FAKES, LEIF_PAGES, SECRET_SHAPES, SEED_WORDS,
-  bip39Intact, dayNumber, decisions, facts, firstInstruction, historyLines, leifPages, lineCount, markOf, runChecks,
-  secretHits, secretKinds, secrets, state, studio, studioVerdict, sydneyDay, terminalSteps, withoutKnownFakes,
+  bip39Intact, countOf, dayNumber, decisions, decodeText, facts, firstInstruction, historyLines, leifPages, lineCount,
+  markOf, runChecks, secretHits, secretKinds, secrets, seedEnds, state, studio, studioVerdict, sydneyDay, terminalSteps,
+  treeLines, withoutKnownFakes,
 } from './prove.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -101,6 +104,51 @@ const MORE_SHAPES = [
   ['bip39-seed', JSON.stringify({ words: seedWords(12, 4).map((w) => w.toUpperCase()) })],
 ];
 
+// The realistic layouts the second 8 Nov audit found passing end to end (wave0 finding 2), one fixture each.
+const SECOND_AUDIT_SHAPES = [
+  ['labelled-hex-key', j('const wallet', 'PrivateKey = "', chars(HEX, 64, 50), '";')],
+  ['labelled-hex-key', j('eth', 'PrivateKey: \'', chars(HEX, 64, 51), "'")],
+  ['labelled-hex-key', j('priv', 'key=', chars(HEX, 64, 52))],
+  ['labelled-hex-key', j('P', 'K=', chars(HEX, 64, 53))],
+  ['labelled-hex-key', j('DEPLOYER', '_PK=', chars(HEX, 64, 54))],
+  ['extended-private-key', j('xp', 'rv9s21ZrQH143K', chars(B58, 97, 55))],
+  ['extended-private-key', j('zp', 'rv', chars(B58, 107, 56))],
+  ['wif-key', j('K', chars(B58, 51, 57))],
+  ['wif-key', j('wif: 5', 'H', chars(B58, 49, 58))],
+  ['url-password', j('DATABASE_URL=postgres', 'ql://postgres:', chars(ALNUM, 20, 59), '@db.', chars(LOWER, 20, 60), '.supabase.co:5432/postgres')],
+  ['bearer-token', j('curl -H "Authorization: ', 'Bearer ', chars(HEX, 40, 61), '" https://api.postiz.com/public/v1/posts')],
+  ['labelled-secret', j('Postiz API', ' key: ', chars(HEX, 32, 62))],
+  ['npm-token', j('np', 'm_', chars(ALNUM, 36, 63))],
+  ['telegram-bot-token', j('TG=', chars(DIGITS, 9, 64), ':A', 'A', chars(URLSAFE, 33, 65))],
+  ['webhook-secret', j('wh', 'sec_', chars(ALNUM, 32, 66))],
+  ['google-oauth-secret', j('GOC', 'SPX-', chars(URLSAFE, 28, 67))],
+];
+
+test('the second audit\'s key and token layouts are caught, each by its own name', () => {
+  for (const [kind, t] of SECOND_AUDIT_SHAPES) assert.ok(secretKinds(t).includes(kind), `${kind} missed in fixture ${SECOND_AUDIT_SHAPES.findIndex((m) => m[1] === t)}`);
+});
+
+test('the new shapes stay narrow: public and cache keys, placeholders and plain words are not flagged', () => {
+  for (const t of [
+    j('publicKey: ', chars(HEX, 64, 70)), // a public key is public
+    j('cacheKey: "', chars(HEX, 64, 71), '"'), // a hash used as a key
+    j('privacy policy sha256: ', chars(HEX, 64, 72)),
+    j('pkg sha256 ', chars(HEX, 64, 73)),
+    'postgres://user:password@localhost:5432/app',
+    'postgresql://postgres:[YOUR-PASSWORD]@db.abcdefghijklmnop.supabase.co:5432/postgres',
+    j('postgres://app:', '$', '{DB_PASSWORD_V2}@db:5432/app'),
+    j('https://x-access-token:', '$', '{GITHUB_TOKEN}@github.com/joyisfree/desk.git'),
+    j("fastURI.parse('uri://us", '\\', 'xA0er:pa', '\\', "uD7FFss@example.com:123/one')"), // escapes in a test string
+    j('integrity sha512-', chars(ALNUM, 20, 74), '+K', chars(B58, 51, 75), '/', chars(ALNUM, 10, 76), '=='), // base64, not WIF
+    'Authorization: Bearer <token>',
+    'Bearer YOUR_ACCESS_TOKEN_GOES_HERE',
+    'Bearer tokens go in the Authorization header',
+    'npm_config_registry=https://registry.npmjs.org/',
+    'the bot id is 123456789 and the chat is 42',
+    'the API key: see the Postiz settings page',
+  ]) assert.deepEqual(secretKinds(t), [], t);
+});
+
 test('13 of 13 of the shapes the task named are caught, each by its own name', () => {
   assert.equal(TASK_SHAPES.length, 13);
   for (const [kind, t] of TASK_SHAPES) assert.ok(secretKinds(t).includes(kind), `${kind} missed`);
@@ -116,7 +164,7 @@ test('the other spellings are caught too: github_pat_, Slack webhooks, sb_secret
 });
 
 test('every shape on the one list has a fixture named for it, and no shape is a stateful /g or /y regex', () => {
-  const named = new Set([...TASK_SHAPES, ...AUDIT_SHAPES, ...MORE_SHAPES].map(([kind]) => kind));
+  const named = new Set([...TASK_SHAPES, ...AUDIT_SHAPES, ...MORE_SHAPES, ...SECOND_AUDIT_SHAPES].map(([kind]) => kind));
   for (const { name, re } of SECRET_SHAPES) {
     assert.ok(named.has(name), `${name} has no fixture`);
     assert.ok(!re.global && !re.sticky, `${name} would skip lines with lastIndex`);
@@ -196,13 +244,47 @@ test('a seed written down a page is caught: one word to a line, numbered, or fou
   assert.equal(secretHits(bullets).length, 1);
 });
 
-test('rows of seed words are not joined across a prose line, a gap, or two files', () => {
+test('rows of seed words are not joined across a prose line, a gap, two blank lines, or two files', () => {
   const words = seedWords(SEED_WORDS, 9);
   const half = (k, file, start) => words.slice(k, k + 6).map((w, i) => line(w, `${file}:${start + i}`));
   assert.deepEqual(secretHits([...half(0, 'a.md', 1), line('and the rest is prose', 'a.md:7'), ...half(6, 'a.md', 8)]), []);
   assert.deepEqual(secretHits([...half(0, 'a.md', 1), ...half(6, 'a.md', 9)]), []);
+  assert.deepEqual(secretHits([...half(0, 'a.md', 1), line('', 'a.md:7'), line('  ', 'a.md:8'), ...half(6, 'a.md', 9)]), []);
   assert.deepEqual(secretHits([...half(0, 'a.md', 1), ...half(6, 'b.md', 7)]), []);
   assert.deepEqual(secretHits(words.slice(0, SEED_WORDS - 1).map((w, i) => line(w, `a.md:${i + 1}`))), []);
+});
+
+/** Lines of one file, numbered from 1. */
+const page = (file, texts) => texts.map((text, i) => line(text, `${file}:${i + 1}`));
+
+test('a seed in the layouts the second audit found is caught: tables, (1) #1 and "1": numbering, wrapped, two blocks', () => {
+  const s = seedWords(SEED_WORDS, 3);
+  const layouts = {
+    'wrapped prose': [`Recovery phrase for the hot wallet is ${s.slice(0, 7).join(' ')}`, `${s.slice(7).join(' ')}, keep it safe.`],
+    'a label, then the rest on the next line': [`seed: ${s.slice(0, 6).join(' ')}`, s.slice(6).join(' ')],
+    'a 3 by 4 markdown table': ['| 1-4 | 5-8 | 9-12 |', '|---|---|---|', ...[0, 1, 2, 3].map((i) => `| ${s[i]} | ${s[i + 4]} | ${s[i + 8]} |`)],
+    'a markdown table, one word to a row': ['| # | word |', '|---|---|', ...s.map((w, i) => `| ${i + 1} | ${w} |`)],
+    '(1) numbering': s.map((w, i) => `(${i + 1}) ${w}`),
+    '#1 numbering': s.map((w, i) => `#${i + 1} ${w}`),
+    'a JSON object keyed "1":': ['{', ...s.map((w, i) => `  "${i + 1}": "${w}",`), '}'],
+    'two blocks of six, one blank line between': [...s.slice(0, 6), '', ...s.slice(6)],
+  };
+  for (const [name, texts] of Object.entries(layouts)) {
+    const hits = secretHits(page('n.md', texts));
+    assert.equal(hits.length, 1, `${name}: ${JSON.stringify(hits)}`);
+    assert.deepEqual(hits[0].kinds, ['bip39-seed'], name);
+  }
+});
+
+test('a wrapped seed is joined only by the words that end one line and lead the next', () => {
+  const s = seedWords(SEED_WORDS, 11);
+  // 7 + 5 = 12 across the break: a seed. With the run broken by a word not on the list, 7 + 4 is not.
+  assert.equal(secretHits(page('w.md', [`it is ${s.slice(0, 7).join(' ')}`, `${s.slice(7).join(' ')} and that is all`])).length, 1);
+  assert.deepEqual(secretHits(page('w.md', [`it is ${s.slice(0, 7).join(' ')}`, `${s.slice(7, 11).join(' ')} and ${s[11]}`])), []);
+  assert.deepEqual(secretHits(page('w.md', [`it is ${s.slice(0, 7).join(' ')} // ok`, `${s.slice(7).join(' ')}`])), []);
+  assert.deepEqual(seedEnds('| 1 | abandon |'), { lead: 1, trail: 1, words: 1 });
+  assert.deepEqual(seedEnds('the cat sat on abandon ability'), { lead: 0, trail: 2, words: 0 });
+  assert.deepEqual(seedEnds('## Next step'), { lead: 0, trail: 2, words: 0 });
 });
 
 test('one seed on one line is reported once, not again as rows', () => {
@@ -286,8 +368,8 @@ function repo(files) {
   return root;
 }
 
-/** A stand-in for git that answers ls-files and log, and records what it was asked. */
-function scanGit({ files = ['a.txt'], log = LOG, lsFails = false, logFails = false } = {}) {
+/** A stand-in for git that answers ls-files, log and diff --cached, and records what it was asked. */
+function scanGit({ files = ['a.txt'], log = LOG, staged = '', lsFails = false, logFails = false, diffFails = false } = {}) {
   const calls = [];
   const git = (args) => {
     calls.push(args);
@@ -299,21 +381,130 @@ function scanGit({ files = ['a.txt'], log = LOG, lsFails = false, logFails = fal
       if (logFails) throw new Error('fatal: your current branch does not have any commits yet');
       return log;
     }
+    if (args[0] === 'diff' && args.includes('--cached')) {
+      if (diffFails) throw new Error('fatal: unable to read index file');
+      return staged;
+    }
     throw new Error(`no stand-in for git ${args.join(' ')}`);
   };
   return { git, calls };
 }
 
+/** What `git diff --cached -U0` prints for one new file staged with these lines. */
+const stagedDiff = (path, texts) => [
+  `diff --git a/${path} b/${path}`,
+  'new file mode 100644',
+  'index 0000000..1234567',
+  '--- /dev/null',
+  `+++ b/${path}`,
+  `@@ -0,0 +1${texts.length === 1 ? '' : `,${texts.length}`} @@`,
+  ...texts.map((t) => `+${t}`),
+  '',
+].join('\n');
+
 const clean = () => repo({ 'a.txt': 'nothing secret here\n', 'b/c.md': '# notes\n' });
 
-test('secrets: a clean tree and a clean history pass, and the scan asks git for untracked files and all of history', () => {
-  const { git, calls } = scanGit({ files: ['a.txt', 'b/c.md'] });
+test('a staged diff is read like history, under "staged", and a UTF-16 line printed by --text reads as its letters', () => {
+  const nul = (s) => s.split('').join('\u0000');
+  const { lines, commits } = historyLines(stagedDiff('w.txt', [nul('seed phrase: abandon'), nul('two')]), 'staged');
+  assert.equal(commits, 0);
+  assert.deepEqual(lines, [{ where: 'staged:w.txt:1', text: 'seed phrase: abandon' }, { where: 'staged:w.txt:2', text: 'two' }]);
+});
+
+test('secrets: a clean tree, index and history pass, and the scan asks git for untracked files, the index and all of history, as text', () => {
+  const { git, calls } = scanGit({ files: ['a.txt', 'b/c.md'], staged: stagedDiff('d.txt', ['still fine']) });
   const r = secrets({ root: clean(), git });
   assert.equal(r.status, 'PASS', r.detail);
-  assert.match(r.detail, /2 file\(s\) in the tree and 6 committed line\(s\) over 2 commit\(s\)/);
-  const [ls, log] = calls;
+  assert.match(r.detail, /2 file\(s\) read in the tree, 0 binary file\(s\) not read; 1 staged line\(s\) not yet committed; 6 committed line\(s\) over 2 commit\(s\)/);
+  const [ls, log, diff] = calls;
   for (const a of ['--cached', '--others', '--exclude-standard']) assert.ok(ls.includes(a), a);
-  for (const a of ['-p', '--all', '--dst-prefix=b/']) assert.ok(log.includes(a), a);
+  for (const a of ['-p', '--all', '--text', '--dst-prefix=b/']) assert.ok(log.includes(a), a);
+  for (const a of ['--cached', '--text', '--no-ext-diff', '--dst-prefix=b/']) assert.ok(diff.includes(a), a);
+});
+
+test('secrets: a secret staged for the next commit fails, as "staged" with its path and line, though the disk is clean', () => {
+  const secret = TASK_SHAPES[4][1];
+  const r = secrets({ root: clean(), git: scanGit({ staged: stagedDiff('leak.env.txt', ['fine', secret]) }).git });
+  assert.equal(r.status, 'FAIL');
+  assert.match(r.detail, /staged:leak\.env\.txt:2 \(stripe\)/);
+  assert.ok(!r.detail.includes(secret.slice(12)));
+});
+
+test('the tree reader decodes UTF-16 by its BOM, either byte order, and names each binary file it does not read', () => {
+  const text = 'seed phrase: here\nline two\n';
+  const le = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]);
+  const be = Buffer.concat([Buffer.from([0xfe, 0xff]), Buffer.from(text, 'utf16le').swap16()]);
+  assert.equal(decodeText(le), text);
+  assert.equal(decodeText(be), text);
+  assert.equal(decodeText(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01])), null);
+  const root = repo({ 'le.txt': '', 'be.txt': '', 'img.bin': '', 'plain.txt': 'plain\n' });
+  writeFileSync(join(root, 'le.txt'), le);
+  writeFileSync(join(root, 'be.txt'), be);
+  writeFileSync(join(root, 'img.bin'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01]));
+  const t = treeLines(root, ['le.txt', 'be.txt', 'img.bin', 'plain.txt']);
+  assert.equal(t.files, 3);
+  assert.deepEqual(t.binary, ['img.bin']);
+  assert.deepEqual(t.lines.filter((l) => l.text === 'seed phrase: here').map((l) => l.where), ['le.txt:1', 'be.txt:1']);
+});
+
+test('secrets: a seed saved as UTF-16 on disk fails, and a binary file not read is counted and named in the PASS', () => {
+  const root = clean();
+  const seed = j('seed', ' phrase: ', seedWords(SEED_WORDS, 12).join(' '));
+  writeFileSync(join(root, 'wallet-backup.txt'), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(`${seed}\r\n`, 'utf16le')]));
+  const r = secrets({ root, git: scanGit({ files: ['a.txt', 'wallet-backup.txt'] }).git });
+  assert.equal(r.status, 'FAIL');
+  assert.match(r.detail, /wallet-backup\.txt:1 \(labelled-seed, bip39-seed\)/);
+  writeFileSync(join(root, 'wallet-backup.txt'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01]));
+  const p = secrets({ root, git: scanGit({ files: ['a.txt', 'wallet-backup.txt'] }).git });
+  assert.equal(p.status, 'PASS', p.detail);
+  assert.match(p.detail, /1 file\(s\) read in the tree, 1 binary file\(s\) not read: wallet-backup\.txt;/);
+});
+
+/**
+ * A real git repo in a temp dir, for what only git itself shows: the index, and how it prints a blob it calls binary.
+ * Every GIT_* variable is dropped first: run from a git hook, GIT_DIR or GIT_INDEX_FILE would point these commands at
+ * the outer repo's index.
+ */
+function realGit() {
+  const root = tempDir('prove-git-');
+  const base = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_')));
+  const env = { ...base, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: devNull, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' };
+  const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: 'pipe', env, maxBuffer: 64 * 1024 * 1024 });
+  git(['init', '-q']);
+  writeFileSync(join(root, 'readme.txt'), 'hello\n');
+  git(['add', 'readme.txt']);
+  git(['commit', '-qm', 'init']);
+  return { root, git };
+}
+const utf16 = (text) => Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]);
+
+test('secrets, with real git: a key staged and then deleted or edited back on disk fails before it is committed', () => {
+  const { root, git } = realGit();
+  const key = j('sk', '_live_', chars(ALNUM, 24, 80));
+  writeFileSync(join(root, 'leak.env.txt'), `STRIPE=${key}\n`);
+  writeFileSync(join(root, 'wallet.txt'), utf16(j('seed', ' phrase: ', seedWords(SEED_WORDS, 13).join(' '), '\n')));
+  git(['add', 'leak.env.txt', 'wallet.txt']);
+  unlinkSync(join(root, 'leak.env.txt'));
+  unlinkSync(join(root, 'wallet.txt'));
+  appendFileSync(join(root, 'readme.txt'), `key: ${key}\n`);
+  git(['add', 'readme.txt']);
+  writeFileSync(join(root, 'readme.txt'), 'hello\n');
+  const r = secrets({ root, git });
+  assert.equal(r.status, 'FAIL', r.detail);
+  for (const at of ['staged:leak.env.txt:1 (stripe)', 'staged:readme.txt:2 (stripe)', 'staged:wallet.txt:1 (labelled-seed, bip39-seed)']) assert.ok(r.detail.includes(at), `${at} not in: ${r.detail}`);
+});
+
+test('secrets, with real git: a seed committed as UTF-16 fails on disk, and in history once the file is gone', () => {
+  const { root, git } = realGit();
+  writeFileSync(join(root, 'wallet-backup.txt'), utf16(j('seed', ' phrase: ', seedWords(SEED_WORDS, 14).join(' '), '\n')));
+  git(['add', 'wallet-backup.txt']);
+  git(['commit', '-qm', 'backup']);
+  assert.match(secrets({ root, git }).detail, /(?:^|; | at )wallet-backup\.txt:1 \(labelled-seed, bip39-seed\)/);
+  git(['rm', '-q', 'wallet-backup.txt']);
+  git(['commit', '-qm', 'gone']);
+  const r = secrets({ root, git });
+  assert.equal(r.status, 'FAIL', r.detail);
+  assert.match(r.detail, /[0-9a-f]{7}:wallet-backup\.txt:1 \(labelled-seed, bip39-seed\)/);
 });
 
 test('secrets: a secret in the tree fails, naming the file, the line and the shape, not the secret', () => {
@@ -342,6 +533,8 @@ test('secrets: unread is never clean (git fails, no commit, no file read, a path
   assert.equal(secrets({ root: clean(), git: scanGit({ lsFails: true }).git }).status, 'FAIL');
   assert.match(secrets({ root: clean(), git: scanGit({ logFails: true }).git }).detail, /history was not read/);
   assert.equal(secrets({ root: clean(), git: scanGit({ logFails: true }).git }).status, 'FAIL');
+  assert.match(secrets({ root: clean(), git: scanGit({ diffFails: true }).git }).detail, /next commit would record was not read/);
+  assert.equal(secrets({ root: clean(), git: scanGit({ diffFails: true }).git }).status, 'FAIL');
   assert.match(secrets({ root: clean(), git: scanGit({ log: '' }).git }).detail, /no commit/);
   const messagesOnly = LOG.split('\n').filter((l) => !/^[+@ -]|^diff|^\\/.test(l) || l.startsWith('    ')).join('\n');
   assert.match(secrets({ root: clean(), git: scanGit({ log: messagesOnly }).git }).detail, /no added line/);
@@ -389,8 +582,12 @@ const studioDir = () => {
   return d;
 };
 
-/** A stand-in for git inside the studio. It answers for-each-ref only with the ref families it was asked for. */
-function studioGit(dir, { branch = 'main', head = 'abc1234', dirty = '', refs = ['refs/heads/main', 'refs/remotes/origin/main'] } = {}) {
+/**
+ * A stand-in for git inside the studio. It answers for-each-ref only with the ref families it was asked for, and
+ * `rev-list --count <base>..<ref>` from `ahead`, keyed "<base>..<ref>" or by the ref alone; a count it was not given
+ * is an error, never a quiet 0.
+ */
+function studioGit(dir, { branch = 'main', head = 'abc1234', dirty = '', refs = ['refs/heads/main', 'refs/remotes/origin/main'], ahead = {} } = {}) {
   return (args) => {
     assert.deepEqual(args.slice(0, 2), ['-C', dir]);
     const [cmd, ...rest] = args.slice(2);
@@ -398,9 +595,17 @@ function studioGit(dir, { branch = 'main', head = 'abc1234', dirty = '', refs = 
     if (cmd === 'rev-parse' && rest.includes('--short')) return `${head}\n`;
     if (cmd === 'status') return dirty;
     if (cmd === 'for-each-ref') return refs.filter((r) => rest.some((p) => r.startsWith(`${p}/`))).join('\n');
+    if (cmd === 'rev-list' && rest[0] === '--count') {
+      const range = rest[1];
+      const n = ahead[range] ?? ahead[range.split('..')[1]];
+      if (n === undefined) throw new Error(`no count for ${range}`);
+      return `${n}\n`;
+    }
     throw new Error(`no stand-in for git ${cmd}`);
   };
 }
+const GALXE = 'refs/heads/claude/galxe-automation-strategy-770t1f';
+const GALXE_REMOTE = 'refs/remotes/origin/claude/galxe-automation-strategy-770t1f';
 
 test('studio: absent is a NOTE, never a PASS', () => {
   const r = studio({ studio: join(tmpdir(), 'no-such-studio-here'), git: () => { throw new Error('not called'); } });
@@ -416,14 +621,46 @@ test('studio: clean, with no claude/galxe-* branch, passes and says where its HE
   assert.match(r.detail, /HEAD abc1234 on main/);
 });
 
-test('studio: a claude/galxe-* branch fails, local or only on the remote', () => {
+test('studio: a claude/galxe-* branch holding a commit main lacks fails, local or only on the remote', () => {
   const dir = studioDir();
-  const local = studio({ studio: dir, git: studioGit(dir, { branch: 'claude/galxe-x', refs: ['refs/heads/main', 'refs/heads/claude/galxe-x'] }) });
+  const local = studio({ studio: dir, git: studioGit(dir, { branch: 'claude/galxe-x', refs: ['refs/heads/main', 'refs/heads/claude/galxe-x'], ahead: { 'refs/heads/claude/galxe-x': 2 } }) });
   assert.equal(local.status, 'FAIL');
-  assert.match(local.detail, /refs\/heads\/claude\/galxe-x/);
-  const remote = studio({ studio: dir, git: studioGit(dir, { refs: ['refs/heads/main', 'refs/remotes/origin/claude/galxe-automation-strategy-770t1f'] }) });
+  assert.match(local.detail, /holds commits refs\/heads\/main does not: refs\/heads\/claude\/galxe-x \(2\)/);
+  const remote = studio({ studio: dir, git: studioGit(dir, { refs: ['refs/heads/main', 'refs/remotes/origin/main', GALXE_REMOTE], ahead: { [GALXE_REMOTE]: 1 } }) });
   assert.equal(remote.status, 'FAIL');
-  assert.match(remote.detail, /refs\/remotes\/origin\/claude\/galxe-automation-strategy-770t1f/);
+  assert.match(remote.detail, /refs\/remotes\/origin\/claude\/galxe-automation-strategy-770t1f \(1\)/);
+});
+
+test('studio: an empty claude/galxe-* branch, as the cloud harness checks out at every start, passes and is named', () => {
+  const dir = studioDir();
+  const refs = ['refs/heads/main', 'refs/remotes/origin/main', GALXE, GALXE_REMOTE];
+  const r = studio({ studio: dir, git: studioGit(dir, { branch: 'claude/galxe-automation-strategy-770t1f', refs, ahead: { [GALXE]: 0, [GALXE_REMOTE]: 0 } }) });
+  assert.equal(r.status, 'PASS', r.detail);
+  assert.match(r.detail, /no commit beyond refs\/remotes\/origin\/main: refs\/heads\/claude\/galxe-automation-strategy-770t1f, refs\/remotes\/origin\/claude\/galxe-automation-strategy-770t1f/);
+  const dirty = studio({ studio: dir, git: studioGit(dir, { refs, dirty: ' M src/App.tsx\n', ahead: { [GALXE]: 0, [GALXE_REMOTE]: 0 } }) });
+  assert.equal(dirty.status, 'FAIL');
+});
+
+test('studio: commits are counted against origin/main, else main, and with neither the check fails closed', () => {
+  const dir = studioDir();
+  const both = studio({ studio: dir, git: studioGit(dir, { refs: ['refs/heads/main', 'refs/remotes/origin/main', GALXE], ahead: { [`refs/remotes/origin/main..${GALXE}`]: 3, [`refs/heads/main..${GALXE}`]: 0 } }) });
+  assert.equal(both.status, 'FAIL', 'a commit on the galxe branch that only local main holds has not been through the studio\'s remote main');
+  const local = studio({ studio: dir, git: studioGit(dir, { refs: ['refs/heads/main', GALXE], ahead: { [`refs/heads/main..${GALXE}`]: 0 } }) });
+  assert.equal(local.status, 'PASS', local.detail);
+  assert.match(local.detail, /beyond refs\/heads\/main/);
+  const none = studio({ studio: dir, git: studioGit(dir, { refs: ['refs/heads/trunk', GALXE] }) });
+  assert.equal(none.status, 'FAIL');
+  assert.match(none.detail, /no main to measure it against: refs\/heads\/claude\/galxe-automation-strategy-770t1f/);
+});
+
+test('studio: a commit count git did not print as a number is unknown, and unknown is not zero', () => {
+  const dir = studioDir();
+  const r = studio({ studio: dir, git: studioGit(dir, { refs: ['refs/heads/main', GALXE], ahead: { [GALXE]: '' } }) });
+  assert.equal(r.status, 'FAIL');
+  assert.match(r.detail, /galxe-automation-strategy-770t1f \(count unknown\)/);
+  assert.equal(studioVerdict({ present: true, refs: [GALXE], base: 'refs/heads/main', ahead: {} }).status, 'FAIL');
+  for (const [s, n] of [['0\n', 0], ['3', 3], [' 12 ', 12]]) assert.equal(countOf(s), n, JSON.stringify(s));
+  for (const s of ['', '-1', '1e2', '2 3', 'fatal']) assert.ok(Number.isNaN(countOf(s)), JSON.stringify(s));
 });
 
 test('studio: uncommitted changes fail as "cause unknown", and a git error fails', () => {
@@ -562,6 +799,50 @@ test('leif-pages: "npm run", a node command or a shell command in backticks fail
     assert.equal(r.status, 'FAIL', text);
     assert.ok(r.detail.includes(`docs/leif.md:3 (${why})`), r.detail);
   }
+});
+
+test('leif-pages: npm, npx or git in prose, <code>, a script, and the Windows and platform tools fail (wave0 finding 5)', () => {
+  const cases = [
+    ['When it says done, type npm test and press Enter.', 'an npm, npx or git command'],
+    ['Open a terminal, type npm install, then press Enter.', 'an npm, npx or git command'],
+    ['If it asks, run npx prove.', 'an npm, npx or git command'],
+    ['Open a terminal and type git pull, then press Enter.', 'an npm, npx or git command'],
+    ['Or <code>npm install</code>.', 'a shell command in <code>'],
+    ['Press <kbd>cd agency</kbd> then Enter.', 'a shell command in <code>'],
+    ['Once: paste `powercfg /change standby-timeout-ac 0` into PowerShell.', 'a shell command in backticks'],
+    ['Then run `./setup.sh`.', 'a shell command in backticks'],
+    ['Double-click `scripts\\keep-awake-undo.ps1` to undo it.', 'a shell command in backticks'],
+    ['Paste `winget install OpenJS.NodeJS.LTS`.', 'a shell command in backticks'],
+    ['Run `nvm install 22` first.', 'a shell command in backticks'],
+    ['Run `vercel --prod`.', 'a shell command in backticks'],
+    ['Run `supabase db push`.', 'a shell command in backticks'],
+  ];
+  for (const [text, why] of cases) assert.deepEqual(terminalSteps('docs/leif.md', `# Sitting\n\n${text}\n`), [{ where: 'docs/leif.md:3', why }], text);
+});
+
+test('leif-pages: a command in a block indented 4 spaces or a tab after a blank line fails, and a pwsh fence fails', () => {
+  const steps = terminalSteps('x.md', 'Then:\n\n    git pull\n\tnpm install\n\n- a list item\n    export the CSV from the store\n\n```pwsh\nSet-Location agency\n```\n');
+  assert.deepEqual(steps, [
+    { where: 'x.md:3', why: 'a command in an indented code block' },
+    { where: 'x.md:4', why: 'a command in an indented code block' },
+    { where: 'x.md:9', why: 'a pwsh code block' },
+  ]);
+});
+
+test('leif-pages: plain English that shares a word with a tool, and paths in backticks, still pass', () => {
+  const text = [
+    '# Your page',
+    '',
+    'The git history keeps every version, and the app has zero npm packages.',
+    'A yarn test for pilling comes before the linen order.',
+    'Read `agency/docs/23-ways.md`, and a `.cmd` file is never sent.',
+    '',
+    '```',
+    'make sure the parcel is with you before the first wash,',
+    'open the care label and start with a cold wash.',
+    '```',
+  ].join('\n');
+  assert.deepEqual(terminalSteps('docs/leif.md', text), []);
 });
 
 test('leif-pages: a shell code block fails at its fence, and a command in any code block fails', () => {
