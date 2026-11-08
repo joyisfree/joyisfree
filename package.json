@@ -8,7 +8,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test galxe-desk/scripts/*.test.mjs .claude/skills/joy-revise/scripts/*.test.mjs",
+    "test": "node --test galxe-desk/scripts/*.test.mjs .claude/skills/joy-revise/scripts/*.test.mjs qalam/scripts/*.test.mjs",
     "worth-it": "node .claude/skills/joy-revise/scripts/worth-it.mjs",
     "desk:rank": "node galxe-desk/scripts/rank.mjs",
     "desk:ledger": "node galxe-desk/scripts/ledger.mjs",
@@ -19,6 +19,7 @@
     "desk:verify": "node galxe-desk/scripts/verify-link.mjs",
     "desk:due": "node galxe-desk/scripts/ledger.mjs due",
     "desk:gigapot": "node galxe-desk/scripts/gigapot.mjs",
-    "desk:mutate": "node galxe-desk/scripts/mutate.mjs"
+    "desk:mutate": "node galxe-desk/scripts/mutate.mjs",
+    "qalam:pack": "cd qalam/skill && rm -f ../dist/qalam.zip && mkdir -p ../dist && zip -rqX ../dist/qalam.zip qalam -x \"*.DS_Store\""
   }
 }

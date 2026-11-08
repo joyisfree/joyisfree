@@ -18,3 +18,6 @@ tmp/
 # The agency pilot's live rules and ledger hold customer-derived data (hashed, but pseudonymous, not anonymous).
 # Only the code and the templates are committed.
 agency/pilot/
+
+# Qalam: the account-skill zip is built by `npm run qalam:pack`, never committed
+qalam/dist/

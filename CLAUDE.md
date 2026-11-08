@@ -20,3 +20,7 @@ Rules that hold in this repo:
   fail), `npm run desk:check` (is the rulebook complete), `npm run desk:status` (the ledger and the kill rule).
 - **Nothing from here enters the studio repo.** The studio asserts that its app contacts only its own origin.
 - Run git as `git -C <path> <command>`, never `cd <path> && git`.
+- **`qalam/` is a personal-habit track, kept generic because this repo is public.**
+  - Its skill source is `qalam/skill/qalam/`. It is uploaded to the claude.ai account as the zip that
+    `npm run qalam:pack` builds, so it is not under `.claude/skills/`.
+  - `npm test` refuses any personal word, any prayer time and any unverified hadith in it.
