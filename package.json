@@ -8,7 +8,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test galxe-desk/scripts/*.test.mjs .claude/skills/joy-revise/scripts/*.test.mjs",
+    "test": "node --test galxe-desk/scripts/*.test.mjs .claude/skills/joy-revise/scripts/*.test.mjs agency/scripts/*.test.mjs scripts/*.test.mjs",
     "worth-it": "node .claude/skills/joy-revise/scripts/worth-it.mjs",
     "desk:rank": "node galxe-desk/scripts/rank.mjs",
     "desk:ledger": "node galxe-desk/scripts/ledger.mjs",
@@ -19,6 +19,10 @@
     "desk:verify": "node galxe-desk/scripts/verify-link.mjs",
     "desk:due": "node galxe-desk/scripts/ledger.mjs due",
     "desk:gigapot": "node galxe-desk/scripts/gigapot.mjs",
-    "desk:mutate": "node galxe-desk/scripts/mutate.mjs"
+    "desk:mutate": "node galxe-desk/scripts/mutate.mjs",
+    "ab:test": "node agency/scripts/ab-test.mjs",
+    "agency:pilot": "node agency/scripts/creator-pilot.mjs",
+    "prove": "node scripts/prove.mjs",
+    "orders": "node agency/scripts/orders.mjs"
   }
 }
