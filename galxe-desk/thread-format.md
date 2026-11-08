@@ -61,5 +61,8 @@ npm run desk:due                                    # anything already won and u
 - **Say what is unknown.** Where the rulebook still carries a DIGEST line (`npm run desk:check`), the post says the
   figure is unconfirmed rather than stating it flat.
 - **Original wording every week.** X forbids duplicate posts across accounts; the numbers change, and so should the
-  sentences. Scheduled through Postiz, never auto-liked or auto-reposted.
-- **Leif posts, or approves the schedule.** The account is his; Claude drafts from the shortlist.
+  sentences. Never auto-liked or auto-reposted.
+- **Claude drafts, Leif publishes by his own hand.** The account is his, and the repo rule is that no script touches
+  the Galxe or X account (`CLAUDE.md`). Claude drafts the thread from the shortlist; Leif reads it and posts each part
+  himself. Nothing is scheduled into X by any tool, Postiz included: a scheduler holds access to the account and posts
+  with no human present, which is what Galxe calls a bot, and a flagged account cannot claim.

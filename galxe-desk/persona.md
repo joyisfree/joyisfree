@@ -34,10 +34,13 @@ That is why one credible alias beats any number of fresh accounts, and why it is
    account, one device; no VPN (Terms section 2 forbids using one to change your apparent location); no bursts; human
    pace.
 5. **No automation on the account, ever.** Galxe defines a bot as a program interacting with quests "without real
-   human involvement" and flags activity that merely looks scripted, even when done by hand. X allows original
-   scheduled posts but forbids bulk or aggressive following, duplicate posts across your own accounts, and bulk,
-   keyword or scheduled auto-likes. So: scheduled original posts are fine (Postiz); automated likes, follows, reposts
-   and reply rings are never fine. Claude writes and schedules; the clicks and every signature stay Leif's.
+   human involvement" and flags activity that merely looks scripted, even when done by hand. X's own rules allow
+   original scheduled posts but forbid bulk or aggressive following, duplicate posts across your own accounts, and
+   bulk, keyword or scheduled auto-likes. This desk is stricter than X, because the repo rule is that no script
+   touches the Galxe or X account (`CLAUDE.md`): a scheduler holds access to the account and posts with no human
+   present, which is exactly what Galxe calls a bot, and a flagged account cannot claim. So: **Claude drafts, Leif
+   publishes by his own hand.** Nothing is scheduled into X by any tool, Postiz included, and automated likes,
+   follows, reposts and reply rings are never fine. The clicks, every post and every signature stay Leif's.
 
 ## The niche
 
@@ -64,9 +67,11 @@ that paid for posting lost API access in Jan 2026).
 
 ## Cadence
 
-A weekly block, in the one pass Leif already does: a handful of original posts scheduled ahead through Postiz, the
-weekly honest-airdrop post, and whatever replies happen naturally in the moment. The account ages whether or not it
-is farmed; the posting is what makes the age mean something.
+A weekly block, in the one pass Leif already does: Claude drafts a handful of original posts and the weekly
+honest-airdrop post ahead of time, Leif publishes each one by his own hand from the desk's own Brave profile, and
+whatever replies happen naturally in the moment are his too. Nothing is queued in a scheduler or posted by any tool,
+because a queued post goes out with no human present, which is the pattern rule 5 is written against. The account
+ages whether or not it is farmed; the posting is what makes the age mean something.
 
 ## What the account unlocks, in order of how real it is
 
