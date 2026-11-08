@@ -25,7 +25,7 @@ const REPO = resolve(DIR, '..', '..');
 // The test files each directory's guards are judged by. execFileSync would not expand a '*.test.mjs' glob without a
 // shell, so they are listed; a missing file is skipped, and a directory whose suite is empty refuses to run.
 export const SUITES = {
-  'galxe-desk/scripts': ['gate.test.mjs', 'ledger.test.mjs', 'crawl.test.mjs', 'do-card.test.mjs', 'verify-link.test.mjs', 'gigapot.test.mjs'],
+  'galxe-desk/scripts': ['gate.test.mjs', 'ledger.test.mjs', 'crawl.test.mjs', 'do-card.test.mjs', 'verify-link.test.mjs', 'gigapot.test.mjs', 'agents.test.mjs'],
   'agency/scripts': ['ab-test.test.mjs', 'creator-pilot.test.mjs', 'orders.test.mjs'],
   '.claude/skills/joy-revise/scripts': ['worth-it.test.mjs'],
   scripts: ['prove.test.mjs'],
@@ -119,6 +119,12 @@ export const MUTATIONS = [
     ['the kill date must be a date', '} else if (Number.isNaN(Date.parse(k.by))) {', '} else if (false) {'],
     ['capital at risk is counted in full', 'const netUsd = evUsd - v.costs - timeCostUsd - capital;', 'const netUsd = evUsd - v.costs - timeCostUsd;'],
   ].map(([name, from, to]) => [name, '.claude/skills/joy-revise/scripts/worth-it.mjs', from, to]),
+  // agents.mjs — the reader/writer firewall over .claude/agents
+  ['web reader may not also act', 'agents.mjs', 'if (web.length && write.length) out.push(', 'if (false) out.push('],
+  ['web reader may not hold project memory', 'agents.mjs', "if (web.length && memory === 'project') out.push(", 'if (false) out.push('],
+  ['an agent must list its tools', 'agents.mjs', "if (!fm.tools) return ['no explicit tools line", "if (false) return ['no explicit tools line"],
+  ['no frontmatter fails closed', 'agents.mjs', "if (!fm) return ['no frontmatter", "if (false) return ['no frontmatter"],
+  ['MCP tools count as outside content', 'agents.mjs', "|| t.startsWith('mcp__');", '|| false;'],
   // agency/scripts — ab-test.mjs, creator-pilot.mjs and orders.mjs. Added once the round-2 builders have finished,
   // because each pattern must match the final file exactly.
 ];
