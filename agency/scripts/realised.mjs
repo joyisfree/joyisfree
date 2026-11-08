@@ -14,7 +14,8 @@
 // dollar is credited to a play only when the order carries that play's own code, in the export's Discount Code column,
 // on a day inside the play's window. Never by date alone.
 //
-// plays.json is a list, one object per play, and every key is checked (a misspelt key is refused, never ignored):
+// plays.json is a list, one object per play, and every key is checked (a misspelt key is refused, never ignored, and so
+// is a key given twice in one object, which JSON would otherwise settle silently by keeping the last):
 // [
 //   { "play": "Gift guide", "from": "2026-11-20", "to": "2026-11-30", "codes": ["GUIDE10"], "hours": 2 },
 //   { "play": "Abandoned checkout", "from": "2026-11-12", "to": "2027-01-05", "codes": [],
@@ -159,6 +160,39 @@ export function checkPlays(value) {
     plays.push({ play: name, from: p.from, to: p.to, codes, hours: p.hours, holdout });
   });
   return problems.length ? { problems: capped(problems) } : { plays };
+}
+
+/**
+ * The keys an object in the plays file gives twice, read from its text, which must already have parsed as JSON.
+ * JSON.parse keeps the last of them without a word, so a second "codes" or "to" would silently replace the first: each
+ * is named here to be refused. A key is compared as JSON.parse reads it, so "to" and "to" are one key.
+ */
+export function repeatedKeys(text) {
+  const found = [];
+  const open = []; // one entry per object or array still open: { keys, play } for an object, null for an array
+  let plays = 0;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '{') {
+      if (open.length === 1 && open[0] === null) plays++;
+      open.push({ keys: new Set(), play: plays });
+    } else if (ch === '[') open.push(null);
+    else if (ch === '}' || ch === ']') open.pop();
+    else if (ch === '"') {
+      let j = i + 1;
+      while (text[j] !== '"') j += text[j] === '\\' ? 2 : 1;
+      let k = j + 1;
+      while (text[k] === ' ' || text[k] === '\t' || text[k] === '\n' || text[k] === '\r') k++;
+      const top = open[open.length - 1];
+      if (top && text[k] === ':') {
+        const key = JSON.parse(text.slice(i, j + 1));
+        if (top.keys.has(key)) found.push(`${top.play ? `play ${top.play}` : 'an object in it'} gives the key ${shown(key)} twice: JSON keeps only the last, so the first would be silently ignored, and it is refused`);
+        else top.keys.add(key);
+      }
+      i = j;
+    }
+  }
+  return found;
 }
 
 // ---------------------------------------------------------------- one order
@@ -390,7 +424,12 @@ export function format(r) {
     } else {
       const least = p.coverage === 'partial' ? 'at least ' : '';
       lines.push(`  ${n(p.orders, 'order')} credited: ${p.paid} paid, ${p.awaiting} awaiting payment, ${p.void} voided or cancelled`);
-      lines.push(`  realised ${least}${m(p.realisedCents)} of ${m(p.paidCents)} paid${p.refundedShare === null ? '; nothing paid yet, so no refunded share' : `; refunded share ${pct(p.refundedShare)}, on ${n(p.refundedOrders, 'order')}`}`);
+      // No share is given when nothing paid has any value: either nothing is paid yet, or what is paid came to 0 (a
+      // 100%-off code), which is not money still to come.
+      const share = p.refundedShare !== null
+        ? `; refunded share ${pct(p.refundedShare)}, on ${n(p.refundedOrders, 'order')}`
+        : p.paid === 0 ? '; nothing paid yet, so no refunded share' : `; ${n(p.paid, 'paid order')} worth 0 in goods, so no refunded share`;
+      lines.push(`  realised ${least}${m(p.realisedCents)} of ${m(p.paidCents)} paid${share}`);
       lines.push(p.perHourCents === null ? '  per Leif hour: unknown, because the plays file gives no hours for it' : `  ${least}${m(p.perHourCents)} per Leif hour, over ${p.hours} h`);
       if (p.coverage === 'partial') lines.push(`  INCOMPLETE: the window runs ${p.from} to ${p.to} and the export's orders run ${r.span.first} to ${r.span.last}; if the export stopped short, or was taken before ${r.span.last} was over, orders are missing`);
     }
@@ -454,12 +493,15 @@ export function cli(argv) {
   } catch {
     return privacyGate(2, '', `cannot read ${a.plays}: --plays needs the plays file, a JSON list of plays\n\n${USAGE}`);
   }
+  const json = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
   let plays;
   try {
-    plays = JSON.parse(raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw);
+    plays = JSON.parse(json);
   } catch {
     return privacyGate(1, '', formatRefusal(['the plays file is not readable JSON']));
   }
+  const twice = repeatedKeys(json);
+  if (twice.length) return privacyGate(1, '', formatRefusal(capped(twice).map((x) => `the plays file: ${x}`)));
   const r = realise(text, plays);
   if (r.verdict !== 'REPORT') return privacyGate(1, '', formatRefusal(r.reasons));
   return privacyGate(0, format(r.report), '');

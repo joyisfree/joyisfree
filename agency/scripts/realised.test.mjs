@@ -1,5 +1,5 @@
 // The realised-dollar record is shown to credit a dollar only through a play's own code inside its window, and to
-// refuse what it should: a code shared by two plays, a plays file with a misspelt key, a date that is not a date or hours
+// refuse what it should: a code shared by two plays, a plays file with a misspelt key or a key given twice, a date that is not a date or hours
 // that are not a number, an export orders.mjs refuses, another store's export, a missing or doubled Discount Code column,
 // two codes for one order and an export with no orders. It is shown never to turn an unknown into a zero: no hours, no
 // code, a window the export does not reach and nothing paid each give no figure, not 0. Each guard has a case here
@@ -259,13 +259,36 @@ test('unknown is never zero: no code, no coverage, no hours and nothing paid eac
 
 test('a window the export\'s orders do not span is INCOMPLETE, and its dollars are "at least"', () => {
   const span = { first: '2026-11-01', last: '2026-12-02' };
-  assert.equal(coverage({ from: '2026-11-01', to: '2026-12-02' }, span), 'full');
+  assert.equal(coverage({ from: '2026-11-01', to: '2026-12-01' }, span), 'full');
   assert.equal(coverage({ from: '2026-10-31', to: '2026-11-30' }, span), 'partial');
   assert.equal(coverage({ from: '2026-11-20', to: '2026-12-03' }, span), 'partial');
   assert.equal(coverage({ from: '2026-09-01', to: '2026-10-31' }, span), 'none');
   assert.equal(coverage({ from: '2026-12-03', to: '2026-12-31' }, span), 'none');
   const out = format(report(BASE));
   assert.match(out, /PLAY {2}Creator Sam {2}2026-11-10 to 2026-12-10 {2}codes SAM15, SAMVIP\n[^\n]*\n {2}realised at least AUD 120\.00 of AUD 190\.00 paid; refunded share 36\.8%, on 1 order\n[^\n]*\n {2}INCOMPLETE: the window runs 2026-11-10 to 2026-12-10 and the export's orders run 2026-11-01 to 2026-12-02/);
+});
+
+test('a window ending on the export\'s last order day is INCOMPLETE: the export may have been taken before that day was over', () => {
+  const span = { first: '2026-11-01', last: '2026-12-02' };
+  assert.equal(coverage({ from: '2026-11-20', to: '2026-12-02' }, span), 'partial');
+  assert.equal(coverage({ from: '2026-12-02', to: '2026-12-02' }, span), 'partial', 'a one-day window on that day too');
+  assert.equal(coverage({ from: '2026-11-20', to: '2026-12-01' }, span), 'full', 'an order on a later day shows the window\'s last day was over');
+  const r = report(BASE, plays((p) => { p[0].to = '2026-12-02'; }));
+  assert.equal(play(r, 'Gift guide').coverage, 'partial');
+  assert.match(format(r), /PLAY {2}Gift guide {2}2026-11-20 to 2026-12-02[^\n]*\n[^\n]*\n {2}realised at least AUD 150\.00 of AUD 210\.00 paid[^\n]*\n {2}at least AUD 75\.00 per Leif hour, over 2 h\n {2}INCOMPLETE: the window runs 2026-11-20 to 2026-12-02 and the export's orders run 2026-11-01 to 2026-12-02; if the export stopped short, or was taken before 2026-12-02 was over, orders are missing/);
+});
+
+test('a paid order worth 0 (a 100%-off code) is paid, not "nothing paid yet", and gives no refunded share', () => {
+  const seeded = shopifyCsv(withOrder(1011, { 'Discount Code': 'SEED', Subtotal: '0.00', Total: '10.00' }));
+  const r = report(seeded, plays((p) => p.push({ play: 'Seeding', from: '2026-11-20', to: '2026-11-30', codes: ['SEED'] })));
+  const s = play(r, 'Seeding');
+  assert.deepEqual(
+    { orders: s.orders, paid: s.paid, paidCents: s.paidCents, realisedCents: s.realisedCents, refundedShare: s.refundedShare, coverage: s.coverage },
+    { orders: 1, paid: 1, paidCents: 0, realisedCents: 0, refundedShare: null, coverage: 'full' },
+  );
+  const block = format(r).split('PLAY  Seeding')[1];
+  assert.match(block, /^[^\n]*\n {2}1 order credited: 1 paid, 0 awaiting payment, 0 voided or cancelled\n {2}realised AUD 0\.00 of AUD 0\.00 paid; 1 paid order worth 0 in goods, so no refunded share\n/);
+  assert.doesNotMatch(block, /nothing paid yet/, 'an order that is paid is not "nothing paid yet"');
 });
 
 test('every order lands in exactly one bucket: the buckets add up to the whole export', () => {
@@ -487,6 +510,40 @@ test('the command line: 0 on a report, 1 on a refusal, 2 on misuse, and nothing 
     assert.equal(run(['--file', join(s.dir, 'missing.csv'), '--plays', s.json]).status, 2);
     assert.equal(run(['--file', s.csv, '--plays', join(s.dir, 'missing.json')]).status, 2);
     assert.equal(run(['--file', s.dir, '--plays', s.json]).status, 2, 'a directory is not an export');
+  } finally {
+    s.clean();
+  }
+});
+
+test('a key given twice in one object of the plays file is refused, never settled by JSON keeping the last', () => {
+  const s = scratch();
+  try {
+    const run = (text) => {
+      const f = join(s.dir, 'twice.json');
+      writeFileSync(f, text);
+      return cli(['--file', s.csv, '--plays', f]);
+    };
+    const guide = '"play":"Gift guide","from":"2026-11-20","to":"2026-11-30","codes":["GUIDE10"],"hours":2';
+    const file = (first) => `[{${first}},${JSON.stringify(PLAYS.slice(1)).slice(1, -1)}]`;
+    assert.equal(run(file(guide)).code, 0, 'the fixture, written out by hand, is read');
+    const twice = [
+      [',"codes":["SAM15"]', 'codes'], // the guide's real code would be dropped, and its orders land under "a code no play names"
+      [',"to":"2026-12-31"', 'to'], // the window would silently widen
+      [',"hours":20', 'hours'],
+      [',\n  "codes" :\t["SAM15"]', 'codes'],
+      [',"\\u0074o":"2026-12-31"', 'to'], // the same key, as JSON reads it
+    ];
+    for (const [extra, key] of twice) {
+      const r = run(file(guide + extra));
+      assert.equal(r.code, 1, JSON.stringify(extra));
+      assert.equal(r.stdout, '');
+      assert.match(r.stderr, new RegExp(`^REFUSED {2}no dollar is credited, because:\\n {2}- the plays file: play 1 gives the key "${key}" twice: JSON keeps only the last`), JSON.stringify(extra));
+    }
+    const held = JSON.stringify(PLAYS).split('"count":2}').join('"count":2,"count":3}');
+    assert.match(run(held).stderr, /- the plays file: play 3 gives the key "count" twice/, 'a holdout\'s keys too');
+    const tricky = plays((p) => { p[0].play = 'Gift "guide": {to} [codes]'; p[1].play = 'codes'; });
+    assert.equal(run(JSON.stringify(tricky)).code, 0, 'a name holding quotes, a colon and brackets, or a name that is a key\'s word, is not a key');
+    assert.equal(run(JSON.stringify(PLAYS, null, 2)).code, 0, 'one key in each of several plays is not a key given twice');
   } finally {
     s.clean();
   }
