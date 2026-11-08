@@ -489,6 +489,23 @@ export const MUTATIONS = [
   ["a count git did not print as a number is unknown, not 0","scripts/prove.mjs","(/^\\d+$/.test(String(s).trim()) ? Number(String(s).trim()) : NaN)","Number(String(s).trim())"],
   ["each galxe branch's commits are counted","scripts/prove.mjs","if (base) for (const r of refs) if (STUDIO_BRANCH_BAN.test(r)) ahead[r] =","if (false) for (const r of refs) if (STUDIO_BRANCH_BAN.test(r)) ahead[r] ="],
   ["an empty galxe branch is named in the PASS","scripts/prove.mjs","claude/galxe-* branch with no commit beyond ${base}: ${banned.join(', ')}","no claude/galxe-* branch"],
+  // agency/scripts — round 4: the plan states each arm's real size; latch edges; no cell echoed by any refusal (9 Nov 2026)
+  ["preflight names half the list as plannedPerArm","agency/scripts/ab-test.mjs","with plannedPerArm ${thousands(perArm)}, half the list","with plannedPerArm ${thousands(toPlan)}, half the list"],
+  ["an arm past its plan says the default arm stands","agency/scripts/ab-test.mjs","if (over) early.push(","if (false) early.push("],
+  ["--check prints the band each arm is read in","agency/scripts/ab-test.mjs","`each arm is read only if it has ${thousands(fewest)} to ${thousands(most)} recipients, ${SHORTFALL * 100}% under to ${OVERRUN * 100}% over the plan, so plannedPerArm must be the number each arm will actually get (half the list, split 50/50), not a minimum`,",""],
+  ["the band printed starts where the analysis reads","agency/scripts/ab-test.mjs","const fewest = Math.ceil((planned * (100 - SHORTFALL * 100)) / 100);","const fewest = Math.floor((planned * (100 - SHORTFALL * 100)) / 100);"],
+  ["the band printed ends where the analysis reads","agency/scripts/ab-test.mjs","const most = Math.floor((planned * (100 + OVERRUN * 100)) / 100);","const most = Math.ceil((planned * (100 + OVERRUN * 100)) / 100);"],
+  ["a refund dated day 30 counts toward the day-30 decision","agency/scripts/creator-pilot.mjs","if (dayOf(t, pilot) <= DAY30) refundsBy30.set(","if (dayOf(t, pilot) < DAY30) refundsBy30.set("],
+  ["a refund dated day 31 does not reach the day-30 decision","agency/scripts/creator-pilot.mjs","if (dayOf(t, pilot) <= DAY30) refundsBy30.set(","if (dayOf(t, pilot) <= DAY30 + 1) refundsBy30.set("],
+  ["the back-dated-refund guard covers a refund dated day 30","agency/scripts/creator-pilot.mjs","&& dayOf(t, pilot) <= DAY30) {","&& dayOf(t, pilot) < DAY30) {"],
+  ["the back-dated-refund guard is on from day 31","agency/scripts/creator-pilot.mjs","if (e.type === 'refund' && dayOf(now, pilot) > DAY30 &&","if (e.type === 'refund' && dayOf(now, pilot) > DAY30 + 1 &&"],
+  ["import-orders refuses an email column that holds no address","agency/scripts/creator-pilot.mjs","? hashEmail(email) : row?.buyer,","? hashId(email) : row?.buyer,"],
+  ["a refusal never echoes a money cell","agency/scripts/orders.mjs",": ${names[f]} is not an amount of money (a plain number",": ${names[f]} is not an amount of money (${val(f)}; a plain number"],
+  ["a refusal never echoes a marketing cell","agency/scripts/orders.mjs","has no yes or no in ${names.marketing}, so","has no yes or no in ${names.marketing} (${mk}), so"],
+  ["a refusal never echoes a currency cell","agency/scripts/orders.mjs","has no three-letter currency code in ${names.currency}`);","has no three-letter currency code in ${names.currency}: ${val('currency')}`);"],
+  ["every row's order number must hold a digit, not only the first","agency/scripts/orders.mjs","if (!/\\d/.test(id)) {","if (r === 1 && !/\\d/.test(id)) {"],
+  ["a refusal never echoes either of two clashing cells","agency/scripts/orders.mjs","values (rows ${had.row} and ${r + 1})","values (${had.v} and ${v}, rows ${had.row} and ${r + 1})"],
+  ["a refusal never echoes a date cell","agency/scripts/orders.mjs",": ${names.created} is not a date written year first",": ${names.created} (${val('created')}) is not a date written year first"],
 ];
 
 // Apply one mutation to a throwaway copy of the scripts and run the suite there. KILLED = a test went red.
