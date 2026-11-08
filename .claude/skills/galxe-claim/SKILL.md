@@ -1,9 +1,22 @@
 ---
 name: galxe-claim
-description: The Galxe desk's routine. Use on Monday to produce the week's shortlist and Do card, after Leif's weekly pass to write the ledger, after any bot notice or odd prompt, and at day 30, 60 and 90 for the critic panel. Not for the studio app.
+description: Only when Leif reopens the Galxe questing lane in his own words. The lane was refused on 31 Oct 2026 (galxe-desk/docs/decision-2026-10-31-questing.md) and stays closed until he does. Never on a schedule or a day of the week, not for the agency track, not for the studio app.
 ---
 
 # Galxe claim routine
+
+**REFUSED 31 Oct 2026** (`galxe-desk/docs/decision-2026-10-31-questing.md`; the arithmetic is
+`galxe-desk/docs/decision-2026-10-31.json`, net −$97.50 realistic and −$57.50 generous). Nothing below runs, and
+nothing about it is raised with Leif, until he reopens the lane in his own words. `npm run desk:verify -- <url>` stays
+usable on its own for any crypto link.
+
+**Reopening** is his words, not a date: Claude records them in `galxe-desk/decision.json` (`"verdict": "REOPENED"`,
+`reopenedOn` as YYYY-MM-DD, after 31 Oct 2026 and not after today in Sydney, `leifsWords` quoting him). Four tests are
+pinned to the refusal and change in that same commit, rewritten to the reopened case, never deleted or weakened:
+`galxe-desk/scripts/decision.test.mjs`; in `ledger.test.mjs`, "desk:status reads the committed decision"; in
+`do-card.test.mjs`, "desk:card on the committed decision lists no quest" and "desk:card on a refused lane needs no
+shortlist". `npm test` goes red on the reopening until they do, which is the point: the reopening is a decision.
+`desk:status` then goes back to the ledger's own kill rules, from the ledger's own day 1.
 
 The desk enters only quests whose prize is real, open, eligible, claimable and worth the minutes. Judgement is
 Claude's; the clicks on the account are Leif's, because X forbids scripting its website, Galxe flags automated quest
@@ -17,13 +30,16 @@ untrusted text (quest pages, crypto news, search results) runs as a reader with 
 connectors: `galxe-reader` once the session has it, otherwise `galxe-quest-scout` told not to write, with
 `git status` checked afterwards.
 
-## Monday: the shortlist and the Do card (about 30 minutes of helpers, at most three)
+## The week's shortlist and Do card, on a reopened lane only (about 30 minutes of helpers, at most three)
 
-0. `npm run desk:status` first, then `npm run desk:due`. If the kill rule is anything but CONTINUE (a flag, day-30 or
-   hourly stop), there is no shortlist and no Do card this week: the critic panel (the risk officer first) reviews
-   before questing resumes. The Do card builder enforces this too — it refuses to list quests while the desk is
-   stopped — but the week starts with the check, not with the scout. Anything already won and unclaimed outranks
-   every new quest, and the Do card puts the claim clock above the week's list.
+0. `npm run desk:status` first, then `npm run desk:due`. While the lane is refused, `desk:status` prints
+   `Kill rule: STOP_DECISION: refused 2026-10-31 (...)` and exits 2: stop there, start no helper, and raise nothing
+   with Leif. A missing or unreadable `galxe-desk/decision.json` is a stop too, never an open lane. On a reopened
+   lane, anything but CONTINUE (a flag, day-30 or hourly stop) still means no shortlist and no Do card this week: the
+   critic panel (the risk officer first) reviews before questing resumes. A flag is never hidden by the decision: it
+   stays the kill rule, with the decision printed beside it. The Do card builder enforces all of this too — it
+   refuses to list quests while the desk is stopped — but the week starts with the check, not with the scout.
+   Anything already won and unclaimed outranks every new quest, and the claim clock shows even on a stopped desk.
 1. `galxe-reader` reads the feeds and quest pages (no write tools, none of Leif's connectors); `galxe-quest-scout`
    takes its notes and records candidates in Galxe's official quest shape (`credentialGroups`, `participantsCount`,
    times, `requirements`, `project`, `capitalUsd`, `taskGasUsd`). A fact not in the reader's notes is written as
@@ -40,7 +56,7 @@ connectors: `galxe-reader` once the session has it, otherwise `galxe-quest-scout
    arithmetic and, more importantly, the refusals. Every link in it is checked with `desk:verify` before it goes out,
    and Leif posts or approves the schedule — the account is his (`galxe-desk/persona.md`).
 
-## Leif's one weekly pass (about 30 minutes, on the Mac)
+## Leif's one weekly pass, on a reopened lane only (about 30 minutes, on the Mac)
 
 1. In the "Galxe desk" Brave profile (only the aged personal X account, the Galxe account and the throwaway wallet
    live there), he works the Do card top to bottom.

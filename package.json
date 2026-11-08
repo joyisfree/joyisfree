@@ -23,6 +23,7 @@
     "ab:test": "node agency/scripts/ab-test.mjs",
     "agency:pilot": "node agency/scripts/creator-pilot.mjs",
     "prove": "node scripts/prove.mjs",
-    "orders": "node agency/scripts/orders.mjs"
+    "orders": "node agency/scripts/orders.mjs",
+    "realised": "node agency/scripts/realised.mjs"
   }
 }

@@ -1,5 +1,7 @@
 # The day-3 care email, and the abandoned-checkout settings
 
+> **PARKED, 8 Nov 2026.** No label shop takes orders yet and no way to be paid is live (agency/facts.json), so nothing on this page is sent or switched on. The text is kept, ready for the day Leif says he wants the shop open. Nothing here is asked of him now.
+
 Drafted 8 Nov 2026 for #2 in `agency/docs/23-ways.md` (W12, retention flows that run themselves). The aim is to have it
 live by 12 Nov, so it is running before the Christmas sends (`christmas-2026.md`) bring traffic and new sign-ups. It
 depends on the consent record in `opt-in.md`. Anything in **[SQUARE CAPITALS]** is a placeholder that only Leif can
@@ -64,8 +66,8 @@ The rules, each with its reason:
   the label disagree, the buyer cannot know which to trust.
 - **One version per fibre** if the range has more than one, chosen by product tag. If the store cannot branch, keep
   only the lines that hold for every fibre in the order. A wrong care instruction is worse than a short one.
-- **No subject-line test.** The email has no links, so there is nothing to click and nothing for `--metric clicks` to
-  measure.
+- **No subject-line test.** The email has no links, so there is no click to count and nothing for a click
+  test to measure.
 - **No claim that it cuts returns.** That claim has no source. Instead, count returns and care complaints (shrinkage,
   damage in the wash) each month from switch-on, beside the same count for the months before, and write both in the
   ledger. If it helps, that is how it will show; if it does not, it still costs nothing and stays on.

@@ -1,3 +1,5 @@
+Questing REFUSED 31 Oct 2026 (docs/decision-2026-10-31-questing.md); nothing is owed; the desk is kept, not run.
+
 # State — 30 Oct 2026 (the Galxe Desk)
 - **Goal:** claim real prizes with one clean account and a specialist team; never enter worthless or unclaimable quests.
 - **Decided (Leif, 28 Oct):** desk without a bot; an existing aged personal X account, never the studio's; the Galxe hosts allowed in the cloud environment.

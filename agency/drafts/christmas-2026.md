@@ -1,5 +1,7 @@
 # Christmas 2026: no discount, true dates, one sitting
 
+> **PARKED, 8 Nov 2026.** No label shop takes orders yet and no way to be paid is live (agency/facts.json), so nothing on this page is sent or switched on. The text is kept, ready for the day Leif says he wants the shop open. Nothing here is asked of him now.
+
 Drafted 8 Nov 2026 for #3 in `agency/docs/23-ways.md` (W14, a no-discount Christmas). It sends only to the
 `express`-consent list (`opt-in.md` section 4), and only after the consent check in #2 (`care-email.md`). Anything in
 **[SQUARE CAPITALS]** is a placeholder that only Leif can fill.
@@ -77,8 +79,8 @@ Rules for every one of them, each with its reason:
 
 - **No discount, anywhere, at any point.** It protects full price, and a list that learns to wait for a sale stops
   paying full price.
-- **`express` consent only, with the sender footer and the one-click unsubscribe** from `opt-in.md`. The rules in
-  `agency/RUN-drop-vs-email.md` section 3 apply to every send.
+- **`express` consent only, with the sender footer and the one-click unsubscribe** from `opt-in.md`. The rules under
+  "What every send already obeys" on the drop-versus-email page apply to every send.
 - **"Best chance", never a guarantee.** Every date reads "order by [DATE] for the best chance of delivery before
   Christmas". Never "guaranteed", "arrives by Christmas" or "in time for Christmas" as a promise. Once the parcel is
   lodged, delivery is out of Joyisfree's hands, and a promise it cannot keep is a consumer-law and trust risk.
@@ -140,7 +142,7 @@ Rules for every one of them, each with its reason:
 ## 4. The three kill rules
 
 Kept as the team wrote them, with how each is read fixed now, before the result, so the comparison cannot be chosen
-after the fact. It is the same principle as `decidedOn` coming before `dataCollectedFrom` in the run-sheet.
+after the fact. It is the same principle as the drop-versus-email rule: written down and dated before the send.
 
 1. **If the consented list is under 500** (at 0.12%, SUMMARY, that is about 0.6 orders per send), **send only the gift
    guide and the cut-off email.** Read on 15 Nov from the count in section 1. The cut-off email is email 3. Below that

@@ -1,0 +1,40 @@
+{
+  "_comment": [
+    "The worth-it inputs behind the 31 Oct refusal (decision-2026-10-31-questing.md), so the verdict is reproducible:",
+    "  npm run worth-it -- --file galxe-desk/docs/decision-2026-10-31.json   (judges the realistic case at the top level)",
+    "The generous case is complete on its own under `generous`. Both are pinned by galxe-desk/scripts/decision.test.mjs.",
+    "Figures are Leif's own (account.json): a $15/h bar and 30 minutes a week, so 90 days of weekly passes is about 6.5 h.",
+    "Break-even at that bar is about $1,025 realised at 20% odds, or $205 at certainty; documented prizes run about $10."
+  ],
+  "name": "Galxe questing as income, the realistic case (31 Oct 2026)",
+  "decidedOn": "2026-10-31",
+  "record": "galxe-desk/docs/decision-2026-10-31-questing.md",
+  "currency": "USD",
+  "payoff": 50,
+  "probability": 0.2,
+  "haircut": 0.5,
+  "costs": 5,
+  "capitalAtRisk": 0,
+  "hours": 6.5,
+  "hourlyBar": 15,
+  "unknowns": [],
+  "cheapestTest": "Does one drop to Joyisfree's existing list outperform a plain email to the same list? It needs no Space, no deposit, no wallet and no new platform.",
+  "killRule": { "metric": "realised dollars by day 30 of a 90-day run from the decision date", "number": 10, "by": "2026-11-29" },
+  "recordedVerdict": "REFUSE",
+  "recordedNetUsd": -97.5,
+  "generous": {
+    "name": "Galxe questing as income, the generous case: top of the vendor range, better odds (31 Oct 2026)",
+    "payoff": 300,
+    "probability": 0.3,
+    "haircut": 0.5,
+    "costs": 5,
+    "capitalAtRisk": 0,
+    "hours": 6.5,
+    "hourlyBar": 15,
+    "unknowns": [],
+    "cheapestTest": "Does one drop to Joyisfree's existing list outperform a plain email to the same list? It needs no Space, no deposit, no wallet and no new platform.",
+    "killRule": { "metric": "realised dollars by day 30 of a 90-day run from the decision date", "number": 10, "by": "2026-11-29" },
+    "recordedVerdict": "REFUSE",
+    "recordedNetUsd": -57.5
+  }
+}

@@ -1,5 +1,7 @@
 # Opt-in: the wording, the consent record and the care guide
 
+> **PARKED, 8 Nov 2026.** No label shop takes orders yet and no way to be paid is live (agency/facts.json), so nothing on this page is sent or switched on. The text is kept, ready for the day Leif says he wants the shop open. Nothing here is asked of him now.
+
 Drafted 8 Nov 2026 for #1 in `agency/docs/23-ways.md` (W11, the consented owned list). It comes first because #2 (the
 care email and the abandoned-checkout flow, `care-email.md`) and #3 (Christmas, `christmas-2026.md`) may only send to
 the people this records. Anything in **[SQUARE CAPITALS]** is a placeholder that only Leif can fill. Nothing here goes

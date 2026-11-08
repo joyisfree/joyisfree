@@ -27,19 +27,24 @@
 //   - voided, refunded, expired, cancelled and failed orders, and any order with a "Cancelled at" date, are counted as
 //     orders but kept out of every value figure; pending and authorised orders are in, because the basket was chosen;
 //   - a partly refunded order counts at its full subtotal, and its refund shows in the refunds line;
-//   - the threshold is the p80 subtotal rounded up to a multiple of 5 (a p80 already on one stays), so at most 20% of
-//     orders are above it, and an order qualifies at or above it;
+//   - an order qualifies for free shipping at or above the threshold, so the threshold starts at the p80 subtotal
+//     rounded up to a multiple of 5 and is raised 5 at a time until at most 20% of the orders that count are at or
+//     above it. Round prices tie: a p80 of 45.00 that most orders sit on would otherwise give free shipping to all;
 //   - fewer than 30 orders that count towards value gives no figures at all, not rough ones;
 //   - accepts-marketing is counted per order, not per customer: counting customers would need the email, and this
 //     file never reads it;
 //   - the date span is the store's own calendar dates as written in the export, so no time zone is assumed;
-//   - --write-aov writes only into a pilot whose startDate is a real date after now, from orders all before it, and
-//     only from a USD export, because the field is baselineAovUsd.
+//   - --write-aov writes only into a pilot whose startDate is a real date after now, from orders all before it, only
+//     from a USD export, because the field is baselineAovUsd, only a median above 0 (0 is the pilot's "unset"), and
+//     only from an export that spans at least 28 days and whose last order is at most 120 days before the start, so
+//     neither one week's drop nor an old season can become the denominator.
 //
-// Privacy: the Email column is never read, and nothing returned or printed holds a cell from the file except order
-// numbers, dates, currency codes and money. An order-number column holding "@" is refused (it would merge a
-// customer's orders into one), and any output that would contain "@" is replaced by a refusal before it is printed
-// and before the pilot write behind it is committed.
+// Privacy: the Email column is never read, and nothing returned or printed holds a cell from the file except dates,
+// currency codes and money. A refusal names an order by the row it starts on, never by its order number or any other
+// cell, so a mis-mapped column cannot put a customer's name on screen. An order-number column holding "@", or a value
+// with no digit in it (a name, not an order number), is refused, because grouping by it would merge a customer's
+// orders into one. Any output that would contain "@" is replaced by a refusal before it is printed and before the
+// pilot write behind it is committed.
 
 import { existsSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -48,6 +53,11 @@ const DAY = 86_400_000;
 /** Below this many orders that count towards value, a median, a p80 and a threshold are unreliable, so none is given. */
 export const MIN_ORDERS = 30;
 const STEP_CENTS = 500;
+/** At most this share of the orders that count, in percent, may sit at or above the free-shipping threshold. */
+const MAX_QUALIFYING_PCT = 20;
+/** --write-aov: the export must span at least this many days, and end at most this many days before the start. */
+const MIN_SPAN_DAYS = 28;
+const MAX_GAP_DAYS = 120;
 const MAX_LISTED = 10;
 
 /** The fields every export must name. `cancelled` is optional: when present, a date in it keeps the order out. */
@@ -184,11 +194,14 @@ export function nearestRank(sorted, pct) {
   return sorted[Math.max(rank, 1) - 1];
 }
 
-/** The free-shipping threshold: the p80 subtotal rounded up to the next multiple of 5 (in cents, 500). */
+/**
+ * Where the free-shipping threshold starts: the p80 subtotal rounded up to a multiple of 5 (in cents, 500), a p80
+ * already on one staying. analyse() then raises it 5 at a time until at most 20% of orders are at or above it.
+ */
 export const thresholdCents = (p80Cents) => Math.ceil(p80Cents / STEP_CENTS) * STEP_CENTS;
 
-/** A status is echoed only when it is plainly a word, so a mis-mapped column can never put a customer's data on screen. */
-const shown = (raw) => (/^[A-Za-z _-]{1,30}$/.test(raw) ? `"${raw}"` : 'an unreadable value');
+/** How a refusal names an order: by the row it starts on, never by a cell, so no customer's data reaches the screen. */
+const which = (o) => `the order on row ${o.row}`;
 
 function refused(reasons) {
   const listed = reasons.slice(0, MAX_LISTED);
@@ -305,9 +318,12 @@ export function analyse(text, { map } = {}) {
     if (id.includes('@')) {
       return refused([`the ${names.id} column holds email addresses, not order numbers: grouping by it would merge a customer's orders into one. Map id to the order number`]);
     }
+    if (!/\d/.test(id)) {
+      return refused([`the ${names.id} column holds a value with no digit in it on row ${r + 1}, so it is not an order number (such as #1001) and may be a name: grouping by it would merge a customer's orders into one. Map id to the order number`]);
+    }
     let o = orders.get(id);
     if (!o) {
-      o = { id, values: {} };
+      o = { id, row: r + 1, values: {} };
       orders.set(id, o);
     }
     for (const f of ORDER_LEVEL) {
@@ -316,7 +332,7 @@ export function analyse(text, { map } = {}) {
       if (v === '') continue;
       const had = o.values[f];
       if (had === undefined) o.values[f] = { v, row: r + 1 };
-      else if (had.v !== v) problems.push(`order ${id} carries two different ${names[f]} values (rows ${had.row} and ${r + 1}): two orders share one ${names.id}, or the export is damaged`);
+      else if (had.v !== v) problems.push(`${which(o)} carries two different ${names[f]} values (rows ${had.row} and ${r + 1}): two orders share one ${names.id}, or the export is damaged`);
     }
   }
 
@@ -329,21 +345,21 @@ export function analyse(text, { map } = {}) {
       cents[f] = moneyCents(val(f));
       if (!Number.isFinite(cents[f])) {
         problems.push(val(f) === undefined
-          ? `order ${o.id} has no ${names[f]} on any of its rows: unknown money is never zero`
-          : `order ${o.id}: ${names[f]} is not an amount of money (a plain number such as 84.50, 0 or more, at most two decimals)`);
+          ? `${which(o)} has no ${names[f]} on any of its rows: unknown money is never zero`
+          : `${which(o)}: ${names[f]} is not an amount of money (a plain number such as 84.50, 0 or more, at most two decimals)`);
       }
     }
     const currency = (val('currency') ?? '').toUpperCase();
-    if (!/^[A-Z]{3}$/.test(currency)) problems.push(`order ${o.id} has no three-letter currency code in ${names.currency}`);
+    if (!/^[A-Z]{3}$/.test(currency)) problems.push(`${which(o)} has no three-letter currency code in ${names.currency}`);
     const raw = val('status');
     const status = raw === undefined ? undefined : raw.toLowerCase().split(/[\s-]+/).join('_');
-    if (status === undefined) problems.push(`order ${o.id} has no ${names.status}, so whether it was voided or refunded cannot be told`);
-    else if (!Object.hasOwn(STATUS, status)) problems.push(`order ${o.id}: ${names.status} ${shown(raw)} is not one this knows (${Object.keys(STATUS).join(', ')}), so whether it is a sale cannot be told`);
+    if (status === undefined) problems.push(`${which(o)} has no ${names.status}, so whether it was voided or refunded cannot be told`);
+    else if (!Object.hasOwn(STATUS, status)) problems.push(`${which(o)}: its ${names.status} is not one this knows (${Object.keys(STATUS).join(', ')}), so whether it is a sale cannot be told`);
     const mk = (val('marketing') ?? '').toLowerCase();
     const accepts = YES.has(mk) ? true : NO.has(mk) ? false : undefined;
-    if (accepts === undefined) problems.push(`order ${o.id} has no yes or no in ${names.marketing}, so it cannot be counted either way`);
+    if (accepts === undefined) problems.push(`${which(o)} has no yes or no in ${names.marketing}, so it cannot be counted either way`);
     const day = calendarDay(val('created'));
-    if (day === undefined) problems.push(`order ${o.id}: ${names.created} is not a date written year first (YYYY-MM-DD, with or without a time); a day/month date is ambiguous`);
+    if (day === undefined) problems.push(`${which(o)}: ${names.created} is not a date written year first (YYYY-MM-DD, with or without a time); a day/month date is ambiguous`);
     const cancelled = at.cancelled !== undefined && val('cancelled') !== undefined;
     parsed.push({ id: o.id, ...cents, currency, status, accepts, day, cancelled });
   }
@@ -374,7 +390,12 @@ export function analyse(text, { map } = {}) {
   const total = spread(asc(counted.map((o) => o.total)));
   const shippingMedianCents = nearestRank(asc(counted.map((o) => o.shipping)), 50);
 
-  const threshold = thresholdCents(subtotal.p80);
+  // Subtotals tie at round prices, and every order tied at the p80 qualifies, so the share at or above it has no
+  // bound of its own: the threshold is raised 5 at a time until at most 20% are. That never takes more than one step
+  // (no value above the p80 is reached by more than 20%), but the share is checked here, not assumed.
+  const atOrAbove = (t) => counted.filter((o) => o.subtotal >= t).length;
+  let threshold = thresholdCents(subtotal.p80);
+  while (atOrAbove(threshold) * 100 > counted.length * MAX_QUALIFYING_PCT) threshold += STEP_CENTS;
   const qualifying = counted.filter((o) => o.subtotal >= threshold);
   const absorbedCents = qualifying.reduce((a, o) => a + o.shipping, 0);
 
@@ -419,9 +440,10 @@ export function analyse(text, { map } = {}) {
 /**
  * Plan the one write: the median subtotal into an existing pilot.json as baselineAovUsd, and nothing else. Refused
  * when the file is missing or is not a JSON object, when startDate is not a date or is on or before now (the
- * denominator is fixed before the pilot starts, never after), when any order is dated on or after the start, and when
- * the export is not in USD. Writes nothing: the command line commits the plan only once its output has passed the
- * privacy gate. Returns { ok: true, pilotPath, content, baselineAovUsd, was, message } or { ok: false, reasons }.
+ * denominator is fixed before the pilot starts, never after), when any order is dated on or after the start, when the
+ * last order is more than 120 days before the start or the export spans under 28 days, when the export is not in
+ * USD, and when the median is not above 0. Writes nothing: the command line commits the plan only once its output has
+ * passed the privacy gate. Returns { ok: true, pilotPath, content, baselineAovUsd, was, message } or { ok: false, reasons }.
  */
 export function planAov(pilotPath, report, now = Date.now()) {
   const no = (why) => ({ ok: false, reasons: [why] });
@@ -439,9 +461,14 @@ export function planAov(pilotPath, report, now = Date.now()) {
   if (startDay <= now) return no(`pilot.startDate ${pilot.startDate} is on or before now: the pilot's denominator must be fixed before it starts, never once it has`);
   const startIso = new Date(startDay).toISOString().slice(0, 10);
   if (report.span.last >= startIso) return no(`the export runs to ${report.span.last}, on or after the pilot's start ${startIso}: the baseline must come only from orders placed before the pilot`);
+  const gapDays = (startDay - Date.parse(`${report.span.last}T00:00:00Z`)) / DAY;
+  if (!(gapDays <= MAX_GAP_DAYS)) return no(`the export ends on ${report.span.last}, more than ${MAX_GAP_DAYS} days before the pilot's start ${startIso}: an old season is not the store the pilot runs in. Export the period just before the start`);
+  if (!(report.span.days >= MIN_SPAN_DAYS)) return no(`the export spans ${report.span.days} day${report.span.days === 1 ? '' : 's'}, ${report.span.first} to ${report.span.last}: under ${MIN_SPAN_DAYS} days one week's drop or sale can set the baseline. Export at least ${MIN_SPAN_DAYS} days, the last 90 if the store has them`);
   if (report.currency !== 'USD') return no(`baselineAovUsd is in US dollars and this export is in ${report.currency}: convert it deliberately, by hand, never here`);
+  const aovCents = report.subtotalCents.median;
+  if (!(aovCents > 0)) return no(`the median subtotal of the ${report.countedOrders} orders that count is not above 0: at least half of them have no goods value (gifted, replacement or fully discounted orders), and 0 is the value creator-pilot.mjs refuses as unset. Nothing is written`);
   const was = pilot.baselineAovUsd;
-  const aov = report.subtotalCents.median / 100;
+  const aov = aovCents / 100;
   return {
     ok: true,
     pilotPath,
@@ -487,7 +514,7 @@ export function format(r) {
     `Refunds: ${m(r.refunds.totalCents)} in total, on ${r.refunds.orders} of ${r.orders} orders (${pct(r.refunds.share)})`,
     `Accepts marketing: ${r.marketing.accepts} of ${r.marketing.orders} orders (${pct(r.marketing.share)}), counted per order, not per customer`,
     '',
-    `Free-shipping threshold: ${m(t.cents)} (the p80 subtotal ${m(t.p80Cents)}, rounded up to a multiple of 5)`,
+    `Free-shipping threshold: ${m(t.cents)} (the p80 subtotal ${m(t.p80Cents)} rounded up to a multiple of 5, then raised 5 at a time until at most ${MAX_QUALIFYING_PCT}% of orders are at or above it)`,
     `  ${t.qualifying} of ${t.of} orders (${pct(t.share)}) are at or above it already; on them the store would have absorbed ${m(t.absorbedCents)} of postage over these ${r.span.days} days`,
   ].join('\n');
 }

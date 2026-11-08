@@ -16,11 +16,14 @@
 // list). --preflight says TOO SMALL before a send is wasted, and the cheaper arm is the one to send. That is the
 // answer, not a consolation prize.
 //
-// Verdicts, in the order they are checked (exit 0 only for WINNER):
+// Verdicts, in the order they are checked (exit 0 only for WINNER), with one exception: once the rule is sound, the
+// clock is asked before any count is read, and until analyseOn has arrived the answer is TOO_EARLY.
 //   NOT_PRE_REGISTERED   the rule is incomplete, dated after the data (or dated so the order cannot be told),
 //                        or underpowered by design; at --check, also planned with no room for 5% lost to bounces
-//   INVALID_DATA         a count is blank, malformed or impossible, or revenue and orders do not match
-//   TOO_EARLY            read before analyseOn, or an arm more than 5% short of plan; no p-value is shown at all
+//   INVALID_DATA         a count is blank, malformed or impossible, revenue and orders do not match, or analysedOn
+//                        is not written the same way as analyseOn (both bare dates, or both timestamps)
+//   TOO_EARLY            the clock has not reached analyseOn, the reading is dated before it, or an arm is more
+//                        than 5% short of plan or more than 5% over it; no p-value is shown at all
 //   INSUFFICIENT_SAMPLE  an arm below the required n, or under 10 expected conversions; the default arm stands
 //   INCONCLUSIVE_DEFAULT not significant; the default arm stands, and the list could not tell the arms apart
 //   NO_CLEAR_WIN         significant on conversion, but the other arm earns more per recipient
@@ -43,6 +46,12 @@ export const MIN_EXPECTED_CONVERSIONS = 10;
 
 /** An arm more than this fraction short of plannedPerArm is not the test that was planned. */
 const SHORTFALL = 0.05;
+
+/**
+ * Nor is an arm more than this fraction over it. Sending to more people after a look that decided nothing, then
+ * reading again, is a second look the plan never allowed: the peeking this file exists to stop.
+ */
+const OVERRUN = 0.05;
 
 const DAY = 86_400_000;
 
@@ -85,7 +94,8 @@ function wilson(x, n, z) {
 }
 
 /**
- * The 95% interval for pO − pD, the other arm's rate minus the default's: Newcombe's hybrid score interval (1998,
+ * The interval for pO − pD, the other arm's rate minus the default's, at the level whose two-sided critical value
+ * is z (95% if none is given; the analysis passes its registered alpha's): Newcombe's hybrid score interval (1998,
  * method 10), built from each arm's Wilson interval. It replaced an unpooled Wald interval that collapsed to
  * "+0.00 to +0.00" at 0 orders against 0, which claims the arms are known to be equal, and that ran too narrow
  * whenever one arm had none. Pinned to Newcombe's published examples in the tests. The counts are the caller's,
@@ -257,6 +267,18 @@ const usd = (c) => `$${(c / 100).toFixed(2)}`;
 const perRecipient = (c, n) => `$${(c / 100 / n).toFixed(4)}`;
 const thousands = (n) => n.toLocaleString('en-AU');
 
+/**
+ * x, already known to be under `limit`, to one place, or to as many more as it takes to read as under it: an arm
+ * expecting 9.9996 conversions is never printed as "10.0 ... under the floor of 10".
+ */
+function under(x, limit) {
+  for (let dp = 1; dp <= 20; dp++) {
+    const s = x.toFixed(dp);
+    if (Number(s) < limit) return s;
+  }
+  return String(x);
+}
+
 // ---------------------------------------------------------------- pre-registration
 
 /**
@@ -380,7 +402,22 @@ export function analyse(e = {}, { now = Date.now() } = {}) {
   if (!check.ok) return check;
   const plan = check.plan;
 
-  // 2. The data must be real counts, and the reading must be dated.
+  // 2. Not before the day, by the clock. Until analyseOn has arrived nothing typed into the file is read, not even
+  //    to say what is wrong with it, since that would show the counts, and a count seen early gets acted on. The
+  //    file's own analysedOn is not enough: it is typed, and a bare date once passed a timestamped analyseOn hours
+  //    before its instant. A bare analyseOn has arrived once it has begun somewhere on Earth (UTC+14), the allowance
+  //    a bare analysedOn gets. Then the data must be real counts, and the reading dated the same way as analyseOn.
+  if (isFuture(plan.analyseOn, now)) {
+    return {
+      verdict: 'TOO_EARLY',
+      headline: 'VERDICT  TOO_EARLY',
+      defaultArm: plan.defaultArm,
+      reasons: [
+        `the results are due on ${plan.analyseOn.text}, and by this machine's clock that has not arrived. One look only: come back then.`,
+        'no p-value and no rates are shown before then, by design',
+      ],
+    };
+  }
   const problems = [];
   const parsed = e.arms.map((arm, i) => {
     const name = plan.names[i];
@@ -398,15 +435,21 @@ export function analyse(e = {}, { now = Date.now() } = {}) {
   const analysedOn = strictDate(e.analysedOn);
   if (!analysedOn) problems.push('analysedOn must be the date you are reading the results, as YYYY-MM-DD or a timestamp with Z or +hh:mm');
   else if (isFuture(analysedOn, now)) problems.push(`analysedOn ${analysedOn.text} is in the future`);
+  else if (analysedOn.dateOnly !== plan.analyseOn.dateOnly) problems.push(`analysedOn (${analysedOn.text}) and preRegistered.analyseOn (${plan.analyseOn.text}) must be written the same way, both as YYYY-MM-DD or both as timestamps with an offset: a bare date has no hour, so whether the reading came after the planned look cannot be told`);
   if (problems.length) return { verdict: 'INVALID_DATA', headline: 'VERDICT  INVALID_DATA', reasons: problems };
 
-  // 3. One look only, on the day it was planned for, at the size it was planned at. No p-value, no rates: a number
-  //    seen early is a number that gets acted on.
+  // 3. One look only, on the day it was planned for, at the size it was planned at: not short of it, and not past
+  //    it, because sending to more after a look that decided nothing is a second look. No p-value, no rates: a
+  //    number seen early is a number that gets acted on.
   const early = [];
-  if (earlier(analysedOn, plan.analyseOn)) early.push(`the results are due on ${plan.analyseOn.text}, and this reading is dated ${analysedOn.text}. One look only: come back then.`);
+  const datedEarly = earlier(analysedOn, plan.analyseOn);
+  if (datedEarly) early.push(`the results are due on ${plan.analyseOn.text}, and this reading is dated ${analysedOn.text}. One look only: come back then.`);
   for (const a of parsed) {
     if (a.recipients * 100 < plan.planned * (100 - SHORTFALL * 100)) {
       early.push(`${a.name} has ${thousands(a.recipients)} recipients against ${thousands(plan.planned)} planned, more than ${SHORTFALL * 100}% short: this is not the test that was planned`);
+    }
+    if (a.recipients * 100 > plan.planned * (100 + OVERRUN * 100)) {
+      early.push(`${a.name} has ${thousands(a.recipients)} recipients against ${thousands(plan.planned)} planned, more than ${OVERRUN * 100}% over: sending to more after the planned size is a second look, and this is not the test that was planned`);
     }
   }
   if (early.length) {
@@ -415,7 +458,7 @@ export function analyse(e = {}, { now = Date.now() } = {}) {
       headline: 'VERDICT  TOO_EARLY',
       arms: parsed.map(({ name, recipients }) => ({ name, recipients })),
       defaultArm: plan.defaultArm,
-      reasons: [...early, 'no p-value and no rates are shown before then, by design'],
+      reasons: [...early, datedEarly ? 'no p-value and no rates are shown before then, by design' : 'no p-value and no rates are shown for a test other than the one planned, by design'],
     };
   }
 
@@ -433,7 +476,7 @@ export function analyse(e = {}, { now = Date.now() } = {}) {
   if (smallest < plan.need || expected < MIN_EXPECTED_CONVERSIONS) {
     const reasons = [];
     if (smallest < plan.need) reasons.push(`${thousands(plan.need)} recipients per arm are needed to detect a ${plan.minLift}% lift on a ${pct(plan.baseline)} baseline; the smaller arm has ${thousands(smallest)}`);
-    if (expected < MIN_EXPECTED_CONVERSIONS) reasons.push(`the smaller arm expects ${expected.toFixed(1)} conversions at the baseline, under the floor of ${MIN_EXPECTED_CONVERSIONS}: too few for any verdict`);
+    if (expected < MIN_EXPECTED_CONVERSIONS) reasons.push(`the smaller arm expects ${under(expected, MIN_EXPECTED_CONVERSIONS)} conversions at the baseline, under the floor of ${MIN_EXPECTED_CONVERSIONS}: too few for any verdict`);
     reasons.push(`at ${thousands(smallest)} per arm this test could only detect ${detectableText(smallest)}`);
     reasons.push(`no winner may be declared from it. The pre-registered default arm, "${plan.defaultArm}", stands.`);
     return {
@@ -445,14 +488,16 @@ export function analyse(e = {}, { now = Date.now() } = {}) {
 
   // 5. The test itself: two-proportion z, pooled, two-sided. It is not exact, and this is by how much. Orders come
   //    in whole numbers, so its false-winner rate sways either side of alpha at every size. Exact enumeration under
-  //    no difference, through analyse itself (pinned in the tests, marked *), puts it at 5.18%* at alpha 0.05 on the
-  //    floor of 10 expected per arm and 5.30%* at 12; at alpha 0.10, 11.46%* with one arm 40% larger than the other
-  //    (14,286 against 20,000). A scan from 10 to 60 expected per arm found, with arms within 5% of each other, at
-  //    most 5.30% at 0.05, 10.41% at 0.10 and 0.96% at 0.01, and within 0.13 points of alpha from 20 expected up;
-  //    arms far from equal reach 11.46% at 0.10 and 1.07% at 0.01. At the template's own plan (0.12%, 20,617 per
-  //    arm) it is 4.92%*. The floor of 10 is not raised, because raising it would not make this exact (at 40
-  //    expected it is still 5.05%); it is kept for what it does do, which is stop a verdict resting on a handful of
-  //    orders.
+  //    no difference, through analyse itself (each figure marked * is pinned in the tests): at alpha 0.05, 5.18%* on
+  //    the floor of 10 expected per arm and 5.30%* at 12 (a 0.07% baseline, equal arms); at alpha 0.10, 10.50%* at
+  //    10 expected with one arm 2% larger (0.74%, 1,352 against 1,379) and 10.30%* at 21 expected (5%, 420 against
+  //    428), 0.30 points over alpha well clear of the floor; at alpha 0.01, 1.001%* (0.12%, 49,167 against 51,625).
+  //    Those are the highest found by a scan of whole expected counts from 10 to 60 per arm, at baselines of 0.07%,
+  //    0.12%, 0.74% and 5%, with the larger arm 0%, 2%, 5%, 8% and as much as 10.5% bigger (the widest pair that the
+  //    5% either side of plan allows); from 20 expected up it stayed within 0.31 points of alpha. The tests run the
+  //    scan again and pin where each maximum falls. At the template's own plan (0.12%, 20,617 per arm) it is 4.92%*.
+  //    The floor of 10 is not raised, because raising it would not make this exact (at 40 expected it is still
+  //    5.05%); it is kept for what it does do, which is stop a verdict resting on a handful of orders.
   const pooled = (A.conversions + B.conversions) / (A.recipients + B.recipients);
   const se = Math.sqrt(pooled * (1 - pooled) * (1 / A.recipients + 1 / B.recipients));
   const z = se > 0 ? (B.rate - A.rate) / se : 0;
@@ -463,19 +508,21 @@ export function analyse(e = {}, { now = Date.now() } = {}) {
 
   if (!(pValue < plan.alpha)) {
     // 6. Not significant. Named for what it is: the list could not tell them apart, which is not evidence they
-    //    are equal. The difference is the other arm minus the default, with Newcombe's 95% score interval, which
-    //    keeps its width at 0 orders against 0.
+    //    are equal. The difference is the other arm minus the default, with Newcombe's score interval, which keeps
+    //    its width at 0 orders against 0, at the registered level, 1 − alpha. A 95% interval under an alpha of 0.01
+    //    could sit wholly above zero beside "could not tell them apart", reading as the difference the test refused.
     const D = parsed[plan.defaultIndex];
     const O = parsed[1 - plan.defaultIndex];
     const diff = O.rate - D.rate;
-    const ci = differenceInterval(O.conversions, O.recipients, D.conversions, D.recipients);
+    const ci = differenceInterval(O.conversions, O.recipients, D.conversions, D.recipients, plan.za);
+    const level = `${((1 - plan.alpha) * 100).toFixed(0)}%`;
     const pp = (x) => `${x >= 0 ? '+' : ''}${(x * 100).toFixed(2)}`;
     return {
       ...base, verdict: 'INCONCLUSIVE_DEFAULT', headline: `VERDICT  INCONCLUSIVE_DEFAULT — "${plan.defaultArm}" stands (pre-registered default)`,
-      differenceCi95: ci, detectableLiftPct: detectable(smallest),
+      differenceCi: ci, differenceCiLevel: 1 - plan.alpha, detectableLiftPct: detectable(smallest),
       reasons: [
         rateLine,
-        `${O.name} minus ${D.name}: ${pp(diff)} points, 95% interval ${pp(ci[0])} to ${pp(ci[1])} points`,
+        `${O.name} minus ${D.name}: ${pp(diff)} points, ${level} interval ${pp(ci[0])} to ${pp(ci[1])} points`,
         `at ${thousands(smallest)} per arm this test could detect ${detectableText(smallest)}; anything smaller would go unseen`,
         moneyLine,
         'this list could not tell them apart; it does not show they are equal',

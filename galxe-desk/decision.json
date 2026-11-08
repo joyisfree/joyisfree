@@ -1,0 +1,15 @@
+{
+  "_comment": [
+    "The lane's standing decision, read by `npm run desk:status` and the Do card. While the verdict is REFUSED the desk",
+    "stops with STOP_DECISION and exits 2, whatever the ledger says. A missing or unreadable file is a stop too.",
+    "It reopens only on Leif's own words: verdict REOPENED, reopenedOn as YYYY-MM-DD after 2026-10-31 and not after today",
+    "in Sydney, and leifsWords quoting him. In the same commit, rewrite (never delete or weaken) the four tests pinned to",
+    "the refusal: galxe-desk/scripts/decision.test.mjs, the \"committed decision\" test in ledger.test.mjs, and the two in",
+    "do-card.test.mjs (galxe-claim SKILL.md names them). The arithmetic is in docs/decision-2026-10-31.json."
+  ],
+  "lane": "galxe-questing",
+  "verdict": "REFUSED",
+  "decidedOn": "2026-10-31",
+  "record": "galxe-desk/docs/decision-2026-10-31-questing.md",
+  "reopensOnlyIf": "Leif reopens it in his own words"
+}

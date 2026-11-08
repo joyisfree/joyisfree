@@ -10,13 +10,24 @@
 //
 // Actions: entered, won, claimed, realised, lost, flag. "flag" is any bot notice, odd approval prompt
 // or restriction, and it stops the desk by itself.
+//
+// The lane's standing decision sits above the ledger. Leif refused questing as income on 31 Oct 2026, and until this
+// file existed that verdict lived only in prose, so `status` printed CONTINUE and exited 0 on a lane he had closed.
+// `status` now reads galxe-desk/decision.json: a refusal is STOP_DECISION (exit 2), it outranks CONTINUE and the
+// numeric stops, and it never hides a recorded flag. A missing or unreadable decision is a stop too, never an open lane.
+//
+//   node galxe-desk/scripts/ledger.mjs status --decision PATH   # judge another decision file (the default sits beside scripts/)
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const ACTIONS = new Set(['entered', 'won', 'claimed', 'realised', 'lost', 'flag']);
 const DAY = 86_400_000;
+
+// Found from this file, not from the working directory, so the same record is read wherever the command runs.
+export const DECISION_FILE = fileURLToPath(new URL('../decision.json', import.meta.url));
+export const LANE = 'galxe-questing';
 
 export function parseLedger(text) {
   return text
@@ -88,6 +99,50 @@ export function status(entries, rules = {}, now = Date.now()) {
   };
 }
 
+/** Read the decision file. It never throws: a file that is missing or is not JSON comes back as the reason it failed. */
+export function readDecision(path = DECISION_FILE) {
+  let text;
+  try { text = readFileSync(path, 'utf8'); } catch (err) { return { error: `the decision record ${path} could not be read (${err.code || err.message})` }; }
+  try { return { decision: JSON.parse(text) }; } catch (err) { return { error: `the decision record ${path} is not valid JSON (${err.message})` }; }
+}
+
+// A reopening is dated as a real calendar day, YYYY-MM-DD: never Date.parse alone, which reads 'Leif 1' as a date.
+export const REFUSED_ON = '2026-10-31';
+const isDay = (v) => {
+  const m = typeof v === 'string' ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(v) : null;
+  if (!m) return false;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return d.toISOString().slice(0, 10) === v;
+};
+/** Today in Sydney, YYYY-MM-DD: the clock Leif lives on. */
+export const sydneyToday = (now = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(now);
+const reopenedWhen = (v, today) => isDay(v) && v > REFUSED_ON && v <= today;
+const inWords = (v) => typeof v === 'string' && v.trim() !== '';
+
+/**
+ * The stop a decision imposes, or null when the lane is open. Only a well-formed reopening opens it: verdict REOPENED,
+ * the date, and Leif's own words. A refusal, an unreadable file, another lane or a verdict not known here are all stops.
+ */
+export function decisionStop(read, today = sydneyToday()) {
+  const d = read?.decision;
+  if (read?.error) return `STOP_DECISION: ${read.error}, so the lane is treated as stopped`;
+  if (d == null || typeof d !== 'object' || Array.isArray(d)) return 'STOP_DECISION: the decision record is not an object, so the lane is treated as stopped';
+  if (d.lane !== LANE) return `STOP_DECISION: the decision record is for lane ${JSON.stringify(d.lane)}, not ${LANE}, so this lane is treated as stopped`;
+  if (d.verdict === 'REFUSED') return `STOP_DECISION: refused ${d.decidedOn || '(no date recorded)'} (${d.record || 'no record named'}); reopens only if ${d.reopensOnlyIf || 'Leif reopens it in his own words'}`;
+  if (d.verdict === 'REOPENED' && reopenedWhen(d.reopenedOn, today) && inWords(d.leifsWords)) return null;
+  if (d.verdict === 'REOPENED') return `STOP_DECISION: a reopening needs reopenedOn as a date and leifsWords quoting Leif (the date as YYYY-MM-DD, after the ${REFUSED_ON} refusal and not after today in Sydney), so the lane is still treated as stopped`;
+  return `STOP_DECISION: the decision record's verdict ${JSON.stringify(d.verdict)} is not REFUSED or REOPENED, so the lane is treated as stopped`;
+}
+
+/**
+ * The ledger's status with the lane's decision applied. A recorded flag is never hidden: it stays the kill rule and
+ * the decision is carried beside it. Otherwise a decision's stop outranks CONTINUE and the ledger's numeric stops.
+ */
+export function withDecision(s, stop) {
+  const kill = s.flags > 0 ? s.kill : stop || s.kill;
+  return { ...s, kill, decision: stop || null };
+}
+
 /** The claim clock on its own: what must be claimed, and what is already late. A won prize unclaimed is a prize lost. */
 export function formatDue(s) {
   const lines = [];
@@ -106,6 +161,7 @@ export function format(s) {
     `OVERDUE: ${s.overdue.length ? s.overdue.map((d) => `${d.quest} (was ${d.deadline})`).join(', ') : 'none'}`,
     `Kill rule: ${s.kill}`,
   ];
+  if (s.decision && s.decision !== s.kill) lines.push(`Decision: ${s.decision}`);
   return lines.join('\n');
 }
 
@@ -146,7 +202,7 @@ if (isMain) {
   } else if (cmd === 'status' || cmd === 'due') {
     const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
     const rules = o.account ? JSON.parse(readFileSync(o.account, 'utf8')).killRules : JSON.parse(readFileSync('galxe-desk/account.json', 'utf8')).killRules;
-    const s = status(parseLedger(text), rules);
+    const s = withDecision(status(parseLedger(text), rules), decisionStop(readDecision(o.decision || DECISION_FILE)));
     if (cmd === 'due') {
       console.log(formatDue(s));
       if (s.overdue.length) process.exitCode = 2;
@@ -155,7 +211,7 @@ if (isMain) {
       if (s.kill !== 'CONTINUE') process.exitCode = 2;
     }
   } else {
-    console.error('usage: ledger.mjs add --quest ID --action entered|won|claimed|realised|lost|flag [--minutes N --fee USD --gas USD --amount USD --deadline DATE --note TEXT]\n       ledger.mjs status [--file PATH --account PATH]\n       ledger.mjs due [--file PATH --account PATH]   # the claim clock only');
+    console.error('usage: ledger.mjs add --quest ID --action entered|won|claimed|realised|lost|flag [--minutes N --fee USD --gas USD --amount USD --deadline DATE --note TEXT]\n       ledger.mjs status [--file PATH --account PATH --decision PATH]\n       ledger.mjs due [--file PATH --account PATH]   # the claim clock only');
     process.exitCode = 1;
   }
 }

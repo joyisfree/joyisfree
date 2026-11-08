@@ -1,0 +1,111 @@
+[
+  {
+    "id": "gift-edit",
+    "date": "2026-11-07",
+    "what": "#9, the Christmas Garden Gift Edit: yes or no on sending the invites to 3-5 clients (invites by 7 Nov, confirm-and-pay by 12 Nov)",
+    "whose": "Leif",
+    "kind": "decision",
+    "status": "lapsed",
+    "lapsesIf": "no answer by 7 Nov 2026. This is what happened: it was never put to Leif as a yes and its invite draft was never written, so it is not run in 2026. Nothing else depended on it."
+  },
+  {
+    "id": "sitting-2026-11-15",
+    "date": "2026-11-15",
+    "what": "Leif's one sitting, about 55 minutes (about 75 if no payment route exists): decisions D1-D3 and the inputs only he can give, all on docs/leif.md",
+    "whose": "Leif, with Claude",
+    "kind": "date",
+    "status": "decided",
+    "lapsesIf": "it does not happen on 15 Nov: D1, D2 and D3 lapse with it, nothing is switched on or scheduled, and the 20 Nov gift guide does not go out unless Leif approves it on another date",
+    "closedBecause": "Withdrawn 8 Nov 2026 by the premise check: no label storefront (0 order notices in 90 days) and no live payment rail (agency/facts.json). Parked with every label play until Leif says he wants the shop open; nothing is asked of him for it."
+  },
+  {
+    "id": "D1",
+    "date": "2026-11-15",
+    "what": "Yes, approve the three drafts as pre-filled: the opt-in wording, the day-3 care email, and the three Christmas emails (gift guide 20 Nov, Black Friday gift with purchase 27 Nov, Express Post cut-off)",
+    "whose": "Leif",
+    "kind": "decision",
+    "status": "decided",
+    "lapsesIf": "no answer by the end of 15 Nov: nothing is switched on or scheduled, so the opt-in, the care email and all three Christmas emails stay unsent, and Leif is told the next day",
+    "closedBecause": "Withdrawn 8 Nov 2026 by the premise check: no label storefront (0 order notices in 90 days) and no live payment rail (agency/facts.json). Parked with every label play until Leif says he wants the shop open; nothing is asked of him for it. The drafts are kept, with a PARKED line at the top."
+  },
+  {
+    "id": "D2",
+    "date": "2026-11-15",
+    "what": "Yes, past buyers on inferred consent get only the 20 Nov gift guide and the cut-off email, with the order number kept as the record; every other campaign stays express-only. A Spam Act judgement, and his. Shown at the sitting as N x 0.12% expected orders for each answer.",
+    "whose": "Leif",
+    "kind": "decision",
+    "status": "decided",
+    "lapsesIf": "no answer by 15 Nov: the stricter default stands, express consent only, so the guide and the cut-off email reach only people who ticked the box, and below 500 of them Christmas is two emails",
+    "closedBecause": "Withdrawn 8 Nov 2026 by the premise check: no label storefront (0 order notices in 90 days) and no live payment rail (agency/facts.json). Parked with every label play until Leif says he wants the shop open; nothing is asked of him for it. With no store there are no past buyers to email."
+  },
+  {
+    "id": "D3",
+    "date": "2026-11-15",
+    "what": "Yes, the brand outreach engine goes from TEST to live at 20 a day. Asked only if the outreach readiness check (sender identity, an unsubscribe line in the intro, bump and breakup emails, template replies instead of a free AI tier, a sending address separate from store mail) passed by 13 Nov; otherwise withdrawn from docs/leif.md.",
+    "whose": "Leif",
+    "kind": "decision",
+    "status": "decided",
+    "lapsesIf": "no answer by 15 Nov, or the readiness check did not pass: the engine stays in TEST and sends nothing, and the first-dollar route that does not depend on store orders waits",
+    "closedBecause": "Withdrawn 8 Nov 2026: the brand outreach belongs to the agency session, whose own Drive doc carries its decisions for Leif. This repo does not ask what that page asks."
+  },
+  {
+    "id": "guide-send",
+    "date": "2026-11-20",
+    "what": "Christmas email 1: the gift guide, and the gift-guide page on the site, sent by the store as scheduled at the 15 Nov sitting",
+    "whose": "the store, scheduled by Leif on 15 Nov; Claude checks it went",
+    "kind": "date",
+    "status": "decided",
+    "lapsesIf": "it is not scheduled on 15 Nov: the guide is not sent, and the 26 Nov check has nothing to read",
+    "closedBecause": "Withdrawn 8 Nov 2026 by the premise check: no label storefront (0 order notices in 90 days) and no live payment rail (agency/facts.json). Parked with every label play until Leif says he wants the shop open; nothing is asked of him for it."
+  },
+  {
+    "id": "guide-check",
+    "date": "2026-11-26",
+    "what": "Kill rule: did the 20 Nov guide bring any order? If 0, the 27 Nov Black Friday email is cancelled",
+    "whose": "Claude reads the store's orders; Leif cancels the email if the rule fires (2 minutes)",
+    "kind": "date",
+    "status": "decided",
+    "lapsesIf": "it is not read by 26 Nov: the Black Friday email goes out without the check that was meant to stop it",
+    "closedBecause": "Withdrawn 8 Nov 2026 by the premise check: no label storefront (0 order notices in 90 days) and no live payment rail (agency/facts.json). Parked with every label play until Leif says he wants the shop open; nothing is asked of him for it."
+  },
+  {
+    "id": "black-friday-email",
+    "date": "2026-11-27",
+    "what": "Christmas email 2: Black Friday gift with purchase, stopping at zero stock, no discount",
+    "whose": "the store, scheduled by Leif on 15 Nov",
+    "kind": "date",
+    "status": "decided",
+    "lapsesIf": "it is not sent on 27 Nov: Black Friday passes at full price with nothing announced, which is also the planned result when the 26 Nov check finds 0 orders or the gift count is 0",
+    "closedBecause": "Withdrawn 8 Nov 2026 by the premise check: no label storefront (0 order notices in 90 days) and no live payment rail (agency/facts.json). Parked with every label play until Leif says he wants the shop open; nothing is asked of him for it."
+  },
+  {
+    "id": "day-30-digest",
+    "date": "2026-12-07",
+    "what": "The day-30 digest to Leif, about 10 minutes, at most 3 items: housekeeping (the alias left dormant, the empty galxe branch on the studio remote, the pre-commit hook), the big-ask recipe, and the hourly price only if a verdict flipped",
+    "whose": "Claude writes it; Leif answers",
+    "kind": "date",
+    "status": "decided",
+    "lapsesIf": "it is not sent by 7 Dec: the housekeeping items wait another month, and nothing else is lost",
+    "closedBecause": "Withdrawn 8 Nov 2026: it would have reported on the store plays, which are parked. Its housekeeping (the dormant alias, the pre-commit hook) is Claude's and is listed in docs/state.md; nothing in it needs Leif."
+  },
+  {
+    "id": "threshold-check",
+    "date": "2026-12-08",
+    "what": "Kill rule: the free-shipping threshold, compared against the same weeks last year; with no data from last year it is unreadable and reverted. Gift cards stay either way.",
+    "whose": "Claude reads it; Leif clicks the revert if the rule fires",
+    "kind": "date",
+    "status": "decided",
+    "lapsesIf": "it is not read on 8 Dec: the threshold keeps running unproven, absorbing postage nobody has shown it pays for",
+    "closedBecause": "Withdrawn 8 Nov 2026 by the premise check: no label storefront (0 order notices in 90 days) and no live payment rail (agency/facts.json). Parked with every label play until Leif says he wants the shop open; nothing is asked of him for it."
+  },
+  {
+    "id": "flow-check",
+    "date": "2027-01-05",
+    "what": "The abandoned-checkout flow, if it was switched on (20 or more abandoned checkouts with an email): report the orders it recovered, marked unsettled (the holdout is about 2 people a month, too small to settle); keep it only if it costs A$30 a month or less",
+    "whose": "Claude reports; Leif switches it off if the rule fires",
+    "kind": "date",
+    "status": "decided",
+    "lapsesIf": "it is not read by 5 Jan: the flow keeps running and costing up to A$30 a month with nobody checking it",
+    "closedBecause": "Withdrawn 8 Nov 2026 by the premise check: no label storefront (0 order notices in 90 days) and no live payment rail (agency/facts.json). Parked with every label play until Leif says he wants the shop open; nothing is asked of him for it."
+  }
+]

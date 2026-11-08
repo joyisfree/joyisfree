@@ -5,7 +5,9 @@
 // interval pinned to Newcombe's published examples, the z-test's false-winner rate measured by exact enumeration
 // (so its comment cannot overclaim again), a plan that survives its own 5% tolerance, a bare date never ordered
 // against a timestamp, a strict command line, an exit-code test for every verdict, and the run-sheet's figures
-// checked against the tool.
+// checked against the tool. The third added: an arm past its plan, the interval at the registered level, a floor
+// figure never rounded up to the floor, the clock asked as well as analysedOn (and the two dates written alike), the
+// strictDate ranges for minutes, seconds and offset minutes, and the false-winner figures measured again.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -136,6 +138,9 @@ for (const [why, v] of [
   ['a space instead of T', '2026-11-05 10:30Z'],
   ['hour 24', '2026-11-05T24:00Z'],
   ['an offset past +14', '2026-11-05T10:00+15:00'],
+  ['minute 60 (it would roll into the next hour)', '2026-11-05T10:60Z'],
+  ['second 60 (it would roll into the next minute)', '2026-11-05T10:30:60Z'],
+  ['offset minutes 60 (+10:60 would read as +11:00)', '2026-11-05T10:00+10:60'],
   ['compact digits', '20261105'],
   ['an empty string', ''],
   ['null', null],
@@ -214,8 +219,9 @@ test('INCONCLUSIVE_DEFAULT: the pre-registered default stands, with the 95% inte
   assert.equal(r.winner, undefined);
   assert.ok(r.pValue >= 0.05);
   // Newcombe's score interval for drop minus plain, 85/1500 against 75/1500: -0.9519 to +2.2922 points.
-  assert.deepEqual(r.differenceCi95, differenceInterval(85, 1500, 75, 1500));
-  assert.ok(Math.abs(r.differenceCi95[0] + 0.009519) < 1e-6 && Math.abs(r.differenceCi95[1] - 0.022922) < 1e-6, String(r.differenceCi95));
+  assert.deepEqual(r.differenceCi, differenceInterval(85, 1500, 75, 1500));
+  assert.equal(r.differenceCiLevel, 0.95);
+  assert.ok(Math.abs(r.differenceCi[0] + 0.009519) < 1e-6 && Math.abs(r.differenceCi[1] - 0.022922) < 1e-6, String(r.differenceCi));
   assert.ok(Math.abs(r.detectableLiftPct - detectableLiftPct({ perArm: 1500, baselineRate: 0.05 })) < 1e-9);
   has(r, /^this list could not tell them apart; it does not show they are equal$/);
   has(r, /^limited drop minus plain email: \+0\.67 points, 95% interval -0\.95 to \+2\.29 points$/);
@@ -237,10 +243,28 @@ test('INCONCLUSIVE_DEFAULT: 0 orders against 0 gives a finite p and an interval 
   assert.equal(r.verdict, 'INCONCLUSIVE_DEFAULT');
   assert.equal(r.pValue, 1);
   assert.equal(r.z, 0);
-  assert.ok(r.differenceCi95[0] < 0 && r.differenceCi95[1] > 0, String(r.differenceCi95));
+  assert.ok(r.differenceCi[0] < 0 && r.differenceCi[1] > 0, String(r.differenceCi));
   assert.doesNotMatch(format(r), /NaN/);
   has(r, /, p = 1\.0000 at alpha 0\.05$/);
   has(r, /^limited drop minus plain email: \+0\.00 points, 95% interval -0\.26 to \+0\.26 points$/);
+});
+
+test('INCONCLUSIVE_DEFAULT: the interval is at the registered level, so under alpha 0.01 it is 99% and includes zero', () => {
+  // 115 of 2,305 against 150 of 2,305 is p = 0.0268: not significant at 0.01. Its 95% interval, +0.17 to +2.87
+  // points, sat wholly above zero beside "could not tell them apart", reading as the difference the test refused.
+  const r = run(exp({ preOver: { alpha: 0.01, plannedPerArm: 2305 }, arms: [arm('plain email', 2305, 115, 11500), arm('limited drop', 2305, 150, 15000)] }));
+  assert.equal(r.verdict, 'INCONCLUSIVE_DEFAULT', JSON.stringify(r.reasons));
+  has(r, /, p = 0\.0268 at alpha 0\.01$/);
+  assert.deepEqual(r.differenceCi, differenceInterval(150, 2305, 115, 2305, 2.5758293035489004));
+  assert.equal(r.differenceCiLevel, 0.99);
+  assert.ok(r.differenceCi[0] < 0 && r.differenceCi[1] > 0, String(r.differenceCi));
+  has(r, /^limited drop minus plain email: \+1\.52 points, 99% interval -0\.25 to \+3\.31 points$/);
+  assert.ok(!r.reasons.some((x) => /95% interval/.test(x)), JSON.stringify(r.reasons));
+  // At alpha 0.10 it is the 90% interval, the width the test itself used.
+  const t = run(exp({ preOver: { alpha: 0.1 }, arms: [arm('plain email', 1500, 75, 7500), arm('limited drop', 1500, 85, 8000)] }));
+  assert.equal(t.verdict, 'INCONCLUSIVE_DEFAULT', JSON.stringify(t.reasons));
+  assert.deepEqual(t.differenceCi, differenceInterval(85, 1500, 75, 1500, 1.6448536269514722));
+  has(t, /^limited drop minus plain email: \+0\.67 points, 90% interval /);
 });
 
 test('INSUFFICIENT_SAMPLE: an arm under the required n gets no winner, and no advice to raise the bar past the gate', () => {
@@ -267,6 +291,20 @@ test('INSUFFICIENT_SAMPLE: under 10 expected conversions in the smaller arm stop
   has(r, new RegExp(`9\\.6 conversions at the baseline, under the floor of ${MIN_EXPECTED_CONVERSIONS}`));
 });
 
+test('INSUFFICIENT_SAMPLE: an arm just under the floor never reads as the floor itself ("10.0 ... under the floor of 10")', () => {
+  // 8,334 is the fewest that expect 10 orders at 0.12%; one address short, 8,333 expect 9.9996, which rounded to 10.0.
+  const at = (n) => run(exp({ preOver: { baselineRate: 0.0012, minLiftPct: 400, plannedPerArm: 8334 }, arms: [arm('plain email', n, 9, 900), arm('limited drop', 8334, 30, 3000)] }));
+  const r = at(8333);
+  assert.equal(r.verdict, 'INSUFFICIENT_SAMPLE', JSON.stringify(r.reasons));
+  has(r, /^the smaller arm expects 9\.9996 conversions at the baseline, under the floor of 10: too few for any verdict$/);
+  // Every arm in the band that used to print 10.0 prints a figure under the floor.
+  for (let n = 8292; n <= 8333; n++) {
+    const line = at(n).reasons.find((x) => x.startsWith('the smaller arm expects'));
+    assert.ok(Number(/expects ([\d.]+) conversions/.exec(line)?.[1]) < MIN_EXPECTED_CONVERSIONS, `${n}: ${line}`);
+  }
+  assert.equal(at(8291).reasons.find((x) => x.startsWith('the smaller arm expects')), 'the smaller arm expects 9.9 conversions at the baseline, under the floor of 10: too few for any verdict');
+});
+
 test('TOO_EARLY: read before analyseOn shows no p-value and no rates at all', () => {
   const r = run(exp({ analysedOn: '2026-10-11' }));
   assert.equal(r.verdict, 'TOO_EARLY');
@@ -289,6 +327,21 @@ test('TOO_EARLY: an arm more than 5% short of plan is not the planned test (1,48
   assert.notEqual(at(1482), 'TOO_EARLY');
 });
 
+test('TOO_EARLY: an arm more than 5% over plan is not the planned test either (sending more after a look is a second look)', () => {
+  // The same rates at ten times the plan of 1,549 gave WINNER, exit 0, with nothing said about the size.
+  const ten = run(exp({ arms: [arm('plain email', 15490, 775, 77500), arm('limited drop', 15490, 860, 86000)] }));
+  assert.equal(ten.verdict, 'TOO_EARLY', JSON.stringify(ten.reasons));
+  assert.equal(ten.pValue, undefined);
+  has(ten, /^plain email has 15,490 recipients against 1,549 planned, more than 5% over: /);
+  has(ten, /^limited drop has 15,490 recipients against 1,549 planned, more than 5% over: /);
+  has(ten, /^no p-value and no rates are shown for a test other than the one planned, by design$/);
+  assert.doesNotMatch(format(ten), /p =|\d\.\d\d%|\$/);
+  // Exactly 5% over is inside the tolerance; one more is not (1,638 is 1,560 and 5%).
+  const at = (n) => run(exp({ preOver: { plannedPerArm: 1560 }, arms: [arm('plain email', 1560, 75, 7500), arm('limited drop', n, 120, 9000)] })).verdict;
+  assert.equal(at(1639), 'TOO_EARLY');
+  assert.equal(at(1638), 'WINNER');
+});
+
 test('a plan that lets 5% bounce still reads when they do: one bounce past the bare minimum is not INSUFFICIENT_SAMPLE', () => {
   // The reviewers' case: planned at exactly the 19,586 needed, one undelivered address made a full test unreadable.
   const big = (plannedPerArm, delivered) => exp({
@@ -306,6 +359,39 @@ test('TOO_EARLY: a timestamped reading an hour before a timestamped analyseOn is
   const r = run(exp({ preOver: { analyseOn: '2026-10-12T09:00+11:00' }, analysedOn: '2026-10-12T08:00+11:00' }));
   assert.equal(r.verdict, 'TOO_EARLY');
   assert.equal(run(exp({ preOver: { analyseOn: '2026-10-12T09:00+11:00' }, analysedOn: '2026-10-12T09:00+11:00' })).verdict, 'WINNER');
+});
+
+test('TOO_EARLY: the clock is asked, not only analysedOn, and before any count is read', () => {
+  // analyseOn is 2026-11-05T22:00Z. At 10:00Z a reading dated a bare '2026-11-06' passed it and gave WINNER, 12 hours
+  // early, because a bare date against a timestamp compared only the days as written.
+  const now = Date.parse('2026-11-05T10:00:00Z');
+  const e = (analysedOn, arms) => exp({ preOver: { decidedOn: '2026-10-01T09:00+11:00', analyseOn: '2026-11-06T09:00+11:00' }, dataCollectedFrom: '2026-10-30T09:00+11:00', analysedOn, arms });
+  const due = /^the results are due on 2026-11-06T09:00\+11:00, and by this machine's clock that has not arrived\. One look only: come back then\.$/;
+  for (const analysedOn of ['2026-11-06', '2026-11-05T21:00+11:00', undefined, 'not a date']) {
+    const r = run(e(analysedOn), now);
+    assert.equal(r.verdict, 'TOO_EARLY', `${analysedOn}: ${JSON.stringify(r.reasons)}`);
+    has(r, due);
+    assert.equal(r.pValue, undefined);
+    assert.doesNotMatch(format(r), /p =|\d\.\d\d%|\b75\b|\b120\b|\$/);
+  }
+  // Before the day not even a data error is shown, because it would name the counts ("75 conversions but $0 revenue").
+  const bad = run(e('2026-11-05T21:00+11:00', [arm('plain email', 1500, 75, 0), arm('limited drop', 1500, 120, 9000)]), now);
+  assert.equal(bad.verdict, 'TOO_EARLY', JSON.stringify(bad.reasons));
+  assert.doesNotMatch(format(bad), /\b75\b/);
+  // At the planned instant it reads. A bare analyseOn has arrived once it has begun in UTC+14, as a bare analysedOn has.
+  assert.equal(run(e('2026-11-06T09:00+11:00'), Date.parse('2026-11-05T22:00:00Z')).verdict, 'WINNER');
+  const bare = exp({ preOver: { decidedOn: '2026-11-01', analyseOn: '2026-11-13' }, dataCollectedFrom: '2026-11-06', analysedOn: '2026-11-13' });
+  assert.equal(run(bare, Date.parse('2026-11-12T09:59:00Z')).verdict, 'TOO_EARLY');
+  assert.equal(run(bare, Date.parse('2026-11-12T10:00:00Z')).verdict, 'WINNER');
+});
+
+test('INVALID_DATA: analysedOn is written the same way as analyseOn, as decidedOn and dataCollectedFrom must be', () => {
+  const r = run(exp({ preOver: { analyseOn: '2026-10-12T09:00+11:00' }, analysedOn: '2026-10-13' }));
+  assert.equal(r.verdict, 'INVALID_DATA', JSON.stringify(r.reasons));
+  has(r, /^analysedOn \(2026-10-13\) and preRegistered\.analyseOn \(2026-10-12T09:00\+11:00\) must be written the same way, both as YYYY-MM-DD or both as timestamps with an offset/);
+  const other = run(exp({ analysedOn: '2026-10-13T09:00+11:00' }));
+  assert.equal(other.verdict, 'INVALID_DATA', JSON.stringify(other.reasons));
+  has(other, /^analysedOn \(2026-10-13T09:00\+11:00\) and preRegistered\.analyseOn \(2026-10-12\) must be written the same way/);
 });
 
 test('verdict order: NOT_PRE_REGISTERED beats INVALID_DATA beats TOO_EARLY beats INSUFFICIENT_SAMPLE', () => {
@@ -586,15 +672,74 @@ function falseWinnerRate({ p, nA, nB, alpha, minLiftPct, plannedPerArm }) {
   return rate;
 }
 
+// The highest the scan found, each through analyse itself. The unequal pairs sit inside the 5% either side of plan.
+const PINNED = [
+  ['5.18%*', { p: 0.0007, nA: 14286, nB: 14286, alpha: 0.05, minLiftPct: 300, plannedPerArm: 14286 }, 0.05183],
+  ['5.30%*', { p: 0.0007, nA: 17143, nB: 17143, alpha: 0.05, minLiftPct: 300, plannedPerArm: 17143 }, 0.05296],
+  ['10.50%*', { p: 0.0074, nA: 1352, nB: 1379, alpha: 0.10, minLiftPct: 300, plannedPerArm: 1352 }, 0.10501],
+  ['10.30%*', { p: 0.05, nA: 420, nB: 428, alpha: 0.10, minLiftPct: 150, plannedPerArm: 420 }, 0.10304],
+  ['1.001%*', { p: 0.0012, nA: 49167, nB: 51625, alpha: 0.01, minLiftPct: 100, plannedPerArm: 49167 }, 0.010011],
+  ['4.92%*', { p: 0.0012, nA: 20617, nB: 20617, alpha: 0.05, minLiftPct: 100, plannedPerArm: 20617 }, 0.04920],
+];
+
 test('the pooled z-test is not exact, and its false-winner rate is what the comment says (exact enumeration)', () => {
-  const near = (got, want) => assert.ok(Math.abs(got - want) < 5e-5, `${got} vs ${want}`);
-  near(falseWinnerRate({ p: 0.0007, nA: 14286, nB: 14286, alpha: 0.05, minLiftPct: 300, plannedPerArm: 14286 }), 0.05183);
-  near(falseWinnerRate({ p: 0.0007, nA: 17143, nB: 17143, alpha: 0.05, minLiftPct: 300, plannedPerArm: 17143 }), 0.05296);
-  near(falseWinnerRate({ p: 0.0007, nA: 14286, nB: 20000, alpha: 0.10, minLiftPct: 300, plannedPerArm: 14286 }), 0.11463);
-  near(falseWinnerRate({ p: 0.0012, nA: 20617, nB: 20617, alpha: 0.05, minLiftPct: 100, plannedPerArm: 20617 }), 0.04920);
   const comment = readFileSync(SCRIPT, 'utf8');
-  for (const figure of ['5.18%*', '5.30%*', '11.46%*', '4.92%*']) assert.ok(comment.includes(figure), `the comment quotes ${figure}`);
+  for (const [figure, c, want] of PINNED) {
+    const got = falseWinnerRate(c);
+    // Tight enough that 1.001% is shown to be over alpha, not just near it.
+    assert.ok(Math.abs(got - want) < (c.alpha === 0.01 ? 5e-7 : 5e-5), `${figure}: ${got} vs ${want}`);
+    assert.ok(comment.includes(figure), `the comment quotes ${figure}`);
+  }
+  assert.ok(falseWinnerRate(PINNED[4][1]) > 0.01);
   assert.doesNotMatch(comment, /at or under alpha/);
+  // Arms 40% apart (14,286 against 20,000, once quoted at 11.46%) are no longer a test this tool will read.
+  assert.doesNotMatch(comment, /11\.46%/);
+  assert.equal(run(exp({ preOver: { baselineRate: 0.0007, minLiftPct: 300, alpha: 0.1, plannedPerArm: 14286 }, arms: [arm('plain email', 14286, 10, 1000), arm('limited drop', 20000, 14, 1400)] })).verdict, 'TOO_EARLY');
+});
+
+// The scan behind the comment's "the highest found" and "within 0.31 points", so those are pinned too (about a second).
+test('the scan behind the step-5 comment finds the maxima it quotes, where it says they are', () => {
+  // analyse decides exactly this, and is too slow to call fifteen million times: WINNER when p < alpha (each arm's
+  // revenue follows its orders here, so money never diverges). It is checked against analyse at the pinned points.
+  const ALPHAS = [0.1, 0.05, 0.01];
+  const rates = (p, nA, nB) => {
+    const A = pmf(nA, p);
+    const B = pmf(nB, p);
+    const out = [0, 0, 0];
+    for (let x = 0; x < A.length; x++) {
+      for (let y = 0; y < B.length; y++) {
+        const pooled = (x + y) / (nA + nB);
+        const se = Math.sqrt(pooled * (1 - pooled) * (1 / nA + 1 / nB));
+        const z = se > 0 ? (y / nB - x / nA) / se : 0;
+        const pv = 2 * (1 - normalCdf(Math.abs(z)));
+        ALPHAS.forEach((a, i) => { if (pv < a) out[i] += A[x] * B[y]; });
+      }
+    }
+    return out;
+  };
+  for (const [figure, c, want] of PINNED) assert.ok(Math.abs(rates(c.p, c.nA, c.nB)[ALPHAS.indexOf(c.alpha)] - want) < 5e-5, figure);
+  const best = ALPHAS.map(() => ({ rate: 0 }));
+  let off = 0;
+  for (const p of [0.0007, 0.0012, 0.0074, 0.05]) {
+    for (const ratio of [1, 1.02, 1.05, 1.08, 'band']) {
+      for (let E = 10; E <= 60; E++) {
+        const nA = Math.ceil(E / p - 1e-9);
+        // 'band': the widest pair the tolerance allows, the smaller arm 5% short of a plan the larger is 5% over.
+        const nB = ratio === 'band' ? Math.floor((Math.floor((nA * 100) / 95) * 105) / 100) : Math.round(nA * ratio);
+        rates(p, nA, nB).forEach((r, i) => {
+          if (r > best[i].rate) best[i] = { rate: r, p, nA, nB };
+          if (E >= 20) off = Math.max(off, Math.abs(r - ALPHAS[i]));
+        });
+      }
+    }
+  }
+  const where = (c) => ({ p: c.p, nA: c.nA, nB: c.nB });
+  assert.deepEqual(where(best[0]), where(PINNED[2][1]), '10.50% is the highest at 0.10');
+  assert.deepEqual(where(best[1]), where(PINNED[1][1]), '5.30% is the highest at 0.05');
+  assert.deepEqual(where(best[2]), where(PINNED[4][1]), '1.001% is the highest at 0.01');
+  assert.ok(off < 0.0031, `from 20 expected up, the furthest from alpha is ${(off * 100).toFixed(3)} points`);
+  const forty = Math.ceil(40 / 0.0007 - 1e-9);
+  assert.ok(Math.abs(rates(0.0007, forty, forty)[1] - 0.0505) < 5e-5, 'at 40 expected it is still 5.05%');
 });
 
 // ------------------------------------------------------------------ the command line

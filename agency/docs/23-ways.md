@@ -23,12 +23,20 @@
 >
 > Drafts for the first three plays are in `agency/drafts/`: `opt-in.md` (#1), `care-email.md` (#2) and
 > `christmas-2026.md` (#3).
+>
+> **Also 8 Nov 2026:**
+> - **#11 is BLOCKED.** It would put the studio's licensed garment files in front of outside makers, which the
+>   licence forbids; W22 was killed for the same reason. The reasons are under #11.
+> - **Struck:** the outside-designer leg of #16 and the studio-trial leg of #20, for the same licence.
+> - **Re-priced:** the first five, at A$25 and A$50 an hour instead of $15. See "The first five, priced at A$25 and
+>   A$50 an hour" after the first three. No verdict flips, because none of the five yet has a verdict to flip.
 
 **How the 23 were built:** 28 ideas were judged and 3 were killed. Three pairs of survivors were merged where the judges' improved versions pointed to the same offer: W04 into #15, W05 into #8 and W17 into #13. That leaves 22. The 23rd is W19 (the alias account), included as the one [R] for instruction only, so the alias channel is covered.
 
 **Conventions:**
 - Lens scores read evidence / Leif / adversary, out of 5 each, with the total out of 15.
-- Leif's time is costed at $15/h.
+- Leif's time is costed at $15/h. (8 Nov 2026: that rate was never his choice, and A$15 is below the adult minimum
+  wage. The first five are re-priced at A$25 and A$50 below; A$25 is the stored default, not his choice.)
 - Evidence labels are kept as given: SUMMARY (search summary, page not opened), UNVERIFIED, NOT_FOUND, or "none known". No new statistics have been added.
 - "Judges' version" means the betterVersion from the judges has been applied.
 
@@ -36,7 +44,7 @@
 - Owned email: #1, #2, #3, #6, #14
 - Creators: #5, #17, #19
 - Retail and wholesale: #4, #7, #21
-- The app (studio): #10, #11, #12, #16, #20, #22
+- The app (studio): #10, #11 (blocked 8 Nov), #12, #16, #20, #22
 - The agency: #8, #9 (lapsed for 2026), #13, #15, #18
 - Alias account: #23
 - Partnerships: #7 (Faire), #9 (multi-brand edit, lapsed for 2026), #13 (client capsule)
@@ -169,6 +177,18 @@
 - **Lenses:** 2 / 3 / 3 = 8
 
 **11. [E] W20: Founding Maker seats, sold outside the app**
+- **Status, 8 Nov 2026: BLOCKED.**
+  - **The licence.** The studio's 648 garments are the Seaggs Vector Mockup Pack, and its licence forbids sharing,
+    re-posting or re-selling the files. This play sells seats to 30 outside makers, adds each one to the sign-in
+    allowlist and sends each a screen recording of the studio, so the files would reach people outside Joyisfree.
+  - **Why it was missed.** W22 was killed for this same licence (see "Killed ideas"), but the judges did not apply
+    that check to this play.
+  - **A second block.** The studio is hosted on Vercel's free Hobby plan, which does not allow commercial use (studio
+    notes, 23 Oct).
+  - **How it reopens.** Only when Seaggs has quoted a licence that allows paying subscribers, and the hosting question
+    is settled. Claude drafts the Seaggs email, and it is sent on Leif's yes. The other way back is a seat that uses
+    only blanks the maker uploads, so the Seaggs files never reach them.
+  - The entry stays below unchanged, as the record of what was judged.
 - **What (judges' versions merged):**
   - Send 30 named personal asks, each with a screen recording of the studio as it is now.
   - The product is a one-off A$190 12-month "season" with no auto-renew and a 30-day refund.
@@ -233,10 +253,14 @@
 - **Lenses:** W26 2 / 3 / 3 = 8; W04 2 / 3 / 2 = 7
 
 **16. [E] W24: "Design it, we sew it" commissions on the label store**
+- **Status, 8 Nov 2026:** the outside-designer leg is struck, for the garment licence that blocks #11. The commission
+  offer to label buyers and the list stands.
 - **What (judges' version):**
-  - First count the outside users who have actually saved a design (a Supabase row count).
+  - ~~First count the outside users who have actually saved a design (a Supabase row count).~~ Struck 8 Nov 2026:
+    outside users designing in the studio would be using the Seaggs garment files (see #11).
   - Get the maker's one-off quote for each pattern, and set a worth-it floor with a remake allowance.
-  - Offer 3 numbered slots with a 30-50% deposit to label buyers, the list and app designers, showing one garment that was actually made.
+  - Offer 3 numbered slots with a 30-50% deposit to label buyers and the list ~~and app designers~~ (struck 8 Nov
+    2026, as above), showing one garment that was actually made.
   - Before cutting, the customer signs off a paid spec and proof: a real cloth swatch, DTG/DTF or embroidery only, placement in mm, the size chart and a strike-off.
   - The terms include an IP warranty, the right to refuse any design, and "no change-of-mind refunds" with the statutory guarantees stated.
   - One order window per month. The app gets a static link only.
@@ -286,11 +310,14 @@
   - One plain reusable QR card, no unique codes.
   - A self-serve page: the buyer enters their order email and ticks an explicit consent box, and the email is checked against real orders.
   - The reward is a vote on the next colourway plus first pre-order access.
-  - Offer a studio trial only after Guided 3 steps ships, and only to voters who show maker intent.
+  - ~~Offer a studio trial only after Guided 3 steps ships, and only to voters who show maker intent.~~ Struck 8 Nov
+    2026: a studio trial would put the Seaggs garment files in front of outside users (see #11).
   - Print 50 cards, with a privacy notice.
 - **Why it pays:** It reaches the warmest buyers. Evidence: no redemption rate is known. Post-purchase flows at $2-5 per recipient (UNVERIFIED).
 - **Cost / time / first dollar:** $40-60 at most (get a quote). About 0.1 h/week. First dollar through #2 and #10.
-- **Kill rule:** fewer than 5 of the first 50 cards scanned means drop the studio offer and keep the email capture.
+- **Kill rule:** fewer than 5 of the first 50 cards scanned means ~~drop the studio offer and~~ keep the email capture.
+  (8 Nov 2026: with the studio offer struck, this rule no longer stops anything. The card needs a new kill rule
+  before it is printed.)
 - **Lenses:** 2 / 3 / 2 = 7
 
 **21. [E] W28: One shared makers' market stall, only if the gate clears**
@@ -328,7 +355,15 @@
 
 ---
 
-## The first three to do, in order
+## PARKED by the premise check (8 Nov 2026)
+
+The first five below all assume a label shop that takes orders. The premise check (`agency/facts.json`) found none: 0
+storefront order notices in 90 days, and no payment rail that can take a dollar. The master plan's own rule, "no store
+found parks every label play", fired, so **#1–#5 are parked**, the 15 Nov sitting is withdrawn, and the Christmas
+sends are not scheduled. They wake only when Leif says he wants the shop open. The plays that do not need a shop (#8,
+#13, #18, the agency-client work) belong to the agency session, which runs Leif's real agency from its own Drive doc.
+
+## The first three to do, in order (as planned before the premise check)
 
 **1. W13: the 90-day order export, plus gift cards and the threshold (6-7 Nov)**
 - **Why first:** One 1-hour export unblocks four other plays. It gives W01 its missing AOV (agency/docs/state.md), W12 its traffic count, W14 its threshold and basket data, and W11 its buyer count. Gift cards also catch Christmas from this week, and every change can be undone.
@@ -349,6 +384,43 @@
   - If orders that received the gift do not beat the November median order value by more than the gift's cost by 31 Dec 2026, there is no gift-with-purchase next year.
 
 **Next in the queue:** W01 starts once the AOV exists, around 9 Nov, and on a different launch date from W13. If Leif wants W07 at all, its invites must go out by 7 Nov; otherwise skip it this year. (8 Nov 2026: the 7 Nov date has passed, so W07 is skipped this year.)
+
+---
+
+## The first five, priced at A$25 and A$50 an hour (8 Nov 2026)
+
+The team costed Leif's time at $15 an hour. He never chose that figure, and A$15 is below the adult minimum wage.
+The stored price of his hour is now **A$25, a default and not his choice**, until he names his own. Here the first
+five are priced from their own stated cash and hours, at A$25 and at twice that, over a 90-day run. Nothing is
+re-scored; only arithmetic is added. The cash figures above carry no currency label and are read here as AUD.
+Totals are rounded to whole dollars.
+
+| # | Cash, 90 days (as stated) | Leif's hours, 90 days (as stated) | His time at A$25 | His time at A$50 | Total at A$25 | Total at A$50 | First dollar (as stated) | Verdict at either price |
+|---|---|---|---|---|---|---|---|---|
+| 1 | $0-90 ($0-30 a month) | 4.25 (1 once, then 0.25 a week) | A$106.25 | A$212.50 | A$106-196 | A$213-303 | none direct | CANNOT_VALUE: "no direct dollar" |
+| 2 | $0-90 ($0-30 a month) | 1.75 (1.5 once, then 5 min a month) | A$43.75 | A$87.50 | A$44-134 | A$88-178 | 7-14 days after switch-on, if there is traffic | CANNOT_VALUE: no dollar figure |
+| 3 | $0 | 1 (the one sitting) | A$25 | A$50 | A$25 | A$50 | 15-22 days | CANNOT_VALUE: 2-3 orders a send, no order value |
+| 4 | absorbed postage, no figure | 1 | A$25 | A$50 | CANNOT_VALUE | CANNOT_VALUE | 1-7 days | CANNOT_VALUE: no postage or payoff figure |
+| 5 | $0 up front; up to A$250 paid only out of verified orders | at least 2 (1 a week in weeks 1-2; the day-30 and day-60 sittings have no stated length) | at least A$50 | at least A$100 | at least A$50 | at least A$100 | 10-35 days, possibly never | CANNOT_VALUE: 0-3 orders, no order value |
+
+- **Verdicts.** None of the five states what it would earn in dollars. So the worth-it gate returns CANNOT_VALUE for
+  every one, at both prices. That is not zero: it means the payoff is the missing fact. The 90-day order export (an
+  order count and an average order value) is what lets #3 and #5 be priced at all.
+- **FRAGILE: none of the five.** A verdict can only flip if there is a verdict at each price, and there is none yet.
+  When the export lands, the five are run through the gate again at both prices. Any play whose verdict differs
+  between A$25 and A$50 is then marked FRAGILE here.
+- **Ranked by what they cost, cheapest first.** The order is the same at both prices:
+  - #3 first.
+  - Then #2 and #5. Which of the two comes first depends on where #2's subscription lands in its $0-30 range and how
+    long #5's two sittings run, not on the price of an hour.
+  - #1 last.
+  - #4 cannot be ranked until its absorbed postage has a figure.
+
+  This ranks cost, not value: without a payoff, the cheapest is not shown to be the best.
+- **What the price of an hour does change.**
+  - The five take 6.5 hours to set up. That is A$162.50 at A$25 and A$325 at A$50, against $97.50 at the old $15.
+  - Over 90 days they take 10 hours, which is A$250 or A$500.
+  - #1's weekly quarter-hour of upkeep is the largest cost of his time among the five.
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: galxe-quest-scout
-description: Galxe quest scout. Use every Monday, and when a new campaign or Earndrop is announced, to turn galxe-reader's notes on the feeds (Galxe Explore, DefiLlama airdrops, CryptoRank Drophunting, Bankless monthly hunts, Airdrop Alert) into candidate quests worth valuing. Writes only galxe-desk/candidates.json; holds no web tools; never enters anything, never touches the browser, the wallet or keys.
+description: Galxe quest scout. Use only inside the galxe-claim routine once Leif has reopened the questing lane in his own words (refused 31 Oct 2026, galxe-desk/docs/decision-2026-10-31-questing.md), to turn galxe-reader's notes on the feeds (Galxe Explore, DefiLlama airdrops, CryptoRank Drophunting, Bankless monthly hunts, Airdrop Alert) into candidate quests worth valuing. Writes only galxe-desk/candidates.json; holds no web tools; never enters anything, never touches the browser, the wallet or keys.
 tools: Read, Grep, Glob, Write
 model: sonnet
 memory: project

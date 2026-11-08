@@ -1,60 +1,63 @@
-# Run-sheet: does a limited drop beat a plain email?
+No test runs: under 41,234 people on the list it cannot settle anything, so when a shop email ever goes out, it is the plain one.
 
-One page, in the order you do it. Written 5 Nov 2026, after the questing lane was refused on the numbers and this was
-named the cheapest decisive test on the brand side.
+# Does a limited drop sell more than a plain email?
 
-## 1. Ask the instrument first, before writing a word
+Updated 9 November 2026. This page says only what happens, what you decide and what you will see. Claude does every
+other step, and none of them needs you.
 
-```
-npm run ab:test -- --preflight --list-size <how many people are on the list> --metric orders
-```
+> **PARKED, 8 Nov 2026.** There is no label shop or email list yet (agency/facts.json), so no email goes out and this
+> question waits. Everything below is the rule for the day a shop exists.
 
-**Expect TOO SMALL.** A clothing brand's campaign email turns about **0.12%** of recipients into an order (Klaviyo
-2026 benchmark, from a search summary; the range across sources is 0.07% to 0.13%). At that rate, telling whether a
-drop **doubles** orders needs **19,586 people in each half**, and the tool has you plan **20,617 per half — 41,234 on
-the list** — so that the 5% of addresses that may bounce cannot sink the test. Detecting a 50% lift needs 65,309 per
-half, planned at 68,747 (137,494 on the list). Smaller lists cannot tell the two apart, however the send goes.
+## What happens
 
-When it says TOO SMALL: **send the plain email and stop.** The test cannot settle it, and where the stakes are low the
-honest rule is to pick the cheaper option. That answer cost one command instead of a campaign, which is the point.
+Before a Christmas or new-piece email goes out, Claude checks one thing: is your list big enough to tell whether a
+"limited drop" email sells more than a plain one?
 
-`--metric clicks` will clear a smaller list: at Omnisend's 0.74% campaign click rate (a search summary), a doubling
-needs 3,146 per half, planned at 3,312 (6,624 on the list). But clicks are not money: treat a click result as a hint
-about the subject line and the hook, never as proof that drops sell.
+At your size the answer is no, and it would be no for any list under 41,234 people. A clothing brand's email
+turns about 12 in every 10,000 people who get it into an order (0.12%, an industry average taken from a search summary;
+sources range from 7 to 13 in 10,000). To tell whether a drop email **doubles** orders, 19,586 people would have to
+get each version. Claude plans for 20,617 each, so 41,234 on the list, which leaves room for 1 address in 20 to
+bounce without sinking the test. To spot a smaller rise, half as many orders again, it needs 65,309 per version,
+planned at 68,747 (137,494 on the list). With fewer people the two emails cannot be told apart, however the sends go,
+so a test would spend a send and prove nothing.
 
-## 2. Only if the list is big enough
+So the plain email is sent and no test is run. When a test cannot settle a low-stakes choice, the honest rule is to
+take the cheaper option, and the plain email is the cheaper one: nothing has to be held back to make it scarce.
 
-1. Copy `agency/experiments/drop-vs-email.json` and fill in the dates. **The rule is fixed before the send** —
-   `decidedOn` must be strictly earlier than `dataCollectedFrom` — or the tool refuses the result as a story told
-   after the fact. Write both the same way, both as dates or both as timestamps with an offset: a date against a
-   timestamp is refused, because a bare date has no hour and the order cannot be told.
-2. Replace `baselineRate` with your own **campaign** placed-order rate if you have it (never a flow's), and set
-   `plannedPerArm` to at least the "plan" figure `--preflight` printed (20,617 at the template's figures).
-3. `npm run ab:test -- --check --file <your copy>` must pass before anything is sent. It refuses a plan with no room
-   for bounces.
-4. Split **one list at random**, 50/50, in the email platform. Never two different segments.
-5. Hold everything else equal: send time, sender name and address, offer and price, products and imagery. The only
-   difference between the arms is the drop framing; otherwise you will not know what you measured.
-6. **Look once**, on `analyseOn` (the send date plus the 7-day window). Checking early and stopping when it looks good
-   is the classic way to manufacture a false winner, so the tool prints no rates or p-values before that date.
-7. Fill in recipients, placed orders and revenue for each arm, then `npm run ab:test -- --file <your copy>`. Take
-   orders and revenue from the same store report: an arm with orders and $0 revenue is refused, and so is an arm
-   with revenue and no orders.
+Counting clicks instead of orders would fit a smaller list. About 74 in every 10,000 people click a campaign email
+(0.74%, an industry average from a search summary), so a doubling needs 3,146 per version, planned at 3,312 (6,624 on
+the list). But clicks are not sales: a click result can hint at which subject line works, and it can never show that
+drops sell, so it is never used to decide.
 
-## 3. The Australian rules that apply to any version of this
+## What you decide
 
-- **Consent.** Send only to people who agreed to hear from Joyisfree. If challenged, the sender has to prove consent,
-  so keep the sign-up record.
-- **Identify the sender** by the business's legal name, or the name and ABN.
-- **Unsubscribe** must be in every email, free, and honoured within **5 working days** (ACMA; ignore any blog that
-  says 10).
-- **No prize draw attached to the drop.** A draw is a trade promotion lottery, and the permit rules differ by state and
-  conflict between sources (South Australia, the ACT and New South Wales especially; treat the ACT as needing a
-  permit). If a draw is ever wanted, that is a question for a lawyer, not the email.
-- **Scarcity must be true.** "Limited" means limited. False urgency is a consumer-law and trust risk, and it has not
-  been researched here, so keep the claim literally accurate.
+Nothing, at today's size. If your list ever reaches 41,234 people, Claude will put one yes on your page: run the
+test once, on a date fixed in advance. You would then split the list and schedule the two sends in the store from
+Claude's click card, about 5 minutes.
 
-## 4. What this is not
+## What you will see
 
-It is not the main revenue path. That is the creator-results pilot (`agency/scripts/creator-pilot.mjs`): it pays only
-on verified orders, it is accounting rather than statistics, and so it works at any list size.
+- **Now:** nothing. With no shop and no list, no email is sent; the Christmas plan is parked with the other store ideas.
+- **Only if the test ever runs:**
+  - the rule written down and dated before the send, so the result cannot be bent to fit it afterwards;
+  - one list split at random into two halves, with everything else the same (send time, sender, offer, price,
+    products and pictures), so the drop wording is the only thing measured;
+  - one look at the result, 7 days after the send and never earlier, because peeking and stopping when it looks good
+    is how a false winner is made;
+  - one line from Claude: which email sold more, or "no clear difference, the plain email stands".
+
+## What every send already obeys
+
+Claude checks each of these before anything goes out, so you do not have to:
+
+- **Consent.** Only people who agreed to hear from Joyisfree are emailed, and the sign-up record is kept, because if
+  anyone challenges it, the sender has to prove consent.
+- **Sender named.** Every email names the business by its legal name, or its name and ABN, because the Spam Act
+  requires it.
+- **Unsubscribe.** Every email has a free unsubscribe, honoured within 5 working days, because that is the legal limit
+  (the regulator, ACMA, says 5; ignore any blog that says 10).
+- **No prize draw on a drop.** A draw counts as a trade promotion lottery, and the permit rules differ between states
+  and conflict between sources (South Australia, the ACT and New South Wales especially). If you ever want one, that
+  is a question for a lawyer, not for an email.
+- **Scarcity must be true.** "Limited" means limited. False urgency is a consumer-law risk and costs trust, so the
+  claim stays literally accurate.

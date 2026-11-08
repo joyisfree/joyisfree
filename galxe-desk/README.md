@@ -1,3 +1,5 @@
+Questing REFUSED 31 Oct 2026 (docs/decision-2026-10-31-questing.md); nothing is owed; the desk is kept, not run.
+
 # The Galxe Desk
 
 Leif's braindump, 28 Oct 2026: "Galxe maxing" with a separate X account, a team of specialists mirroring Galxe's own
@@ -70,7 +72,7 @@ npm run desk:card -- --shortlist galxe-desk/shortlist.json   # the weekly Do car
 npm run desk:verify -- <url>  # the scam-link checker: GENUINE only for app.galxe.com, exit 1 for anything else
 npm run desk:due          # the claim clock on its own: what is won and unclaimed, what is already late
 npm run desk:gigapot      # is the GG lottery ever worth a ticket (it cannot be valued on public information)
-npm run desk:mutate       # remove each guard in turn and prove a test goes red (61 of 61)
+npm run desk:mutate       # remove each guard in the repo in turn and prove a test goes red (it prints the count)
 ```
 
 ## What is Leif's, and only this

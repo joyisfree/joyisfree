@@ -1,6 +1,8 @@
 # Joyisfree (non-studio tracks) — orientation for Claude
 
-Start with [`galxe-desk/README.md`](./galxe-desk/README.md) and `galxe-desk/docs/state.md`. The account skills
+Start with [`docs/state.md`](./docs/state.md): both tracks in 15 lines or fewer. Leif's one page is `docs/leif.md`.
+Galxe questing was refused on 31 Oct 2026, so [`galxe-desk/README.md`](./galxe-desk/README.md) and
+`galxe-desk/docs/state.md` are the desk's record: kept, not run. The account skills
 `joy-boot` and `joy-teams` apply here as everywhere: check what already ran, the token law, the worth-it gate, one
 ledger per project (`galxe-desk/docs/errors.md`), and Leif's decisions in one digest.
 

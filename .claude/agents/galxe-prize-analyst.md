@@ -1,6 +1,6 @@
 ---
 name: galxe-prize-analyst
-description: Galxe prize analyst. Use every Monday to turn the scout's candidates into the ranked shortlist, and whenever a quest's prize needs valuing (pool, odds, token price, vesting, fee, minutes). Runs the Prize Gate script only; never enters, claims, or touches the browser, the wallet or keys.
+description: Galxe prize analyst. Use only inside the galxe-claim routine once Leif has reopened the questing lane in his own words (refused 31 Oct 2026, galxe-desk/docs/decision-2026-10-31-questing.md), to value the scout's candidates (pool, odds, token price, vesting, fee, minutes) and turn them into the ranked shortlist. Runs the Prize Gate script only; never enters, claims, or touches the browser, the wallet or keys.
 tools: Read, Grep, Glob, Edit, Bash
 model: sonnet
 memory: project

@@ -1,6 +1,11 @@
 // The weekly Do card: fills Leif's minutes, ending-soon first, keeps all quests inside one wallet cap, marks his clicks.
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { doCard, plan, safeTaskText } from './do-card.mjs';
 
 const NOW = Date.parse('2026-11-02T00:00:00Z');
@@ -96,4 +101,84 @@ test('task text cannot smuggle a non-Galxe link onto the card', () => {
   const card = doCard(evil(), { weeklyMinutesCap: 60, walletCapUsd: 100 }, new Date(NOW));
   assert.doesNotMatch(card, /airdrop-galxe\.one/);
   assert.match(card, /external link removed/);
+});
+
+// 8 Nov 2026, audit A5 and A11: the lane refused on 31 Oct must blank the card exactly as a flag does, and say so in
+// words that do not send Leif to a critic panel over a subject he has closed.
+const REFUSED_STOP = 'STOP_DECISION: refused 2026-10-31 (galxe-desk/docs/decision-2026-10-31-questing.md); reopens only if Leif reopens it in his own words';
+
+test('a standing decision produces no Do card, says the lane is closed and how it reopens, and keeps the claim clock', () => {
+  const card = doCard(shortlist(), { weeklyMinutesCap: 60, walletCapUsd: 100 }, new Date(NOW), {
+    kill: REFUSED_STOP,
+    overdue: [{ quest: 'W0', deadline: '2026-10-20' }],
+  });
+  assert.doesNotMatch(card, /app\.galxe\.com/, 'no quest is listed while the lane is refused');
+  assert.match(card, /closed by a standing decision: STOP_DECISION: refused 2026-10-31/);
+  assert.match(card, /none until Leif reopens the lane in his own words/);
+  assert.match(card, /Nothing is owed by Leif/);
+  assert.doesNotMatch(card, /critic panel|a flag is cleared/, 'a refusal is not a flag waiting on a review');
+  assert.match(card, /## OVERDUE[\s\S]*W0/, 'a prize already won is not new questing');
+});
+
+test('a flag that outranks the decision still names the decision on the card', () => {
+  const card = doCard(shortlist(), { weeklyMinutesCap: 60, walletCapUsd: 100 }, new Date(NOW), {
+    kill: 'STOP_FLAG: Bot activity detected',
+    decision: REFUSED_STOP,
+  });
+  assert.match(card, /stopped by its own kill rule: STOP_FLAG: Bot activity detected/);
+  assert.match(card, /also closed by a standing decision: STOP_DECISION: refused 2026-10-31/);
+  assert.doesNotMatch(card, /app\.galxe\.com/);
+  // And the decision line is not repeated when the decision is itself the stop.
+  const once = doCard(shortlist(), {}, new Date(NOW), { kill: REFUSED_STOP, decision: REFUSED_STOP });
+  assert.doesNotMatch(once, /also closed/);
+});
+
+// The CLI, end to end: the card builder reads the committed decision file itself, not only the ledger.
+// Every temporary file lives under one folder, removed when the file finishes.
+const SCRATCH = mkdtempSync(join(tmpdir(), 'do-card-test-'));
+after(() => rmSync(SCRATCH, { recursive: true, force: true }));
+const scratch = (prefix) => mkdtempSync(join(SCRATCH, prefix));
+const DOCARD = fileURLToPath(new URL('./do-card.mjs', import.meta.url));
+const ACCOUNT = resolve(fileURLToPath(new URL('.', import.meta.url)), '..', 'account.json');
+const oneQuest = { passed: [{ id: 'Q1', name: 'Week 1', space: 'Funded L2', url: 'https://app.galxe.com/quest/a/Q1', ev: 5, minutes: 5, endsAt: '2026-11-20', capitalUsd: 0, tasks: [{ relation: 'ALL', items: [task('Follow @FundedL2 on X', true)] }] }] };
+function runCard(extra = [], { withShortlist = true } = {}) {
+  const dir = scratch('card-');
+  const sl = join(dir, 'shortlist.json');
+  if (withShortlist) writeFileSync(sl, JSON.stringify(oneQuest));
+  const out = join(dir, 'do-card.md');
+  const r = spawnSync(process.execPath, [DOCARD, '--shortlist', sl, '--account', ACCOUNT, '--ledger', join(dir, 'ledger.jsonl'), '--out', out, ...extra], { encoding: 'utf8' });
+  let card = '';
+  try { card = readFileSync(out, 'utf8'); } catch { /* no card written: the assertions below say so */ }
+  return { r, card };
+}
+
+test('desk:card on the committed decision lists no quest, even with a shortlist on disk', () => {
+  const { r, card } = runCard();
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /desk stopped \(STOP_DECISION: refused 2026-10-31/);
+  assert.match(card, /closed by a standing decision: STOP_DECISION: refused 2026-10-31/);
+  assert.doesNotMatch(card, /app\.galxe\.com/);
+});
+
+test('desk:card with a missing decision file fails closed: no quests, and the reason on the card', () => {
+  const { r, card } = runCard(['--decision', join(SCRATCH, 'no-such-dir', 'gone.json')]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(card, /STOP_DECISION: .*gone\.json could not be read/);
+  assert.doesNotMatch(card, /app\.galxe\.com/);
+});
+
+test('desk:card on a refused lane needs no shortlist: nothing was scouted, and the stop notice is still written', () => {
+  const { r, card } = runCard([], { withShortlist: false });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(card, /closed by a standing decision/);
+});
+
+test('desk:card on a well-formed reopening builds the card from the shortlist again', () => {
+  const dir = scratch('decision-');
+  const d = join(dir, 'decision.json');
+  writeFileSync(d, JSON.stringify({ lane: 'galxe-questing', verdict: 'REOPENED', reopenedOn: '2026-11-08', leifsWords: 'reopen the Galxe questing' }));
+  const { r, card } = runCard(['--decision', d]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /^do card: 1 quests/);
+  assert.match(card, /https:\/\/app\.galxe\.com\/quest\/a\/Q1/);
 });

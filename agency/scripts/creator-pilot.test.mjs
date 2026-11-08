@@ -1,8 +1,9 @@
 // The creator-results pilot is shown to refuse what it should: rules dated after the data, a corrupt line skipped,
 // money that is not a number, reach, the same order twice under two spellings, the creator's own orders, a payout
 // past the cap or past what is owed, a back-dated line that takes money already paid. Every guard in section 7 of the
-// design (G1 to G27) has a case here that goes red without it, and so does every fix from the second review round.
-// The clock is always injected (`now`, or --now on the command line): no case depends on today's date.
+// design (G1 to G27) has a case here that goes red without it, and so does every fix from the second and third review
+// rounds. The clock is always injected (`now`, or --now on the command line): no case depends on today's date.
+// Every ledger starts with the rules pin, line 1 {type:"rules", ts, pilotSha256}, as the CLI writes it.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -12,7 +13,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   PILOT_DEFAULTS, REASONS, toCents, hashId, normId, parseLedger, validatePilot, validateEvent, screen, status,
-  checkPayout, checkAppend, format,
+  checkPayout, checkAppend, format, weekly, pilotSha256, canonicalEmail,
 } from './creator-pilot.mjs';
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), 'creator-pilot.mjs');
@@ -28,6 +29,8 @@ const at = (n, hh = 10) => new Date(Date.UTC(2026, 10, 8 + n, hh)).toISOString()
 /** The injected clock: noon on pilot day n. */
 const nowAt = (n) => Date.parse(at(n, 12));
 
+/** Line 1 of every ledger: the rules pinned before the first event. */
+const RULES = { ts: at(0, 8), type: 'rules', pilotSha256: pilotSha256(PILOT) };
 const CA = { ts: at(1, 8), type: 'creator', creator: 'A', code: 'JOYA', handle: '@a', followers: 4200, selfIds: [] };
 const CB = { ts: at(1, 8), type: 'creator', creator: 'B', code: 'JOYB', handle: '@b', followers: 900, selfIds: [B_SELF] };
 const order = (orderId, code, n, valueUsd = 100, over = {}) => ({
@@ -41,10 +44,10 @@ const payout = (creator, n, amountUsd, ref) => ({ ts: at(n), type: 'payout', cre
 const flag = (n, note, creator) => (creator === undefined ? { ts: at(n), type: 'flag', note } : { ts: at(n), type: 'flag', note, creator });
 const post = (creator, n) => ({ ts: at(n), type: 'post', creator, url: 'https://example.com/p/1' });
 
-/** Write each line through checkAppend, the way the CLI does; every one must be accepted. */
+/** Write each line through checkAppend, the way the CLI does; every one must be accepted. A new ledger starts with RULES. */
 function build(lines, now, start = []) {
   let ledger = start;
-  for (const ev of lines) {
+  for (const ev of start.length === 0 && lines[0]?.type !== 'rules' ? [RULES, ...lines] : lines) {
     const r = checkAppend(ledger, PILOT, ev, now);
     assert.ok(r.ok, `setup line refused: ${JSON.stringify(ev)}: ${r.reasons.join('; ')}`);
     ledger = [...ledger, r.event];
@@ -85,6 +88,9 @@ test('G1 rules not fixed before the data: decidedOn after startDate gives NOT_PR
   assert.match(w.reasons[0], /^NOT_PRE_REGISTERED/);
   // The honest rules pay the same payout, so the refusal is the rule's, not the ledger's.
   assert.equal(checkPayout(L, PILOT, { creator: 'A', amountUsd: 15, ref: 'BANK-1' }, nowAt(3)).ok, true);
+  // The boundary, pinned: rules fixed on launch day itself are allowed (the first write pins them before any line is
+  // recorded under them); a day later is not.
+  assert.deepEqual(validatePilot({ ...PILOT, decidedOn: PILOT.startDate }), []);
 });
 
 test('G2 a corrupt ledger line stops everything: "ok\\n{bad\\nok" throws /line 2/, it does not return 2 entries', () => {
@@ -98,6 +104,11 @@ test('G2 a corrupt ledger line stops everything: "ok\\n{bad\\nok" throws /line 2
 
 test('G3 money that is not a real number is refused: toCents of "true", "", true, "12.345" is NaN', () => {
   for (const v of ['true', '', true, '12.345', null, undefined, false, 'abc', NaN, Infinity]) assert.ok(Number.isNaN(toCents(v)), JSON.stringify(v));
+  // A JSON number (a store export row, a hand-edited line) with a third decimal is refused, never rounded.
+  for (const v of [12.345, 0.001, 84.505]) assert.ok(Number.isNaN(toCents(v)), String(v));
+  assert.throws(() => validateEvent(order('1001', 'JOYA', 2, 84.505)), /valueUsd must be a dollar amount above 0 with at most 2 decimals \(got 84\.505\)/);
+  assert.equal(toCents(19.99), 1999);
+  assert.equal(toCents(0.07), 7);
   assert.equal(toCents('84.50'), 8450);
   assert.equal(toCents(84.5), 8450);
   assert.equal(toCents('12.34'), 1234);
@@ -303,7 +314,7 @@ test('G19 results beyond the cap: the one that crosses is paid in part, the rest
     assert.equal(r.verified, true);
     assert.equal(r.payableCents, 0);
   }
-  const s = status([CA, ...capOrders], PILOT, nowAt(15));
+  const s = status([RULES, CA, ...capOrders], PILOT, nowAt(15));
   assert.equal(s.verdict, 'CAP_REACHED');
   assert.equal(s.cap.payableUsd, 600);
   assert.equal(s.cap.remainingUsd, 0);
@@ -341,6 +352,9 @@ test('G21 no orders by day 30 is a stop: STOPPED_NO_ORDERS, never a NaN that com
   // A creator added after day 30 could never pass the rule, so the line is refused.
   const late = checkAppend(L, PILOT, { ...CA, ts: at(31), creator: 'C', code: 'JOYC' }, nowAt(31));
   assert.deepEqual(late.reasons, ['day 30 counts from the programme start, so a creator added after it could never pass the day-30 rule']);
+  // The boundary, pinned: a recruit on day 30 itself is taken.
+  const day30 = checkAppend(L, PILOT, { ...CA, ts: at(30), creator: 'C', code: 'JOYC' }, nowAt(30));
+  assert.equal(day30.ok, true, day30.reasons.join('; '));
 });
 
 // Blended cost per order: $135 order ($20.25) + one sign-up ($5) = $25.25; $100 order + 3 sign-ups = $30.00;
@@ -412,7 +426,7 @@ test('G25 no future-dated lines: a ts more than a day ahead is refused, and so i
 });
 
 test('G26 capped results do not flatter cost: 20 more capped orders leave costPerOrderUsd unchanged', () => {
-  const base = [CA, ...capOrders];
+  const base = [RULES, CA, ...capOrders];
   const more = Array.from({ length: 20 }, (_, k) => order(String(5000 + k), 'JOYA', 6, 90, { ts: hourly(100 + k) }));
   const s1 = status(base, PILOT, nowAt(15));
   const s2 = status([...base, ...more], PILOT, nowAt(15));
@@ -463,7 +477,7 @@ test('round 2: a stored id in any other spelling is refused, so a hand-edited tw
   const L = build([CA, CB, order('1001', 'JOYA', 2)], nowAt(3));
   const s = status([...L, order('1001 ', 'JOYA', 2)], PILOT, nowAt(3));
   assert.equal(s.verdict, 'INVALID_LEDGER');
-  assert.match(s.verdictText, /entry 4: orderId "1001 " is not in its one spelling "1001"/);
+  assert.match(s.verdictText, /entry 5: orderId "1001 " is not in its one spelling "1001"/);
   assert.throws(() => validateEvent({ ...CA, creator: 'ana' }), /creator "ana" is not in its one spelling "ANA"/);
   assert.throws(() => validateEvent(payout('A', 3, 15, 'bank-1')), /ref "bank-1" is not in its one spelling "BANK-1"/);
   assert.throws(() => validateEvent(signup('#s1', 'JOYA', 2)), /signupId "#s1" is not in its one spelling "S1"/);
@@ -517,8 +531,8 @@ test('round 2: every write ends by re-validating the ledger: a refund before its
   assert.deepEqual(checkAppend(L, PILOT, refund('1001', 4, 100), nowAt(6)).reasons, [`the refund is dated ${at(4)}, before order 1001 was placed (${at(5)})`]);
   assert.equal(checkAppend(L, PILOT, refund('1001', 5, 100), nowAt(6)).ok, true);
   const L2 = build([CB, { ...CA, ts: at(3, 8) }], nowAt(4));
-  assert.deepEqual(checkAppend(L2, PILOT, post('A', 2), nowAt(4)).reasons, ['the ledger would not validate with this line: entry 3: post for a creator not in the ledger (A)']);
-  assert.deepEqual(checkAppend(L2, PILOT, flag(2, 'odd', 'A'), nowAt(4)).reasons, ['the ledger would not validate with this line: entry 3: flag for a creator not in the ledger (A)']);
+  assert.deepEqual(checkAppend(L2, PILOT, post('A', 2), nowAt(4)).reasons, ['the ledger would not validate with this line: entry 4: post for a creator not in the ledger (A)']);
+  assert.deepEqual(checkAppend(L2, PILOT, flag(2, 'odd', 'A'), nowAt(4)).reasons, ['the ledger would not validate with this line: entry 4: flag for a creator not in the ledger (A)']);
   assert.equal(checkAppend(L2, PILOT, post('A', 3), nowAt(4)).ok, true);
 });
 
@@ -546,6 +560,197 @@ test('round 2: validatePilot wants JSON numbers for money and rates; a string is
     assert.equal(checkPayout(L, p, { creator: 'A', amountUsd: 15, ref: 'BANK-1' }, nowAt(3)).ok, false, field);
   }
   assert.deepEqual(validatePilot(PILOT), []);
+});
+
+// ------------------------------------------------------------------ the third review round, each fix shown to bite
+
+test('G23 a flag set before day 30 survives day 30: on day 32 the flagged creators are still FLAGGED and held, and pay is refused', () => {
+  // A has a sign-up and no order, so the day-30 rule alone would stop A for no orders; B has $35 an order by day 30,
+  // so it alone would stop B for cost. Either stop would replace the flag and release the held money.
+  const L = build([
+    CA, CB,
+    signup('S1', 'JOYA', 2), flag(3, 'same buyer on six codes', 'A'),
+    order('2001', 'JOYB', 2), ...[3, 4, 5, 6].map((n) => signup(`SB${n}`, 'JOYB', n)), flag(7, 'odd', 'B'),
+  ], nowAt(8));
+  const s = status(L, PILOT, nowAt(32));
+  for (const [id, code, owed] of [['A', 'JOYA', 5], ['B', 'JOYB', 35]]) {
+    const c = creatorOf(s, id);
+    assert.equal(c.state, 'FLAGGED', id);
+    assert.equal(c.held, true, id);
+    assert.equal(c.owedUsd, owed, id);
+    const p = checkPayout(L, PILOT, { creator: id, amountUsd: owed, ref: `BANK-${id}` }, nowAt(32));
+    assert.equal(p.ok, false, id);
+    assert.ok(p.reasons.some((x) => x.startsWith(`${code} is flagged`)), p.reasons.join('; '));
+  }
+});
+
+test('G11/G13 an order whose buyer is "" is NO_BUYER, and a sign-up with no account or account "" is NO_ACCOUNT: each pays $0, however many', () => {
+  const L = build([
+    CA,
+    order('1001', 'JOYA', 2, 100, { buyer: '' }),
+    signup('S1', 'JOYA', 2, { account: undefined }),
+    signup('S2', 'JOYA', 2, { account: '' }),
+    signup('S3', 'JOYA', 3, { account: undefined }),
+  ], nowAt(4));
+  const s = status(L, PILOT, nowAt(4));
+  assert.deepEqual(s.rejected.map((r) => [r.ref, r.reason]), [['1001', 'NO_BUYER'], ['S1', 'NO_ACCOUNT'], ['S2', 'NO_ACCOUNT'], ['S3', 'NO_ACCOUNT']]);
+  const a = creatorOf(s, 'A');
+  assert.equal(a.payableUsd, 0);
+  assert.equal(a.verifiedOrders, 0);
+  assert.equal(a.signups, 0);
+});
+
+test('round 3: the rules are pinned by line 1; a pilot.json edited after the data is NOT_PRE_REGISTERED for every read and write', () => {
+  // Finding: raising capUsd and commissionRate mid-pilot re-priced the $8,000 order and let $2,400 be paid on a $600
+  // cap; raising days to 90 made a day-70 order payable. validatePilot alone passes both edits.
+  const L = build([CA, order('1001', 'JOYA', 2, 8000), payout('A', 3, 600, 'BANK-1')], nowAt(4));
+  assert.deepEqual(L[0], RULES);
+  assert.equal(status(L, PILOT, nowAt(4)).verdict, 'CAP_REACHED');
+  for (const edited of [{ ...PILOT, capUsd: 2400, commissionRate: 0.3 }, { ...PILOT, days: 90 }]) {
+    assert.deepEqual(validatePilot(edited), []);
+    const s = status(L, edited, nowAt(4));
+    assert.equal(s.verdict, 'NOT_PRE_REGISTERED');
+    assert.match(s.problems[0], /^pilot\.json no longer matches the rules pinned on line 1 of the ledger/);
+    assert.deepEqual(s.creators, []);
+    assert.equal(s.cap, null);
+    assert.match(format(s), /NOT_PRE_REGISTERED/);
+    const pay = checkPayout(L, edited, { creator: 'A', amountUsd: 1800, ref: 'BANK-2' }, nowAt(4));
+    assert.equal(pay.ok, false);
+    assert.match(pay.reasons[0], /^NOT_PRE_REGISTERED/);
+    for (const line of [payout('A', 4, 1800, 'BANK-2'), order('1002', 'JOYA', 4)]) {
+      const w = checkAppend(L, edited, line, nowAt(4));
+      assert.equal(w.ok, false, line.type);
+      assert.match(w.reasons[0], /^NOT_PRE_REGISTERED: no write under rules other than the ones the ledger pinned/);
+    }
+    assert.deepEqual(weekly(L, edited, nowAt(4)), []);
+  }
+  assert.ok(weekly(L, PILOT, nowAt(4)).length > 0);
+  // Key order and layout are not the rules: the canonical form is hashed, so the same values in another order read.
+  const reordered = Object.fromEntries(Object.entries(PILOT).reverse());
+  assert.equal(pilotSha256(reordered), pilotSha256(PILOT));
+  assert.equal(status(L, reordered, nowAt(4)).verdict, 'CAP_REACHED');
+});
+
+test('round 3: line 1 must be the pin: none, one forged onto another line, a second one, or one for other rules is refused', () => {
+  const bare = [CA, order('1001', 'JOYA', 2)];
+  assert.equal(status(bare, PILOT, nowAt(3)).verdict, 'NOT_PRE_REGISTERED');
+  assert.match(status(bare, PILOT, nowAt(3)).problems[0], /first line must pin the rules/);
+  // The hash on a line that is not a rules line pins nothing.
+  const forged = [{ ...CA, pilotSha256: pilotSha256(PILOT) }, order('1001', 'JOYA', 2)];
+  assert.equal(status(forged, PILOT, nowAt(3)).verdict, 'NOT_PRE_REGISTERED');
+  assert.match(status([], PILOT, nowAt(3)).problems[0], /not pinned yet/);
+  // An empty ledger takes the pin and nothing else, and only the pin of these rules.
+  const first = checkAppend([], PILOT, CA, nowAt(3));
+  assert.equal(first.ok, false);
+  assert.match(first.reasons[0], /^NOT_PRE_REGISTERED: the ledger's first line pins the rules/);
+  assert.equal(checkAppend([], PILOT, RULES, nowAt(3)).ok, true);
+  const other = checkAppend([], PILOT, { ...RULES, pilotSha256: pilotSha256({ ...PILOT, capUsd: 2400 }) }, nowAt(3));
+  assert.equal(other.ok, false);
+  assert.match(other.reasons[0], /^a rules line pins this pilot\.json, whose sha256 is [0-9a-f]{64}/);
+  // The rules are pinned once.
+  const L = build([CA], nowAt(3));
+  assert.deepEqual(checkAppend(L, PILOT, { ...RULES, ts: at(2) }, nowAt(3)).reasons, ['the ledger would not validate with this line: entry 3: the rules are pinned once, by line 1: a second rules line is refused']);
+  const twice = status([...L, { ...RULES, ts: at(2) }], PILOT, nowAt(3));
+  assert.equal(twice.verdict, 'INVALID_LEDGER');
+  assert.match(twice.verdictText, /entry 3: the rules are pinned once/);
+  // A rules line without its hash is not a rules line.
+  assert.throws(() => parseLedger(JSON.stringify({ ts: at(0), type: 'rules' })), /line 1: a rules line needs pilotSha256/);
+});
+
+// B's day-30 cost is $30 on a $200 order plus a $5 sign-up = $35 an order, over $30 (0.3 of the $100 AOV), so B stops
+// on day 31, and ten $100 orders on day 35 are CREATOR_STOPPED. Finding: a $50 refund on the $200 order, dated day 40,
+// re-took the day-30 decision at $27.50 an order, lifted the stop and paid all ten: $35 payable became $177.50.
+const stoppedB = () => build([
+  CB, order('2001', 'JOYB', 2, 200), signup('SB1', 'JOYB', 3),
+  ...Array.from({ length: 10 }, (_, k) => order(String(2100 + k), 'JOYB', 35, 100, { ts: at(35, k) })),
+], nowAt(40));
+
+test('round 3: the day-30 stop is a one-way latch: a refund dated after day 30 nets its own order and never lifts the stop', () => {
+  const L = stoppedB();
+  const before = creatorOf(status(L, PILOT, nowAt(40)), 'B');
+  assert.equal(before.state, 'STOPPED_DAY30');
+  assert.equal(before.payableUsd, 35);
+  const L2 = build([refund('2001', 40, 50)], nowAt(40), L);
+  const s = status(L2, PILOT, nowAt(40));
+  const b = creatorOf(s, 'B');
+  assert.equal(b.state, 'STOPPED_DAY30');
+  assert.equal(b.stop.share, 0.35);
+  assert.equal(b.payableUsd, 27.5);
+  assert.equal(s.rejected.filter((r) => r.reason === 'CREATOR_STOPPED').length, 10);
+  assert.deepEqual(checkPayout(L2, PILOT, { creator: 'B', amountUsd: 177.5, ref: 'BANK-1' }, nowAt(40)).reasons, ['$177.50 is more than JOYB is owed ($27.50)']);
+});
+
+test('round 3: a refund on one creator\'s order cannot claw back another: B stays stopped, and A, paid $565, owes nothing', () => {
+  // Finding: B's revived day-31 order took $144 of the cap room A had already been paid, leaving A, who had nothing
+  // refunded, with a $144 clawback.
+  const L = build([
+    CA, CB,
+    order('1001', 'JOYA', 2), order('2001', 'JOYB', 2, 200), signup('SB1', 'JOYB', 3),
+    order('2031', 'JOYB', 31, 1000), order('1050', 'JOYA', 32, 4000),
+    payout('A', 32, 565, 'BANK-1'),
+  ], nowAt(33));
+  assert.equal(creatorOf(status(L, PILOT, nowAt(33)), 'A').payableUsd, 565);
+  const s = status(build([refund('2001', 33, 40)], nowAt(33), L), PILOT, nowAt(33));
+  const a = creatorOf(s, 'A');
+  const b = creatorOf(s, 'B');
+  assert.equal(b.state, 'STOPPED_DAY30');
+  assert.equal(b.payableUsd, 29);
+  assert.deepEqual(reasonsOf(s, '2031'), ['CREATOR_STOPPED']);
+  assert.equal(a.clawbackUsd, 0);
+  assert.equal(s.fraud.clawbacksUsd, 0);
+  // The $6 the refund took off B's commission goes back to the cap, and A's partly capped order earns it (as in G16).
+  assert.equal(a.payableUsd, 571);
+  assert.equal(a.owedUsd, 6);
+});
+
+test('round 3: a refund dated on or before day 30 but written after the day-30 decision is refused if it would move a stop', () => {
+  // Dated day 25 and written on day 40, the $50 refund would re-take B's decision and lift the stop.
+  const L = stoppedB();
+  const r = checkAppend(L, PILOT, refund('2001', 25, 50), nowAt(40));
+  assert.equal(r.ok, false);
+  assert.deepEqual(r.reasons, [`the day-30 decision is taken and JOYB is STOPPED_DAY30; this refund is dated ${at(25)}, on or before day 30, so it would re-take that decision and make JOYB ACTIVE. Date it after day 30 (the CLI dates it now unless --ts is given): it then nets order 2001 and moves no stop`]);
+  // One that moves no stop is taken: $10 leaves B at $33.50 an order, still stopped. Dated today, the $50 is taken too.
+  assert.equal(checkAppend(L, PILOT, refund('2001', 25, 10), nowAt(40)).ok, true);
+  assert.equal(checkAppend(L, PILOT, refund('2001', 40, 50), nowAt(40)).ok, true);
+  // The latch holds the other way too: A's only day-30 order, refunded in full and back-dated, would stop A for no
+  // orders and take back the five later orders A was paid for; dated after day 30 it nets that one order only.
+  const LA = build([
+    CA, order('1001', 'JOYA', 10), ...[31, 32, 33, 34, 35].map((n) => order(String(1000 + n), 'JOYA', n)), payout('A', 36, 90, 'BANK-1'),
+  ], nowAt(40));
+  const back = checkAppend(LA, PILOT, refund('1001', 20, 100), nowAt(40));
+  assert.equal(back.ok, false);
+  assert.match(back.reasons[0], /JOYA is ACTIVE; .* make JOYA STOPPED_NO_ORDERS/);
+  const s = status(build([refund('1001', 40, 100)], nowAt(40), LA), PILOT, nowAt(40));
+  assert.equal(creatorOf(s, 'A').state, 'ACTIVE');
+  assert.equal(creatorOf(s, 'A').clawbackUsd, 15);
+  assert.deepEqual(s.rejected.map((x) => [x.ref, x.reason]), [['1001', 'REFUNDED']]);
+});
+
+test('round 3: one spelling of an email before it is hashed: case, a +tag, Gmail dots and googlemail.com are one inbox', () => {
+  const cases = [
+    [' Ana@GMAIL.com ', 'ana@gmail.com'],
+    ['ana+shop@gmail.com', 'ana@gmail.com'],
+    ['a.n.a@gmail.com', 'ana@gmail.com'],
+    ['A.n.a+1@googlemail.com', 'ana@gmail.com'],
+    ['a.na+x@example.com', 'a.na@example.com'],
+  ];
+  for (const [raw, one] of cases) assert.equal(canonicalEmail(raw), one, raw);
+  for (const bad of ['nope', '@gmail.com', 'ana@', 'a@b@c.com', '+tag@gmail.com', '', undefined, 42]) {
+    assert.throws(() => canonicalEmail(bad), /^Error: canonicalEmail: (an email address must be one mailbox|the address has no mailbox)/, String(bad));
+  }
+  assert.equal(hashId('a.n.a+shop@googlemail.com'), hashId('ana@gmail.com'));
+  // Finding: two alias orders from the creator's own inbox were paid, and ten "new" sign-ups from one inbox paid $50.
+  const L = build([
+    { ...CA, selfIds: [hashId('ana@gmail.com')] },
+    order('1', 'JOYA', 2, 100, { buyer: hashId('ana+shop@gmail.com') }),
+    order('2', 'JOYA', 2, 100, { buyer: hashId('a.n.a@gmail.com'), ts: at(2, 11) }),
+    ...Array.from({ length: 10 }, (_, k) => signup(`S${k + 1}`, 'JOYA', 3, { account: hashId(`friend+${k + 1}@gmail.com`), ts: at(3, k + 1) })),
+  ], nowAt(5));
+  const s = status(L, PILOT, nowAt(5));
+  assert.equal(s.fraud.selfUse, 2);
+  assert.equal(s.fraud.duplicates, 9);
+  assert.equal(creatorOf(s, 'A').signups, 1);
+  assert.equal(creatorOf(s, 'A').payableUsd, 5);
 });
 
 test('a hand-edited ledger that breaks a whole-ledger rule is INVALID_LEDGER: no figures, and no write onto it', () => {
@@ -646,14 +851,15 @@ test('CLI round 2: ids are stored in one spelling, "1001 " is refused as a repea
     assert.equal(twin.code, 1);
     assert.match(twin.err, /order id 1001 is already in the ledger/);
     const lines = ledgerText(dir).trim().split('\n').map((l) => JSON.parse(l));
-    assert.deepEqual(lines.map((e) => [e.type, e.creator ?? e.orderId, e.code]), [['creator', 'ANA', 'JOYA'], ['order', '1001', 'JOYA']]);
+    assert.deepEqual(lines[0], { ts: at(3, 12), type: 'rules', pilotSha256: pilotSha256(PILOT) });
+    assert.deepEqual(lines.slice(1).map((e) => [e.type, e.creator ?? e.orderId, e.code]), [['creator', 'ANA', 'JOYA'], ['order', '1001', 'JOYA']]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
 test('CLI round 2: import-orders refuses a row whose id is null or not an id, instead of paying order "undefined"', () => {
-  const dir = sandbox([CA]);
+  const dir = sandbox(build([CA], nowAt(3)));
   try {
     writeFileSync(join(dir, 'export.json'), JSON.stringify([
       { orderId: null, code: 'JOYA', value: 100, email: 'q@r.com', ts: at(2) },
@@ -710,6 +916,84 @@ test('CLI round 2: check refuses a dollar figure written as a string by name, wi
     } finally {
       rmSync(good, { recursive: true, force: true });
     }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('CLI round 3: the first write pins pilot.json as line 1, and once pilot.json is edited check, status and pay all refuse', () => {
+  const dir = sandbox([]);
+  try {
+    const now = ['--now', at(3, 12)];
+    // A refused first command writes nothing, not even the pin: the rules are still open.
+    const bad = cli(dir, 'add-creator', ...paths, '--id', 'ana', '--handle', '@ana', '--followers', '1', '--ts', at(1, 8), ...now);
+    assert.equal(bad.code, 1);
+    assert.equal(ledgerText(dir), '');
+    assert.match(cli(dir, 'check', ...paths).out, /not pinned yet/);
+    const ok = cli(dir, 'add-creator', ...paths, '--id', 'ana', '--code', 'JOYA', '--handle', '@ana', '--followers', '1', '--ts', at(1, 8), ...now);
+    assert.equal(ok.code, 0, ok.err);
+    assert.match(ok.out, new RegExp(`line 1 pins the rules: pilot\\.json sha256 ${pilotSha256(PILOT)}`));
+    assert.equal(cli(dir, 'order', ...paths, '--order-id', '1001', '--code', 'JOYA', '--value', '100', '--buyer-email', 'z@z.com', '--source', 'store', '--ts', at(2), ...now).code, 0);
+    const lines = ledgerText(dir).trim().split('\n').map((l) => JSON.parse(l));
+    assert.deepEqual(lines.map((e) => e.type), ['rules', 'creator', 'order']);
+    assert.deepEqual(lines[0], { ts: at(3, 12), type: 'rules', pilotSha256: pilotSha256(PILOT) });
+    const pinned = cli(dir, 'check', ...paths);
+    assert.equal(pinned.code, 0, pinned.err);
+    assert.match(pinned.out, /pinned by line 1 of ledger\.jsonl/);
+    // The edit the finding made: cap and commission raised after the data.
+    writeFileSync(join(dir, 'pilot.json'), JSON.stringify({ ...PILOT, capUsd: 2400, commissionRate: 0.3 }));
+    const before = ledgerText(dir);
+    const check = cli(dir, 'check', ...paths);
+    assert.equal(check.code, 1);
+    assert.match(check.err, /NOT_PRE_REGISTERED/);
+    assert.match(check.err, /no longer matches the rules pinned on line 1/);
+    const st = cli(dir, 'status', ...paths, ...now);
+    assert.equal(st.code, 2);
+    assert.match(st.out, /NOT_PRE_REGISTERED/);
+    const pay = cli(dir, 'pay', ...paths, '--creator', 'ana', '--amount', '15', '--ref', 'BANK-1', ...now);
+    assert.equal(pay.code, 1);
+    assert.match(pay.err, /NOT_PRE_REGISTERED/);
+    assert.equal(ledgerText(dir), before);
+    // The pinned values put back, in another key order and layout, read again.
+    writeFileSync(join(dir, 'pilot.json'), JSON.stringify(Object.fromEntries(Object.entries(PILOT).reverse()), null, 2));
+    assert.equal(cli(dir, 'check', ...paths).code, 0);
+    assert.equal(cli(dir, 'pay', ...paths, '--creator', 'ana', '--amount', '15', '--ref', 'BANK-1', ...now).code, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('CLI round 3: --self-ids takes hashes and stores them as given; every email flag is hashed in its one spelling', () => {
+  const dir = sandbox([]);
+  try {
+    const now = ['--now', at(3, 12)];
+    const H = hashId('ana@x.com');
+    const creator = (...extra) => cli(dir, 'add-creator', ...paths, '--id', 'ana', '--code', 'JOYA', '--handle', '@ana', '--followers', '10', '--ts', at(1, 8), ...now, ...extra);
+    const raw = creator('--self-ids', 'ana@x.com');
+    assert.equal(raw.code, 1);
+    assert.match(raw.err, /a raw email in --self-ids is refused/);
+    const notHash = creator('--self-ids', '0412345678');
+    assert.equal(notHash.code, 1);
+    assert.match(notHash.err, /--self-ids must be a sha256 hash/);
+    assert.equal(ledgerText(dir), '');
+    assert.equal(creator('--self-ids', H).code, 0);
+    assert.equal(cli(dir, 'add-creator', ...paths, '--id', 'bo', '--code', 'JOYB', '--handle', '@bo', '--followers', '10', '--self-emails', 'Bo.B+promo@googlemail.com', '--ts', at(1, 8), ...now).code, 0);
+    const order = (id, code, ...who) => cli(dir, 'order', ...paths, '--order-id', id, '--code', code, '--value', '100', '--source', 'store', '--ts', at(2), ...now, ...who);
+    assert.equal(order('1', 'JOYA', '--buyer', H).code, 0);
+    assert.equal(order('2', 'JOYA', '--buyer-email', ' ANA@x.com ').code, 0);
+    assert.equal(order('3', 'JOYB', '--buyer-email', 'b.o.b+x@gmail.com').code, 0);
+    const notEmail = order('4', 'JOYA', '--buyer-email', 'not-an-email');
+    assert.equal(notEmail.code, 1);
+    assert.match(notEmail.err, /canonicalEmail: an email address must be one mailbox/);
+    assert.doesNotMatch(notEmail.err, /not-an-email/);
+    writeFileSync(join(dir, 'export.json'), JSON.stringify([{ id: '5', code: 'JOYB', value: 100, email: 'BOB+shop@gmail.com', ts: at(2) }]));
+    assert.equal(cli(dir, 'import-orders', ...paths, '--from', 'export.json', ...now).code, 0);
+    const lines = ledgerText(dir).trim().split('\n').map((l) => JSON.parse(l));
+    assert.deepEqual(lines.filter((e) => e.type === 'creator').map((e) => e.selfIds), [[H], [hashId('bob@gmail.com')]]);
+    const st = cli(dir, 'status', ...paths, ...now);
+    assert.match(st.out, /Fraud: 0 duplicates, 4 self-use/);
+    // No address reaches the ledger (a handle such as @ana is not an address).
+    assert.doesNotMatch(ledgerText(dir), /\w@\w/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

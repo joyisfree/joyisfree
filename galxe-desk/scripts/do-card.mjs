@@ -4,11 +4,16 @@
 // tied up at once never exceeds it. Each entry gives the exact URL, the tasks in order with his clicks and signatures
 // marked, and the end and claim-by dates. Claude writes the ledger from his one-line reply.
 //
+// The card is built only on an open lane. A recorded flag, a kill-rule stop or the lane's standing decision
+// (galxe-desk/decision.json, refused 31 Oct 2026) each blank it to a stop notice, and a missing decision file is a stop
+// too. The claim clock still shows, because a prize already won is not new questing.
+//
 //   node galxe-desk/scripts/do-card.mjs --shortlist galxe-desk/shortlist.json --account galxe-desk/account.json --out galxe-desk/do-card.md
+//   node galxe-desk/scripts/do-card.mjs --decision PATH   # judge another decision file (the default sits beside scripts/)
 
 import { readFileSync, writeFileSync, existsSync, realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { parseLedger, status } from './ledger.mjs';
+import { parseLedger, status, withDecision, decisionStop, readDecision, DECISION_FILE } from './ledger.mjs';
 
 const DAY = 86_400_000;
 const perMinute = (x) => (Number(x.ev) || 0) / Math.max(1, Number(x.minutes) || 1);
@@ -58,18 +63,26 @@ function claimClock(due, overdue) {
   return lines;
 }
 
-export function doCard(shortlist, account, when = new Date(), { kill = 'CONTINUE', due = [], overdue = [] } = {}) {
+export function doCard(shortlist, account, when = new Date(), { kill = 'CONTINUE', due = [], overdue = [], decision = null } = {}) {
   const header = `# Do card, week of ${when.toISOString().slice(0, 10)}`;
   // A recorded flag, or any other kill-rule stop, ends the questing: no Do card is produced until the panel
-  // clears it. The claim clock still shows, because a prize already won is not new questing.
+  // clears it. A standing decision ends it until Leif reopens the lane, and is not a panel's to clear.
+  // The claim clock still shows, because a prize already won is not new questing.
   if (kill && kill !== 'CONTINUE') {
-    return [
-      header, '',
-      `The desk is stopped by its own kill rule: ${kill}`,
-      'There is no Do card this week. The critic panel (the risk officer first) reviews before any questing resumes;',
-      'a flag is cleared only after that review. Run `npm run desk:status` to see it.', '',
-      ...claimClock(due, overdue),
-    ].join('\n');
+    const closed = String(kill).startsWith('STOP_DECISION');
+    const why = closed
+      ? [
+        `The questing lane is closed by a standing decision: ${kill}`,
+        'There is no Do card this week, and none until Leif reopens the lane in his own words. Nothing is owed by Leif:',
+        'no pass and no minutes.',
+      ]
+      : [
+        `The desk is stopped by its own kill rule: ${kill}`,
+        'There is no Do card this week. The critic panel (the risk officer first) reviews before any questing resumes;',
+        'a flag is cleared only after that review.',
+      ];
+    if (decision && decision !== kill) why.push(`The lane is also closed by a standing decision: ${decision}`);
+    return [header, '', ...why, 'Run `npm run desk:status` to see it.', '', ...claimClock(due, overdue)].join('\n');
   }
   const { picked, skipped, used, cap, capital, walletCap } = plan(shortlist, account, when.getTime());
   const lines = [header, '', ...claimClock(due, overdue)];
@@ -110,15 +123,17 @@ function arg(name, fallback) {
 
 const isMain = (() => { try { return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href; } catch { return false; } })();
 if (isMain) {
-  const shortlist = JSON.parse(readFileSync(arg('shortlist', 'galxe-desk/shortlist.json'), 'utf8'));
   const account = JSON.parse(readFileSync(arg('account', 'galxe-desk/account.json'), 'utf8'));
   const out = arg('out', 'galxe-desk/do-card.md');
-  // The ledger's kill state gates the card: a flag or a stop rule means no quests this week.
+  // The ledger's kill state and the lane's standing decision gate the card: a flag, a stop rule or a refusal means no
+  // quests this week.
   const ledgerPath = arg('ledger', 'galxe-desk/ledger/ledger.jsonl');
   const entries = existsSync(ledgerPath) ? parseLedger(readFileSync(ledgerPath, 'utf8')) : [];
-  const s = status(entries, account.killRules);
-  const { kill, due, overdue } = s;
-  writeFileSync(out, doCard(shortlist, account, new Date(), { kill, due, overdue }));
+  const s = withDecision(status(entries, account.killRules), decisionStop(readDecision(arg('decision', DECISION_FILE))));
+  const { kill, due, overdue, decision } = s;
+  // A stopped desk needs no shortlist, and on a refused lane there is none, because nothing was scouted.
+  const shortlist = kill === 'CONTINUE' ? JSON.parse(readFileSync(arg('shortlist', 'galxe-desk/shortlist.json'), 'utf8')) : { passed: [] };
+  writeFileSync(out, doCard(shortlist, account, new Date(), { kill, due, overdue, decision }));
   const clock = `${due.length} claim(s) due, ${overdue.length} OVERDUE`;
   if (kill !== 'CONTINUE') {
     console.log(`desk stopped (${kill}): no Do card; ${clock} -> ${out}`);

@@ -1,0 +1,101 @@
+{
+  "_comment": [
+    "The numbers this track rests on, each with where it came from and when. Counts only: no name, address or message",
+    "text from Leif's mail or Drive is ever written here. `npm run prove` fails while any fact lacks a source or a date,",
+    "and turns this into a NOTE once asOf is over 14 days old. A SUMMARY source means a search summary, page not opened."
+  ],
+  "asOf": "2026-11-08",
+  "facts": [
+    {
+      "key": "label-store-orders-90d",
+      "value": 0,
+      "unit": "storefront order notices in 90 days",
+      "source": "Leif's Gmail, read-only search for order notices from Shopify, Square, WooCommerce, BigCommerce, Wix, Etsy, Big Cartel and Squarespace over the 90 days to 8 Nov 2026. No label storefront was found, so every store play is parked.",
+      "date": "2026-11-08"
+    },
+    {
+      "key": "payment-rail-live",
+      "value": "none",
+      "unit": "",
+      "source": "Leif's Gmail, read-only: a Stripe sign-up on 1 Nov 2026 with setup not finished; a PayPal account created 24 Oct 2026 with its email not yet confirmed. Neither can take a payment today.",
+      "date": "2026-11-08"
+    },
+    {
+      "key": "ebay-resale-sales",
+      "value": 2,
+      "unit": "eBay sales (vintage resale, not the label)",
+      "source": "Leif's Gmail, read-only count of eBay sale notices",
+      "date": "2026-11-08"
+    },
+    {
+      "key": "agency-brand-sheets",
+      "value": 1,
+      "unit": "sub-agency sheet shared by a brand (July 2026)",
+      "source": "Leif's Google Drive, read-only",
+      "date": "2026-11-08"
+    },
+    {
+      "key": "agency-warm-brands",
+      "value": 7,
+      "unit": "warm brand drafts",
+      "source": "Leif's Google Drive doc 'Start here — Agency plan after the team meeting (8 Nov 2026)', written by the agency session, which owns this work",
+      "date": "2026-11-08"
+    },
+    {
+      "key": "agency-creator-roster",
+      "value": 8,
+      "unit": "creators on the agency roster",
+      "source": "the same Drive doc as agency-warm-brands",
+      "date": "2026-11-08"
+    },
+    {
+      "key": "clothing-campaign-order-rate",
+      "value": 0.0012,
+      "unit": "placed orders per campaign recipient (0.12%; range 0.07% to 0.13%)",
+      "source": "SUMMARY, not verified: Klaviyo 2026 benchmark, clothing campaigns; flows run 15 to 20 times higher and are never used here. Used by agency/scripts/ab-test.mjs.",
+      "date": "2026-11-05"
+    },
+    {
+      "key": "campaign-click-rate",
+      "value": 0.0074,
+      "unit": "clicks per campaign recipient (0.74%)",
+      "source": "SUMMARY, not verified: Omnisend 2025 benchmark. Used by agency/scripts/ab-test.mjs.",
+      "date": "2026-11-05"
+    },
+    {
+      "key": "drop-test-list-needed",
+      "value": 41234,
+      "unit": "people on the list to test whether a drop email doubles orders",
+      "source": "agency/scripts/ab-test.mjs preflight at the 0.12% rate: 19,586 per version, planned at 20,617 so 1 in 20 can bounce",
+      "date": "2026-11-08"
+    },
+    {
+      "key": "express-post-christmas-lodge-by",
+      "value": "2026-12-23 east coast, Tas and same-state; 2026-12-22 to or from WA and to NT; 2.30pm over the counter",
+      "unit": "",
+      "source": "SUMMARY, not verified: auspost.com.au/christmas (the summary said its table was partly garbled), with SBS reporting the same. Parcel Post dates not found. Kept for when a store exists.",
+      "date": "2026-11-08"
+    },
+    {
+      "key": "express-post-small-satchel",
+      "value": 15.55,
+      "unit": "AUD, prepaid satchel 355 x 225 mm, packaging and postage, from 1 Jul 2026",
+      "source": "SUMMARY, not verified: auspost.com.au pricing update 2026 (Express Post up 4.95% on average from 1 Jul 2026)",
+      "date": "2026-11-08"
+    },
+    {
+      "key": "gift-card-minimum-expiry",
+      "value": 3,
+      "unit": "years from supply, for gift cards supplied from 1 Nov 2019",
+      "source": "SUMMARY, not verified: Treasury explanatory materials (2019), with ACCC and state consumer pages; the full exemption list was not found from a primary source",
+      "date": "2026-11-08"
+    },
+    {
+      "key": "spam-act-unsubscribe-limit",
+      "value": 5,
+      "unit": "working days to honour an unsubscribe",
+      "source": "ACMA, as cited in agency/RUN-drop-vs-email.md (a blog saying 10 is wrong)",
+      "date": "2026-11-05"
+    }
+  ]
+}

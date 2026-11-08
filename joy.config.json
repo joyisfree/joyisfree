@@ -1,0 +1,13 @@
+{
+  "_comment": [
+    "Settings stored once for the whole repo. The worth-it gate (.claude/skills/joy-revise/scripts/worth-it.mjs) reads",
+    "hourlyBar when a decision gives no bar, and prints that it is a default. When Leif names his own price for an hour,",
+    "amount and status change together in one commit, and status records that it is his and the date he said it."
+  ],
+  "hourlyBar": {
+    "amount": 25,
+    "currency": "AUD",
+    "status": "default, not Leif's choice",
+    "why": "about the Australian adult minimum wage; Leif has never set his own"
+  }
+}
