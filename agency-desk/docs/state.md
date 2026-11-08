@@ -1,0 +1,33 @@
+# State — 8 Nov 2026 (the Agency Desk)
+- **Goal:** every brand contact Leif adds on LinkedIn gets a true, sourced note and DM that earns a reply; email only after a yes (Spam Act).
+- **Done:**
+  - 5 specialists and the `agency-personalise` routine.
+  - 7 scripts (audit, worklist, roster, lint, pack, privacy, lib) with tests in `npm test`, each guard shown to fail.
+  - First full run, 78 helpers and 171 web searches: 332 rows, all lint-clean. Plus 7 warm-reply drafts, a US creator scout, creator one-pagers and a profile rewrite.
+  - Real data lives only in Leif's Drive and Gmail drafts.
+- **Honest result:**
+  - Confidence: 0 High, 17 Medium, 283 Low.
+  - About 288 titles are unconfirmed, because public search cannot see LinkedIn profiles.
+  - 14 rows have dated hooks; 24 rows fell back to an honest role-check DM.
+- **Next (biggest lever):**
+  - Leif exports LinkedIn Connections. `agency:worklist --connections` then confirms titles, and wave 1 re-runs in a fresh session, which has a fresh search budget.
+  - Then a mower creator and US creators for the brands that keep asking, and reply learning once the Reply column fills.
+- **Blocked:**
+  - The website audit: both domains are refused by the environment's network policy.
+  - LIVE email waits for a postal address.
+- **For a Mac session** (the engine's code is on the Mac):
+  - the address picker chooses service and support inboxes;
+  - SEND_HOURS is stored as a date;
+  - one contact list belongs to a different company that shares the name;
+  - the Creators tab still claims 300k for the creator whose typical video is about 5k;
+  - the "Ready" drafts carry the old lines;
+  - one time zone is used for every brand.
+- **Traps:**
+  - New agent files register only at the next session start, so this run used `galxe-reader` for every stage.
+  - Web searches are capped at about 200 a session.
+  - Restarts drop in-flight calls: check list_drafts before re-creating anything.
+  - The Drive connector cannot upload a large file, so big workbooks go to Leif as a file.
+- **Proof:**
+  - `npm test`;
+  - `npm run agency:privacy -- --names <people> --terms <brands and creators>`: 0 hits;
+  - `npm run agency:lint -- --rows <rows.json> --roster <roster.json> --today 2026-11-08`: 0 errors.

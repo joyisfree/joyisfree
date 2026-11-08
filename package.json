@@ -2,13 +2,13 @@
   "name": "joyisfree",
   "version": "0.1.0",
   "private": true,
-  "description": "Joyisfree Studio: the Galxe Desk and other non-studio tracks. No dependencies on purpose.",
+  "description": "Joyisfree Studio: the Galxe Desk, the Agency Desk and other non-studio tracks. No dependencies on purpose.",
   "type": "module",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test galxe-desk/scripts/*.test.mjs .claude/skills/joy-revise/scripts/*.test.mjs",
+    "test": "node --test galxe-desk/scripts/*.test.mjs agency-desk/scripts/*.test.mjs .claude/skills/joy-revise/scripts/*.test.mjs",
     "worth-it": "node .claude/skills/joy-revise/scripts/worth-it.mjs",
     "desk:rank": "node galxe-desk/scripts/rank.mjs",
     "desk:ledger": "node galxe-desk/scripts/ledger.mjs",
@@ -19,6 +19,11 @@
     "desk:verify": "node galxe-desk/scripts/verify-link.mjs",
     "desk:due": "node galxe-desk/scripts/ledger.mjs due",
     "desk:gigapot": "node galxe-desk/scripts/gigapot.mjs",
-    "desk:mutate": "node galxe-desk/scripts/mutate.mjs"
+    "desk:mutate": "node galxe-desk/scripts/mutate.mjs",
+    "agency:audit": "node agency-desk/scripts/audit.mjs",
+    "agency:worklist": "node agency-desk/scripts/worklist.mjs",
+    "agency:lint": "node agency-desk/scripts/lint-lines.mjs",
+    "agency:pack": "node agency-desk/scripts/pack.mjs",
+    "agency:privacy": "node agency-desk/scripts/privacy-gate.mjs"
   }
 }

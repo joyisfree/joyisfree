@@ -8,4 +8,10 @@ and its own ledger, and none of them touches the studio.
   worthless or unclaimable quests, and a by-hand weekly run with a ledger and kill rules. Started 28 Oct 2026 from
   Leif's braindump, after three research scouts and three independent crypto reviewers.
 
+- [`agency-desk/`](./agency-desk/README.md): the Agency Desk. A five-seat specialist team and the `agency-personalise`
+  routine that turns every brand contact Leif adds on LinkedIn into a true, sourced connection note and DM (with the
+  consent ask the Spam Act needs before any email), plus the scripts that keep it honest: the audit of the agency
+  sheets, the roster truth (median views, so one viral video cannot inflate a pitch), the copy gate, the pack and a
+  privacy gate for this public repo. Started 5 Nov 2026 from Leif's braindump.
+
 No dependencies: `npm test` runs on Node 22 alone.
