@@ -6,8 +6,9 @@ Updated Monday 9 November 2026. If any other page in this repo seems to ask you 
 
 ## Your one live decision page is the agency's
 
-Your agency is the real business, and it is live: 7 warm brands with drafts ready and 8 creators on the roster. Another Claude session
-runs it, and its decisions for you are in one Google Doc:
+Your agency is the real business, and it is live: 7 reply drafts to warm brands (3 ready to send, 4 waiting on a
+creator's yes) and 8 creators on the roster. Another Claude session runs it, and its decisions for you are in one
+Google Doc:
 [Start here — Agency plan after the team meeting (8 Nov 2026)](https://docs.google.com/document/d/1eWDpBE8Pw06KC3n8sUsIvKGAi43We3LSOe6zEUl7Hmg/edit).
 This repo does not ask you anything that page asks, so you only ever answer once.
 
@@ -19,11 +20,12 @@ payment today (the Stripe sign-up from 1 November is unfinished, and the PayPal 
 its email confirmation). Your 2 eBay sales were vintage resale, not the label.
 
 So the store sitting planned for Sunday 15 November is **withdrawn**, and nothing is asked of you for it. The Christmas
-emails, the sign-up box, the care email and the free-postage idea are kept as drafts, ready, but they need a shop and a
-way to be paid before any of them can earn a dollar.
+emails, the sign-up box and the care email are kept as drafts, and the free-postage idea as a plan, but they need a
+shop and a way to be paid before any of them can earn a dollar.
 
 They wake on one thing only: you say you want the label shop open. Then Claude puts at most three yes-or-no questions
-here, each with its minutes, and does the rest.
+here, lists the few steps only you can take, each with its minutes (finishing the Stripe sign-up, confirming PayPal,
+your business name and ABN, and signing in to the shop), and does everything else.
 
 ## Closed
 

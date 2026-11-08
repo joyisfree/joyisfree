@@ -37,9 +37,16 @@
     {
       "key": "agency-warm-brands",
       "value": 7,
-      "unit": "warm brand drafts",
+      "unit": "reply drafts to warm brands, none sent",
       "source": "Leif's Google Drive doc 'Start here — Agency plan after the team meeting (8 Nov 2026)', written by the agency session, which owns this work",
       "date": "2026-11-08"
+    },
+    {
+      "key": "agency-warm-drafts-ready",
+      "value": 3,
+      "unit": "of those drafts ready to send; the other 4 wait on a creator's confirmation",
+      "source": "the same Drive doc as agency-warm-brands, \"What is ready for you right now\", re-read 9 Nov 2026",
+      "date": "2026-11-09"
     },
     {
       "key": "agency-creator-roster",
