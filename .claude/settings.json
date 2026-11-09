@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|fork",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ \"${CLAUDE_CODE_REMOTE:-}\" = \"true\" ] && [ -f \"$CLAUDE_PROJECT_DIR/claude-setup/skills/joy-boot/scripts/boot.mjs\" ] && node \"$CLAUDE_PROJECT_DIR/claude-setup/skills/joy-boot/scripts/boot.mjs\" 2>/dev/null || true",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

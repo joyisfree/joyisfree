@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|fork",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -f ~/.claude/hooks/joy-boot.mjs ] && node ~/.claude/hooks/joy-boot.mjs 2>/dev/null || true",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -37,7 +37,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const TEST_DIRS = ['galxe-desk/scripts', 'agency/scripts', '.claude/skills/joy-revise/scripts', 'scripts'];
+const TEST_DIRS = ['galxe-desk/scripts', 'agency/scripts', '.claude/skills/joy-revise/scripts', 'scripts', 'claude-setup/skills/joy-boot/scripts', 'claude-setup/skills/maxx/scripts'];
 const DAY = 86_400_000;
 const MAX_BUFFER = 256 * 1024 * 1024;
 

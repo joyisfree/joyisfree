@@ -18,3 +18,6 @@ tmp/
 # The agency pilot's live rules and ledger hold customer-derived data (hashed, but pseudonymous, not anonymous).
 # Only the code and the templates are committed.
 agency/pilot/
+
+# This repository is public: a session handoff never rides into it (transfer writes it to Drive instead).
+HANDOFF.md
