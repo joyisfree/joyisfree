@@ -21,7 +21,8 @@
 //   6. decisions   agency/calendar.json exists, reads as a calendar, and no open item's date is before today in Sydney
 //   7. state       docs/state.md exists in 15 lines or fewer, and CLAUDE.md's first instruction names it
 //   8. leif-pages  Leif's pages hold no terminal step: no "npm run", npm, npx or git command, no node command, no
-//                  shell command in backticks, <code> or a code block
+//                  shell command in backticks, <code> or a code block, and in prose no terminal tool with an argument
+//                  shaped like a command and no script run by its path
 //   9. facts       agency/facts.json: every fact has a source and a date. NOTE when its asOf is over 14 days old.
 // Reported, never failed:
 //  10. rulebook    `desk:check` is honestly incomplete until the live crawl runs; it is shown, not hidden
@@ -95,7 +96,9 @@ export function sydneyDay(now) {
 // 8 Nov 2026, second audit: a camelCase or short label before a 64-hex key, xprv and WIF keys, a URL holding a
 // password, Bearer, npm, Telegram, whsec_ and GOCSPX- tokens and "API key:" with a space all passed, and are on it now.
 // A URL password and a Bearer token count only with a letter and a digit in them, as labelled-secret does, so
-// placeholders such as `user:password@` and `Bearer YOUR_TOKEN` stay out.
+// placeholders such as `user:password@` and `Bearer YOUR_TOKEN` stay out. 9 Nov 2026: an X session cookie in a
+// Netscape cookies.txt (name, a tab, the value) passed, and is on x-session-cookie now; one in a browser extension's
+// JSON export is read across lines (COOKIE_NAME, below).
 export const SECRET_SHAPES = [
   { name: 'private-key-pem', re: /-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----/ },
   { name: 'jwt', re: /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}/ },
@@ -111,7 +114,7 @@ export const SECRET_SHAPES = [
   { name: 'openai', re: /\bsk-(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{20,}/ },
   { name: 'supabase-secret', re: /\bsb_secret_[A-Za-z0-9_-]{20,}/ },
   { name: 'cloudinary-url', re: /\bcloudinary:\/\/\d{6,}:[A-Za-z0-9_-]{16,}@/ },
-  { name: 'x-session-cookie', re: /\b(?:auth_token|ct0)["'`]?\s*[:=]\s*["'`]?[A-Fa-f0-9]{32,}/ },
+  { name: 'x-session-cookie', re: /\b(?:auth_token|ct0)(?:["'`]?\s*[:=]\s*["'`]?|\t)[A-Fa-f0-9]{32,}/ },
   { name: 'solana-base58-key', re: /(?<![A-Za-z0-9])[1-9A-HJ-NP-Za-km-z]{86,88}(?![A-Za-z0-9])/ },
   { name: 'keypair-byte-array', re: /\[\s*(?:\d{1,3}\s*,\s*){63}\d{1,3}\s*\]/ },
   { name: 'labelled-hex-key', re: /(?:privatekey|privkey|secretkey|(?<![A-Za-z0-9])(?:private|secret|key|(?:priv|pk)(?![a-z]))|_pk(?![a-z]))[\w ]{0,20}?["'`]?\s*[:=]?\s*["'`]?(?<![A-Fa-f0-9])[A-Fa-f0-9]{64}(?![A-Za-z0-9])/i },
@@ -420,6 +423,8 @@ export const BIP39_WORDS = BIP39_LINES.join(' ').split(' ');
 export const BIP39_SHA256 = '2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda';
 const BIP39 = new Set(BIP39_WORDS);
 export const SEED_WORDS = 12;
+/** How many repeats twelve words in a row of a seed may hold (seedLike). */
+export const SEED_REPEATS = 2;
 
 /** True only when the list is the published one, word for word and in order. */
 export function bip39Intact(words) {
@@ -427,49 +432,100 @@ export function bip39Intact(words) {
   return createHash('sha256').update(words.join('\n') + '\n').digest('hex') === BIP39_SHA256;
 }
 
-/** The longest run of BIP39 words on one line. Anything but a letter separates words, so numbering, commas and quotes hide nothing. */
-export function seedRun(text) {
-  let best = 0;
-  let run = 0;
-  for (const t of String(text).split(/[^A-Za-z]+/)) {
-    if (!t) continue;
-    run = BIP39.has(t.toLowerCase()) ? run + 1 : 0;
-    best = Math.max(best, run);
-  }
-  return best;
-}
-
-// Numbering and bullets around seed words neither count nor break a row: 1  1.  1)  1:  #1  (1)  and, once quotes are
-// dropped, a JSON key "1":. Anything else that is not a BIP39 word breaks it, `//` and `##` included.
-const SEED_NUMBER = /^(?:#?\d{1,2}[.):]?|\(\d{1,2}\)[.:]?)$/;
-const SEED_BULLET = /^[-*•]+$/;
-
-/** One token of a row: 1 for a BIP39 word, 0 for numbering, a bullet or nothing, -1 for anything else. */
-function seedMark(raw) {
-  const t = raw.split(/["'`]/).join('');
-  if (!t || SEED_NUMBER.test(t) || SEED_BULLET.test(t)) return 0;
-  const w = t.replace(/^(?:#?\d{1,2}[.):]|\(\d{1,2}\))/, '').replace(/^[([{]+|[,;.:)\]}]+$/g, '');
-  return BIP39.has(w.toLowerCase()) ? 1 : -1;
+/**
+ * True when some twelve words in a row of `words` hold at most SEED_REPEATS repeats, as a seed does: its words are
+ * drawn from 2048, so a repeat is rare, while a stock list repeats its few colours and sizes ("black, small, black,
+ * large"). Until 9 Nov 2026 any twelve BIP39 words were a seed, and a stock CSV of colours and sizes failed as one.
+ * Measured on 9 Nov 2026 over a million random seeds of each length: 4 in a million twelve-word seeds have more than
+ * two repeats in their twelve and are missed, and no 15, 18 or 24-word seed is; a stock list sorted by colour or by
+ * size, over 30 BIP39 colours and 10 sizes, never holds more than 8 different words in any twelve in a row. A list in
+ * no order, of six colours or more and four sizes or more, sometimes holds 10 and fails closed. Not caught, on purpose:
+ * the published BIP39 test vectors made from patterned entropy (from all-zero entropy, "abandon" eleven times and
+ * then "about"; from 0x7f bytes, eight words said one and a half times), which repeat by design and are public, so
+ * they guard nothing.
+ */
+export function seedLike(words) {
+  for (let end = SEED_WORDS; end <= words.length; end++) if (new Set(words.slice(end - SEED_WORDS, end)).size >= SEED_WORDS - SEED_REPEATS) return true;
+  return false;
 }
 
 /**
- * One line read as a row of a seed: how many BIP39 words lead it, how many end it, and how many it holds when it is
- * nothing but BIP39 words, numbering, bullets, table bars and JSON punctuation (else 0). Spaces and `|` separate
- * tokens, so a markdown table's cells read as words.
+ * True when one line holds a seed: a run of BIP39 words that seedLike reads as one. Anything but a letter separates
+ * words, so numbering, commas and quotes hide nothing.
+ */
+export function seedRun(text) {
+  let run = [];
+  for (const t of String(text).split(/[^A-Za-z]+/)) {
+    if (!t) continue;
+    run = BIP39.has(t.toLowerCase()) ? [...run.slice(1 - SEED_WORDS), t.toLowerCase()] : [];
+    if (seedLike(run)) return true;
+  }
+  return false;
+}
+
+// Numbering and bullets around seed words neither count nor break a row: 1  1.  1)  1:  #1  (1)  1st  w1  word1  word_1
+// in any case and, once quotes are dropped, a JSON key "1": or "w1":. Anything else that is not a BIP39 word breaks it,
+// `//` and `##` included. Until 9 Nov 2026 the ordinals and the w1 and word1 labels broke the row, so they hid a seed.
+// A number is numbering only when a word follows it ("1,abandon", "| 1 | abandon |"); after its words it is a count, as
+// in a stock CSV's "black,small,2", and breaks the row. The words just before a number are its label, not seed words:
+// "Word 1: rifle" and "Seed word 1: rifle" are the word rifle, so a label said on every line is not read as repeats.
+const SEED_NUMBER = /^(?:#?\d{1,2}(?:st|nd|rd|th)?[.):]?|\(\d{1,2}\)[.:]?|(?:w|word)[_-]?\d{1,2}[.):]?)$/i;
+const SEED_BULLET = /^[-*•]+$/;
+const NUMBERING = Symbol('numbering');
+
+/** One token of a row: its BIP39 word in lower case; NUMBERING; '' for a bullet or nothing; null for anything else. */
+function seedMark(raw) {
+  const t = raw.split(/["'`]/).join('');
+  if (!t || SEED_BULLET.test(t)) return '';
+  if (SEED_NUMBER.test(t)) return NUMBERING;
+  const w = t.replace(/^(?:#?\d{1,2}[.):]|\(\d{1,2}\))/, '').replace(/^[([{]+|[,;.:)\]}]+$/g, '').toLowerCase();
+  return BIP39.has(w) ? w : null;
+}
+
+/**
+ * One line read as a row of a seed: the BIP39 words that lead it, the ones that end it, and all of them when it is
+ * nothing but BIP39 words, numbering, bullets, table bars and JSON punctuation (else none). Spaces, `|`, commas and
+ * semicolons separate tokens, so a markdown table's cells and a CSV's columns (`1,about`, `1;about`) read as words;
+ * until 9 Nov 2026 a CSV row was one token, not a word, and a seed saved as a spreadsheet passed.
  */
 export function seedEnds(text) {
-  const marks = String(text).split(/[\s|]+/).map(seedMark).filter(Boolean);
-  const first = marks.indexOf(-1);
-  if (first < 0) return { lead: marks.length, trail: marks.length, words: marks.length };
-  return { lead: first, trail: marks.length - 1 - marks.lastIndexOf(-1), words: 0 };
+  const tokens = String(text).split(/[\s|,;]+/);
+  const marks = tokens.map(seedMark);
+  const kept = marks.map((m, i) => [m, tokens[i]]).filter(([m]) => m !== '');
+  const row = [];
+  const nums = []; // the numbers that number a word, in order: a seed's run on, 1, 2, 3 (secretHits joins rows by them)
+  let label = 0; // where the words that may label the next number start: after the last numbered word
+  kept.forEach(([m, raw], i) => {
+    if (m !== NUMBERING) row.push(m);
+    else if (typeof kept[i + 1]?.[0] !== 'string') row.push(null); // a count after its words, not numbering
+    else {
+      if (!row.slice(label).includes(null)) row.length = label; // "Word 1: rifle": the words before a number label it
+      label = row.length + 1;
+      nums.push(Number(/\d{1,2}/.exec(raw)[0]));
+    }
+  });
+  // Numbers that do not rise along one line ("5. ocean 3. ladder") are not a seed's numbering.
+  if (nums.some((n, i) => i > 0 && n <= nums[i - 1])) return { lead: [], trail: [], words: [], nums };
+  const first = row.indexOf(null);
+  if (first < 0) return { lead: row, trail: row, words: row, nums };
+  return { lead: row.slice(0, first), trail: row.slice(row.lastIndexOf(null) + 1), words: [], nums };
 }
+
+/**
+ * Whether a numbered row continues the run before it. A seed's numbers run on: the row's first number follows the
+ * last row's last number (1. to 2.), or its first (two columns, "1. abandon  13. zoo" then "2. ability  14. ..."). A
+ * row without numbers, or after a run without them, joins as before. A count first in each row ("4,black,dress",
+ * "12;dress") never runs on, so a wholesale order or a restock list is not a seed (R2 verifier, round 2, 9 Nov 2026).
+ */
+const runsOn = (run, nums) => !nums.length || run.last == null || nums[0] === run.last + 1 || nums[0] === run.first + 1;
+const numbered = (nums, run) => (nums.length ? { first: nums[0], last: nums[nums.length - 1] } : { first: run?.first ?? null, last: run?.last ?? null });
 
 /** The secret shapes one line holds, by name. Pure, so the scanner itself is testable. */
 export function secretKinds(text) {
   const s = String(text);
   const kinds = SECRET_SHAPES.filter(({ re }) => re.test(s)).map(({ name }) => name);
   if (HEX64.test(s.replace(ALLOWED_HEX_URL, ''))) kinds.push('0x-hex-key');
-  if (seedRun(s) >= SEED_WORDS) kinds.push('bip39-seed');
+  if (seedRun(s)) kinds.push('bip39-seed');
   return kinds;
 }
 
@@ -478,32 +534,46 @@ const place = (where) => {
   return m ? { file: m[1], n: Number(m[2]) } : { file: String(where), n: NaN };
 };
 
+// An X session cookie in a browser extension's JSON export (Cookie-Editor, EditThisCookie) is one object per cookie,
+// its "name" and its "value" about six lines apart, so no one line holds the shape and until 9 Nov 2026 it passed. A
+// hex "value" on the line of a "name" of auth_token or ct0, or within COOKIE_LINES lines below it in one file, is
+// that cookie.
+const COOKIE_NAME = /"name"\s*:\s*"(?:auth_token|ct0)"/;
+const COOKIE_VALUE = /"value"\s*:\s*"[A-Fa-f0-9]{32,}"/;
+export const COOKIE_LINES = 12;
+
 /**
  * Every line that holds a secret shape, as { where, kinds }; never the text itself, so a report cannot leak it.
  * Lines arrive in order, each `where` ending in ":<line>". A run of seed words is added up down the lines of one file:
- * the words that end a line, every line that is nothing but seed words, and the words that lead the line after. So a
- * seed written one word or four to a line, in a table, as JSON, or wrapped mid-sentence onto the next line is caught,
- * and the run may cross one blank line (two blocks of six), never two.
+ * the words that end a line, every line that is nothing but seed words, and the words that lead the line after, and
+ * it is a seed when seedLike reads it as one. So a seed written one word or four to a line, in a table, as JSON, or
+ * wrapped mid-sentence onto the next line is caught, and the run may cross one blank line (two blocks of six), never
+ * two. An exported cookie's name and value are read together the same way (COOKIE_NAME).
  */
 export function secretHits(lines) {
   const hits = [];
   let run = null;
+  let named = null; // the last line that names an X session cookie, as { file, n }
   for (const { where, text } of lines) {
     const kinds = secretKinds(text);
     const at = place(where);
+    if (COOKIE_NAME.test(text)) named = at;
+    if (named && named.file === at.file && at.n - named.n <= COOKIE_LINES && COOKIE_VALUE.test(text)) kinds.push('x-session-cookie');
     const next = run !== null && run.file === at.file && at.n === run.n + 1;
     if (!String(text).trim()) {
       run = next && !run.blank ? { ...run, n: at.n, blank: true } : null;
       continue;
     }
-    const { lead, trail, words } = seedEnds(text);
+    const { lead, trail, words, nums } = seedEnds(text);
     const own = kinds.includes('bip39-seed');
-    if (next && !run.told && run.words + lead >= SEED_WORDS) {
+    const joins = next && runsOn(run, nums);
+    if (joins && !run.told && seedLike([...run.words, ...lead])) {
       if (!own) hits.push({ where: run.where, kinds: ['bip39-seed'] });
       run.told = true;
     }
-    if (next && words) run = { ...run, n: at.n, words: run.words + words, blank: false };
-    else run = trail ? { where, file: at.file, n: at.n, words: trail, told: own, blank: false } : null;
+    // A run keeps its last eleven words: as many as twelve in a row ending on the next line can take.
+    if (joins && words.length) run = { ...run, n: at.n, words: [...run.words, ...words].slice(1 - SEED_WORDS), blank: false, ...numbered(nums, run) };
+    else run = trail.length ? { where, file: at.file, n: at.n, words: trail, told: own, blank: false, ...numbered(nums, null) } : null;
     if (kinds.length) hits.push({ where, kinds });
   }
   return hits;
@@ -823,6 +893,35 @@ const PROSE_COMMAND = /\b(?:npm|pnpm)\s+(?:install|i|ci|test|t|start|exec|update
 const NODE_COMMAND = /\bnode\s+(?:--?[a-z]|[\w./-]*\.[cm]?js\b|[\w.-]*\/)/i;
 const SCRIPT = '(?:\\.{1,2}[\\\\/]|~[\\\\/])?[\\w.\\\\/-]*\\w\\.(?:sh|ps1|bat|cmd|command)\\b';
 const SHELL_START = new RegExp(`^\\s*(?:\\$\\s*)?(?:(?:${SHELL})\\s+\\S|${SCRIPT})`);
+// Outside code, 9 Nov 2026: "1. brew install node", "- cd ~/Desktop/joyisfree", a bare "brew install node" and "type
+// powercfg /change standby-timeout-ac 0" all passed, because SHELL_START was tried only on code. The first fix counted
+// some tools before any word, and others at the start of any line or list item, and the same day it failed plain
+// English: "the choco brown hoodie", "no sudo is needed", "ssh key" opening a wrapped line, "> ls is short for list.",
+// "grep for the price", "the export /import step", "the cold brew update". This label's pages say colours, coffee
+// and the names of tools, so in prose a tool counts only with an argument no sentence puts after a word (PROSE_ARG): a
+// flag, the home folder, a path that starts ./ or ../, an absolute path of two parts or more (/Users/leif, never
+// "/import"), or a drive. Beyond those: install or uninstall after an installer whose name is a word (brew, choco, yarn,
+// bun); a subcommand after a tool no sentence names (nvm install 22, pip list, gh auth login); a command after sudo;
+// powercfg's /switch; and curl's or wget's URL. A script counts when it is run by its path (./setup.sh, .\undo.ps1);
+// its bare name is a file named and a markdown link to it is a link, not a step. npm, npx, git and node have their own.
+// Round 2, the same day: "We export ~ 200 pieces", "Claude will export /collections/summer/ as a PDF" and "the yarn
+// install at the gallery" failed too. So the home folder is a ~ that leads a path or ends the line, never one before a
+// number; an absolute path counts only after a tool whose name is not also an English word (PATH_SHELL: export, cat,
+// echo, yarn and the rest say things in a sentence, and "/collections/summer/" is a web path), while ./, ~/ and a drive
+// are paths after any tool; and yarn, a knitting word, installs only when nothing but a flag follows ("- yarn install").
+const STEP_ARG = [
+  '--?[A-Za-z]', // a flag: -m, --resume, -fsSL; never a dash in a sentence ("cat - a tabby")
+  '~(?:[\\\\/]|$)', // the home folder: ~/Desktop, or a bare ~ that ends the line; never "~ 200" or "~40 kg"
+  '\\.{1,2}[\\\\/]', // a relative path: ./setup.sh, ..\joyisfree
+  '[A-Za-z]:\\\\', // a drive: C:\Users
+].join('|');
+const ABSOLUTE_PATH = '[\\\\/][\\w.~-]+[\\\\/]'; // two parts or more: /Users/leif, \Users\leif; never "export /import"
+const SAID_IN_PROSE = new Set(['cat', 'export', 'echo', 'yarn', 'bun', 'brew', 'choco', 'claude', 'docker', 'sed', 'awk']);
+const PATH_SHELL = SHELL.split('|').filter((w) => !SAID_IN_PROSE.has(w)).join('|');
+const CLI = 'winget|pnpm|pip3?|nvm|fnm|deno|docker|gh';
+const SUBCOMMAND = '(?:un|re)?install|upgrade|update|list|search|run|auth\\s+login';
+const PROSE_TOOL = new RegExp(`(?<![\\w./-])(?:(?:${SHELL})\\s+(?:${STEP_ARG})|(?:${PATH_SHELL})\\s+${ABSOLUTE_PATH}|(?:brew|choco|bun)\\s+(?:un|re)?install\\b|yarn\\s+(?:un|re)?install(?=\\s*(?:$|--?[A-Za-z]))|(?:${CLI})\\s+(?:${SUBCOMMAND})\\b|sudo\\s+(?:${SHELL})\\b|powercfg\\s+\\/[A-Za-z]|(?:curl|wget)\\s+https?:\\/\\/)`);
+const RUN_SCRIPT = new RegExp(`(?<![\\w.~/\\\\(-])(?=\\.{1,2}[\\\\/]|~[\\\\/])${SCRIPT}`);
 const INLINE_CODE = /`([^`\n]+)`/g;
 const HTML_CODE = /<(?:code|kbd)>([^<\n]+)<\/(?:code|kbd)>/gi;
 const FENCE = /^\s*(?:`{3,}|~{3,})\s*([\w+-]*)/;
@@ -849,6 +948,8 @@ export function terminalSteps(file, text) {
     if (!why && [...line.matchAll(INLINE_CODE)].some((m) => SHELL_START.test(m[1]))) why = 'a shell command in backticks';
     if (!why && [...line.matchAll(HTML_CODE)].some((m) => SHELL_START.test(m[1]))) why = 'a shell command in <code>';
     if (!why && PROSE_COMMAND.test(line)) why = 'an npm, npx or git command';
+    if (!why && PROSE_TOOL.test(line)) why = 'a terminal tool with an argument';
+    if (!why && RUN_SCRIPT.test(line)) why = 'a script run by its path';
     if (why) hits.push({ where: `${file}:${i + 1}`, why });
     blank = !line.trim();
   });

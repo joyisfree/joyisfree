@@ -11,9 +11,9 @@ import { devNull, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  BIP39_WORDS, CHECKS, KNOWN_FAKES, LEIF_PAGES, SECRET_SHAPES, SEED_WORDS,
+  BIP39_WORDS, CHECKS, KNOWN_FAKES, LEIF_PAGES, SECRET_SHAPES, SEED_REPEATS, SEED_WORDS,
   bip39Intact, countOf, dayNumber, decisions, decodeText, facts, firstInstruction, historyLines, leifPages, lineCount,
-  markOf, runChecks, secretHits, secretKinds, secrets, seedEnds, state, studio, studioVerdict, sydneyDay, terminalSteps,
+  markOf, runChecks, secretHits, secretKinds, secrets, seedEnds, seedLike, state, studio, studioVerdict, sydneyDay, terminalSteps,
   treeLines, withoutKnownFakes,
 } from './prove.mjs';
 
@@ -282,13 +282,176 @@ test('a wrapped seed is joined only by the words that end one line and lead the 
   assert.equal(secretHits(page('w.md', [`it is ${s.slice(0, 7).join(' ')}`, `${s.slice(7).join(' ')} and that is all`])).length, 1);
   assert.deepEqual(secretHits(page('w.md', [`it is ${s.slice(0, 7).join(' ')}`, `${s.slice(7, 11).join(' ')} and ${s[11]}`])), []);
   assert.deepEqual(secretHits(page('w.md', [`it is ${s.slice(0, 7).join(' ')} // ok`, `${s.slice(7).join(' ')}`])), []);
-  assert.deepEqual(seedEnds('| 1 | abandon |'), { lead: 1, trail: 1, words: 1 });
-  assert.deepEqual(seedEnds('the cat sat on abandon ability'), { lead: 0, trail: 2, words: 0 });
-  assert.deepEqual(seedEnds('## Next step'), { lead: 0, trail: 2, words: 0 });
+  assert.deepEqual(seedEnds('| 1 | abandon |'), { lead: ['abandon'], trail: ['abandon'], words: ['abandon'], nums: [1] });
+  assert.deepEqual(seedEnds('the cat sat on abandon ability'), { lead: [], trail: ['abandon', 'ability'], words: [], nums: [] });
+  assert.deepEqual(seedEnds('## Next step'), { lead: [], trail: ['next', 'step'], words: [], nums: [] });
 });
 
 test('one seed on one line is reported once, not again as rows', () => {
   assert.deepEqual(secretHits([line(seedWords(SEED_WORDS, 10).join(' '), 'x.txt:4'), line(BIP39_WORDS[5], 'x.txt:5')]), [{ where: 'x.txt:4', kinds: ['bip39-seed'] }]);
+});
+
+// 9 Nov 2026, the R2 adversary review: a seed saved as a spreadsheet, or numbered 1st, w1 or word1, passed.
+const nth = (n) => `${n}${['st', 'nd', 'rd'][n - 1] ?? 'th'}`;
+const SPREADSHEET_SEEDS = (s) => ({
+  'a CSV, a header then 1,word': ['n,word', ...s.map((w, i) => `${i + 1},${w}`)],
+  'a CSV with quoted cells': s.map((w, i) => `"${i + 1}","${w}"`),
+  'a CSV with semicolons': s.map((w, i) => `${i + 1};${w}`),
+  '1st: numbering': s.map((w, i) => `${nth(i + 1)}: ${w}`),
+  'a JSON object keyed "w1":': ['{', ...s.map((w, i) => `  "w${i + 1}": "${w}",`), '}'],
+  'Word1: labels': s.map((w, i) => `Word${i + 1}: ${w}`),
+  'a JSON object keyed "word_1":': ['{', ...s.map((w, i) => `  "word_${i + 1}": "${w}",`), '}'],
+  'word-1 labels': s.map((w, i) => `word-${i + 1} ${w}`),
+  'Word 1: labels, a space before the number': s.map((w, i) => `Word ${i + 1}: ${w}`),
+  'Seed word #1: labels, two to a line': [0, 2, 4, 6, 8, 10].map((k) => `Seed word #${k + 1}: ${s[k]}   Seed word #${k + 2}: ${s[k + 1]}`),
+});
+
+test('a seed saved as a CSV, or numbered 1st, w1, Word1 or word_1, is caught once (R2 adversary, 9 Nov 2026)', () => {
+  for (const [name, texts] of Object.entries(SPREADSHEET_SEEDS(seedWords(SEED_WORDS, 15)))) {
+    const hits = secretHits(page('wallet-backup.csv', texts));
+    assert.equal(hits.length, 1, `${name}: ${JSON.stringify(hits)}`);
+    assert.deepEqual(hits[0].kinds, ['bip39-seed'], name);
+  }
+  assert.deepEqual(secretHits(page('w.csv', seedWords(SEED_WORDS - 1, 15).map((w, i) => `${i + 1},${w}`))), [], '11 rows are not a seed');
+  assert.deepEqual(seedEnds('12,abandon'), { lead: ['abandon'], trail: ['abandon'], words: ['abandon'], nums: [12] });
+});
+
+// An X session cookie as the browser extensions export it: one JSON object per cookie, its name and value six lines
+// apart. The names are built from pieces, so this file never holds a name beside a value.
+const AUTH = j('auth', '_token');
+const CT0 = j('ct', '0');
+const editorCookie = (name, value) => ['    {', '        "domain": ".x.com",', '        "expirationDate": 1790000000.5,', '        "hostOnly": false,', '        "httpOnly": true,', `        "name": "${name}",`, '        "path": "/",', '        "sameSite": "no_restriction",', '        "secure": true,', '        "session": false,', '        "storeId": "0",', `        "value": "${value}"`, '    },'];
+
+test('an X session cookie in a Cookie-Editor JSON export or a Netscape cookies.txt is caught (R2 adversary, 9 Nov 2026)', () => {
+  const exported = page('x-cookies.json', ['[', ...editorCookie(AUTH, chars(HEX, 40, 90)), ...editorCookie(CT0, chars(HEX, 160, 91)), ...editorCookie('guest_id', chars(HEX, 32, 92)), ']']);
+  assert.deepEqual(secretHits(exported), [{ where: 'x-cookies.json:13', kinds: ['x-session-cookie'] }, { where: 'x-cookies.json:26', kinds: ['x-session-cookie'] }]);
+  assert.deepEqual(secretHits([line(JSON.stringify([{ domain: '.x.com', name: AUTH, value: chars(HEX, 40, 93) }]), 'c.json:1')]), [{ where: 'c.json:1', kinds: ['x-session-cookie'] }]);
+  for (const [name, n] of [[AUTH, 40], [CT0, 160]]) assert.deepEqual(secretKinds(['.x.com', 'TRUE', '/', 'TRUE', '1790000000', name, chars(HEX, n, 94)].join('\t')), ['x-session-cookie'], name);
+});
+
+test('a cookie name pairs only with a hex value a few lines below it in the same file', () => {
+  const name = `        "name": "${AUTH}",`;
+  const value = `        "value": "${chars(HEX, 40, 95)}"`;
+  const far = Array.from({ length: 20 }, (_, i) => `        "field${i}": ${i},`);
+  assert.deepEqual(secretHits(page('a.json', [name, ...far, value])), [], 'twenty lines apart');
+  assert.deepEqual(secretHits([line(name, 'a.json:1'), line(value, 'b.json:2')]), [], 'two files');
+  assert.deepEqual(secretHits(page('a.json', [name, '        "value": "<your auth token>"'])), [], 'a placeholder');
+  assert.deepEqual(secretHits(page('a.md', [`The ${AUTH} and ${CT0} cookies are Leif's and never leave his browser.`])), []);
+});
+
+test('secrets: a cookie export, a cookies.txt and a seed saved as a CSV in the tree all fail, by file and line', () => {
+  const cookiesTxt = ['# Netscape HTTP Cookie File', ['.x.com', 'TRUE', '/', 'TRUE', '1790000000', AUTH, chars(HEX, 40, 96)].join('\t'), ''].join('\n');
+  const csv = `${SPREADSHEET_SEEDS(seedWords(SEED_WORDS, 16))['a CSV, a header then 1,word'].join('\n')}\n`;
+  const root = repo({ 'x-cookies.json': `${['[', ...editorCookie(AUTH, chars(HEX, 40, 97)), ']'].join('\n')}\n`, 'cookies.txt': cookiesTxt, 'wallet-backup.csv': csv });
+  const r = secrets({ root, git: scanGit({ files: ['x-cookies.json', 'cookies.txt', 'wallet-backup.csv'] }).git });
+  assert.equal(r.status, 'FAIL');
+  for (const at of ['x-cookies.json:13 (x-session-cookie)', 'cookies.txt:2 (x-session-cookie)', 'wallet-backup.csv:1 (bip39-seed)']) assert.ok(r.detail.includes(at), `${at} not in: ${r.detail}`);
+});
+
+// 9 Nov 2026, the R2 verifier: once commas and semicolons separated seed words, a stock CSV of colours, sizes and
+// quantities failed as a seed. This label's CSVs and pages are full of BIP39 colour and size words (black, small,
+// large, green, blue, brown, cream, cotton, wool, silk), and a check that fails on them is one the next session
+// weakens.
+const COLOURS = ['black', 'green', 'blue', 'brown', 'cream', 'olive'];
+const SIZES = ['small', 'large', 'short', 'long'];
+const STOCK_LISTS = {
+  'the stock CSV the verifier committed, colour,size,qty': ['colour,size,qty', 'black,small,2', 'black,large,1', 'green,small,3', 'green,large,2', 'blue,small,1', 'blue,large,4'],
+  'a fabric CSV with semicolons': ['fabric;colour;qty', 'cotton;black;12', 'cotton;green;8', 'wool;black;3', 'wool;blue;5', 'silk;black;2', 'silk;cream;1'],
+  'the same stock as a markdown table': ['| colour | size | qty |', '|---|---|---|', '| black | small | 2 |', '| black | large | 1 |', '| green | small | 3 |', '| green | large | 2 |', '| blue | small | 1 |', '| blue | large | 4 |'],
+  'the quantity first, qty,colour,size': ['qty,colour,size', ...COLOURS.flatMap((c, i) => SIZES.map((z, k) => `${(i + k) % 9 + 1},${c},${z}`))],
+  'no quantity, sorted by colour': ['colour,size', ...COLOURS.flatMap((c) => SIZES.map((z) => `${c},${z}`))],
+  'no quantity, sorted by size': ['colour;size', ...SIZES.flatMap((z) => COLOURS.map((c) => `${c};${z}`))],
+  'twelve pieces named for BIP39 words, each with its count': ['piece,left', ...seedWords(SEED_WORDS, 23).map((w, i) => `${w},${i % 7 + 1}`)],
+};
+
+test('a stock or fabric CSV of BIP39 colours, sizes and counts is not a seed, as CSV, semicolons or a table (R2 verifier, 9 Nov 2026)', () => {
+  for (const [name, texts] of Object.entries(STOCK_LISTS)) assert.deepEqual(secretHits(page('stock.csv', texts)), [], name);
+  const files = { 'stock.csv': `${STOCK_LISTS['the stock CSV the verifier committed, colour,size,qty'].join('\n')}\n`, 'fabric.csv': `${STOCK_LISTS['a fabric CSV with semicolons'].join('\n')}\n`, 'stock.md': `${STOCK_LISTS['the same stock as a markdown table'].join('\n')}\n` };
+  const r = secrets({ root: repo(files), git: scanGit({ files: Object.keys(files) }).git });
+  assert.equal(r.status, 'PASS', r.detail);
+});
+
+// Round 2 of the R2 verifier, 9 Nov 2026: a count first in each row ("4,black,dress", "12;dress") read as seed
+// numbering, and a wholesale order, a restock list, a pop-up kit or an ink order failed prove as a seed phrase. A
+// seed's numbers run on, 1, 2, 3, so a numbered row joins the run only on the number after the last one.
+const COUNT_FIRST = {
+  'a wholesale order, count first': [
+    'qty,colour,item', '4,black,dress', '2,cream,dress',
+    '6,olive,jacket', '3,black,jacket', '5,sand,hat',
+    '2,stone,hat', '8,black,sock', '6,cream,sock',
+    '1,coral,bag', '4,ivory,bag',
+  ],
+  'a restock list with semicolons': [
+    'count;item', '12;dress', '8;jacket',
+    '20;hat', '6;sock', '3;bag',
+    '9;skirt', '4;belt', '7;glove',
+    '2;shoe', '5;label', '11;ladder',
+    '10;lamp',
+  ],
+  'a pop-up kit': [
+    'qty,item', '2,table', '4,chair',
+    '1,mirror', '3,lamp', '6,basket',
+    '2,rack', '1,carpet', '8,cable',
+    '3,box', '5,bag', '60,card',
+    '1,tape',
+  ],
+  'a screen-print ink order': [
+    'qty,ink', '2,black', '1,cream',
+    '3,olive', '4,coral', '1,ivory',
+    '2,sand', '5,stone', '1,ocean',
+    '3,green', '2,blue', '4,gold',
+    '1,silver',
+  ],
+};
+
+test('a count first in each row is not seed numbering: a numbered row joins only on the next number (R2 verifier, round 2, 9 Nov 2026)', () => {
+  for (const [name, rows] of Object.entries(COUNT_FIRST)) assert.deepEqual(secretHits(page('order.csv', rows)), [], name);
+  const s = seedWords(SEED_WORDS, 23);
+  assert.deepEqual(secretHits(page('w.csv', s.map((w, i) => `${i + 1},${w}`))), [{ where: 'w.csv:1', kinds: ['bip39-seed'] }], 'a seed saved as index,word');
+  assert.deepEqual(secretHits(page('w.csv', ['index,word', ...s.map((w, i) => `${i + 1};${w}`)])), [{ where: 'w.csv:1', kinds: ['bip39-seed'] }], 'with a header and semicolons (index and word are BIP39 words, so the run starts there)');
+  const t = seedWords(24, 29);
+  const twoColumns = t.slice(0, 12).map((w, i) => `${i + 1}. ${w}   ${i + 13}. ${t[i + 12]}`);
+  assert.ok(secretHits(page('w.md', twoColumns)).some((h) => h.kinds.includes('bip39-seed')), 'a 24-word seed in two numbered columns');
+  const blocks = [...s.slice(0, 6).map((w, i) => `${i + 1}. ${w}`), '', ...s.slice(6).map((w, i) => `${i + 7}. ${w}`)];
+  assert.deepEqual(secretHits(page('w.md', blocks)), [{ where: 'w.md:1', kinds: ['bip39-seed'] }], 'two numbered blocks of six across a blank line');
+  assert.deepEqual(seedEnds('4,black,dress').nums, [4]);
+  assert.deepEqual(seedEnds('5. ocean 3. ladder').words, [], "numbers that fall within one line are not a seed's");
+});
+
+test('leif-pages: a tilde before a number, a path after a word that is also a tool, and a yarn install at a gallery are prose (R2 verifier, round 2, 9 Nov 2026)', () => {
+  for (const ok of ['We export ~ 200 pieces a season to the UK and NZ.', 'Claude will export /collections/summer/ as a PDF for the lookbook.', 'The yarn install at the gallery opens Friday (a knitted wall piece).', 'The cat /dog/ prints sold out by noon.', 'The bobcat -print tee is back.', 'The cd /vinyl bundle ships with the tee.']) {
+    assert.deepEqual(terminalSteps('docs/leif.md', ok), [], ok);
+  }
+  for (const step of ['cd ~', 'cd ~/Desktop/joyisfree', 'cp ./notes.txt /Users/leif/old/', 'chmod +x ./setup.sh', 'mkdir ~/Desktop/drop', 'cat ./notes.txt']) {
+    assert.equal(terminalSteps('docs/leif.md', step).length, 1, step);
+  }
+});
+
+test('a number is numbering only when a word follows it; after its words it is a count and breaks the row', () => {
+  assert.deepEqual(seedEnds('black,small,2'), { lead: ['black', 'small'], trail: [], words: [], nums: [] });
+  assert.deepEqual(seedEnds('2,black,small'), { lead: ['black', 'small'], trail: ['black', 'small'], words: ['black', 'small'], nums: [2] });
+  assert.deepEqual(seedEnds('| 3 | ocean | 4 |'), { lead: ['ocean'], trail: [], words: [], nums: [3] });
+  assert.deepEqual(seedEnds('Seed word 1: rifle').words, ['rifle'], 'the words before a number are its label');
+  assert.deepEqual(seedEnds('5. word 6. zoo').words, ['word', 'zoo'], 'a numbered word is never a label');
+});
+
+test('a seed may repeat a word or two in any twelve in a row; a run with three repeats is a list, not a seed', () => {
+  const s = seedWords(SEED_WORDS, 17);
+  const twoRepeats = [...s.slice(0, 10), s[2], s[7]];
+  const threeRepeats = [...s.slice(0, 9), s[1], s[4], s[8]];
+  assert.equal(SEED_REPEATS, 2);
+  assert.equal(seedLike(s), true);
+  assert.equal(seedLike(twoRepeats), true, 'two repeats, as about 4 in 10,000 twelve-word seeds have');
+  assert.equal(seedLike(threeRepeats), false, 'three repeats in twelve');
+  assert.equal(seedLike(s.slice(0, SEED_WORDS - 1)), false, 'eleven words');
+  assert.equal(seedLike([...threeRepeats, ...s]), true, 'any twelve in a row, not only the first');
+  assert.equal(seedLike([...Array(11).fill(BIP39_WORDS[0]), BIP39_WORDS[3]]), false, 'a published test vector made from all-zero entropy is public, and repeats by design');
+  assert.ok(secretKinds(twoRepeats.join(' ')).includes('bip39-seed'), 'on one line');
+  assert.deepEqual(secretKinds(threeRepeats.join(' ')), [], 'on one line');
+  assert.deepEqual(secretHits(page('w.txt', twoRepeats.map((w, i) => `${i + 1}. ${w}`))), [{ where: 'w.txt:1', kinds: ['bip39-seed'] }]);
+  assert.deepEqual(secretHits(page('w.txt', threeRepeats.map((w, i) => `${i + 1}. ${w}`))), []);
+  const stockThenSeed = [...STOCK_LISTS['no quantity, sorted by colour'].slice(1), s.slice(0, 6).join(','), s.slice(6).join(',')];
+  assert.deepEqual(secretHits(page('mixed.csv', stockThenSeed)), [{ where: 'mixed.csv:1', kinds: ['bip39-seed'] }], 'a seed pasted under stock rows');
 });
 
 // --------------------------------------------------------------------------------------------- history, then the check
@@ -841,6 +1004,81 @@ test('leif-pages: plain English that shares a word with a tool, and paths in bac
     'make sure the parcel is with you before the first wash,',
     'open the care label and start with a cold wash.',
     '```',
+  ].join('\n');
+  assert.deepEqual(terminalSteps('docs/leif.md', text), []);
+});
+
+test('leif-pages: a command bare in prose, or as a list or quote item, fails by an argument shaped like a command (R2 adversary, 9 Nov 2026)', () => {
+  const tool = 'a terminal tool with an argument';
+  const script = 'a script run by its path';
+  const cases = [
+    // the adversary's eight
+    ['1. brew install node', tool],
+    ['brew install node', tool],
+    ['> brew install gh', tool],
+    ['- cd ~/Desktop/joyisfree', tool],
+    ['2. claude --resume', tool],
+    ['Then open PowerShell and type powercfg /change standby-timeout-ac 0 and press Enter.', tool],
+    ['Paste this into Terminal: curl -fsSL https://example.com/install.sh | bash', tool],
+    ['* python3 -m http.server', tool],
+    // each argument that makes a tool a step, alone on its line
+    ['Open Terminal and type cd ../joyisfree, then press Enter.', tool],
+    ['Open Terminal and type cd /Users/leif/joyisfree, then press Enter.', tool],
+    ['In PowerShell, type cd C:\\Users\\leif\\joyisfree and press Enter.', tool],
+    ['Then type choco install nodejs-lts and press Enter.', tool],
+    ['- yarn install', tool],
+    ['Then type winget install OpenJS.NodeJS.LTS and press Enter.', tool],
+    ['- nvm install 22', tool],
+    ['Type docker run hello-world and press Enter.', tool],
+    ['2) gh auth login', tool],
+    ['> gh auth login', tool],
+    ['Then type sudo mkdir backups and press Enter.', tool],
+    ['Then paste curl https://example.com/install.sh into Terminal.', tool],
+    ['Then paste wget https://example.com/fonts.zip into Terminal.', tool],
+    ['1. ./setup.sh', script],
+    ['Then run .\\keep-awake-undo.ps1 in PowerShell.', script],
+  ];
+  for (const [text, why] of cases) assert.deepEqual(terminalSteps('docs/leif.md', `# Sitting\n\n${text}\n`), [{ where: 'docs/leif.md:3', why }], text);
+});
+
+test('leif-pages: plain English that names a tool, a colour or a coffee passes outside code (R2 verifier, 9 Nov 2026)', () => {
+  const text = [
+    '# Your page, Leif',
+    '',
+    'The choco brown hoodie sold out first, and no sudo is needed for any of this: Claude keeps the passwords and the',
+    'ssh key in your password manager.',
+    '',
+    '- ssh key: in your password manager',
+    '- gh token: in your password manager',
+    '> ls is short for list.',
+    '- rm stands for remove, if you ever see it.',
+    '- cp is the copy command Claude uses.',
+    'sed quis custodiet ipsos custodes',
+    "grep for the price in the PDF is Claude's job.",
+    "The export /import step is Claude's.",
+    'The cold brew update on the menu is Thursday.',
+    'Brew a coffee, then curl up with the draft.',
+    '- cd and vinyl bundle',
+    'Machine wash ~ 30 degrees, inside out.',
+    'keep-awake.ps1 is the file Claude runs to stop the PC sleeping, and setup.sh is its Mac twin.',
+    'The [undo script](./keep-awake-undo.ps1) is there if you want to read it.',
+  ].join('\n');
+  assert.deepEqual(terminalSteps('docs/leif.md', text), []);
+  const r = leifPages(at(repo({ ...PAGES_OK, 'docs/leif.md': `${text}\n` })));
+  assert.equal(r.status, 'PASS', r.detail);
+});
+
+test('leif-pages: prose that shares a word with a tool, or names one as a noun, still passes outside code', () => {
+  const text = [
+    '# Your page',
+    '',
+    'Claude can export the CSV from the store, and the edges curl after the first wash.',
+    'export the orders first, and the cold brew tap can wait.',
+    '- export the CSV from the store',
+    '- cat ~40 kg of linen, and the export / import of orders is Claude\'s.',
+    'The studio cat - a tabby - sleeps on the linen.',
+    'Claude keeps the ssh key and the gh token in your password manager.',
+    'Cold wash /hang dry, inside out.',
   ].join('\n');
   assert.deepEqual(terminalSteps('docs/leif.md', text), []);
 });
