@@ -32,6 +32,9 @@
   - one time zone is used for every brand;
   - and keep the engine frozen, so a brand that already has a draft never gets the old email as well.
 - **Traps:**
+  - Start the next session from Leif's private bundle ("Agency private bundle (9 Nov).zip", sent for his Drive folder).
+    - Unzip it into the scratchpad and follow its README. Don't re-run the research: it took 171 searches.
+    - Only the sheet exports are pulled fresh.
   - Restarts and plan-mode switches pause or drop in-flight calls. Write progress into the plan before each external step, and check list_drafts before creating anything.
   - The Drive connector cannot take a large file, so big workbooks go to Leif as a file.
   - Web searches are capped at about 200 a session.
