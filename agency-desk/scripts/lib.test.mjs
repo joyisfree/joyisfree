@@ -40,7 +40,7 @@ test('relation tells a storefront from another company', () => {
 
 test('autofill copies of a label share one brand key', () => {
   assert.equal(brandKey('Gizmo 360'), brandKey('Gizmo 363'));
-  assert.equal(brandKey('Ag1'), brandKey('Ag3'));
+  assert.equal(brandKey('Qx1'), brandKey('Qx3'));
   assert.equal(brandKey('AcmeBot'), brandKey('Acmebot'));
   assert.notEqual(brandKey('70gizmo'), brandKey('Acme'));
 });

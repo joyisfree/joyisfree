@@ -28,12 +28,21 @@ export function buildRoster({ creators, myInfluencers, pricing }, extra = {}) {
       pastSponsors: x.pastSponsors || [],
       platforms: x.platforms || ['YouTube'],
       claimedViews: Number.isFinite(claimed) ? claimed : null,
-      measured: stats ? { n: stats.n, typical: stats.median, average: stats.mean, best: stats.max, method: 'median of the listed recent videos (Pricing tab)' } : null,
+      // A dated measurement (the creator's own screenshot, or measure.mjs on the public feed) wins over the Pricing
+      // tab, whose videos carry no date: brand copy may quote a number only within 30 days of measuredAt.
+      // An override without a typical figure is ignored rather than half-used.
+      measured: Number.isFinite(x.measured?.typical) ? { method: 'dated measurement', ...x.measured }
+        : stats ? { n: stats.n, typical: stats.median, average: stats.mean, best: stats.max, method: 'median of the listed recent videos (Pricing tab)' } : null,
+      measuredAt: Number.isFinite(x.measured?.typical) ? (x.measured.at || null) : null,
+      yesAt: x.yesAt || null, // the creator's latest yes; brand copy may name them for 90 days after it
+      describe: x.describe || '', // one clean phrase for copy, written by hand, never the team's notes
       private: { rate: mi ? col(mi, 'Rate') : '' }, // never quoted in copy
     };
     if (c.measured) {
-      c.numbers = [...new Set([fmtViews(c.measured.typical), fmtViews(c.measured.average), fmtViews(c.measured.best)])];
-      c.phrase = `${name} (about ${fmtViews(c.measured.typical)} views on a typical video, ${fmtViews(c.measured.best)} on the best of the last ${c.measured.n})`;
+      c.numbers = [...new Set([c.measured.typical, c.measured.average, c.measured.best].filter(Number.isFinite).map(fmtViews))];
+      // The best video is quoted only when both it and the sample size are known (a screenshot may give only the typical).
+      const best = Number.isFinite(c.measured.best) && Number.isFinite(c.measured.n) ? `, ${fmtViews(c.measured.best)} on the best of the last ${c.measured.n}` : '';
+      c.phrase = `${name} (about ${fmtViews(c.measured.typical)} views on a typical video${best})`;
       c.numberSource = 'measured';
       if (c.claimedViews && c.claimedViews / c.measured.typical > 2) c.warning = `the sheet says ${fmtViews(c.claimedViews)}, the videos say ${fmtViews(c.measured.typical)} typical`;
     } else if (c.claimedViews) {

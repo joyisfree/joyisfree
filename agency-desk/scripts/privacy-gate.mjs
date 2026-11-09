@@ -25,11 +25,13 @@ export function scanText(text, { names = [], terms = [] } = {}) {
     if (name.split(/\s+/).length < 2 || name.length < 6) continue; // a first name alone is not identifying
     if (lower.includes(name.toLowerCase())) hits.push({ kind: 'name', value: name });
   }
-  // Brand and creator names are pipeline details too: whole words of five letters or more.
+  // Brand and creator names are pipeline details too: whole words of three letters or more, in any case, so a
+  // handle (@name), a URL slug, a code variable or a heading in capitals is caught as well. Skipping short names
+  // once let a real one reach a public test file; a false alarm costs a rename, a leak cannot be taken back.
   for (const t of terms) {
     const term = t.trim();
-    if (term.length < 5) continue;
-    const re = new RegExp(`(^|[^a-z0-9])${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^a-z0-9])`, 'i');
+    if (term.length < 3) continue;
+    const re = new RegExp(`(^|[^A-Za-z0-9])${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^A-Za-z0-9])`, 'i');
     if (re.test(text)) hits.push({ kind: 'term', value: term });
   }
   return hits;

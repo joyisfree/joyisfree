@@ -39,7 +39,23 @@ function jaccard(a, b) {
 }
 const numKey = (s) => s.toLowerCase().replace(/\s+/g, '');
 
-export function lint(rows, roster, { today, noteMax = 200, maxAgeDays = 183 } = {}) {
+const DAY = 86_400_000;
+
+// yesDays: brand copy may name a creator only this long after their latest yes (the team meeting's rule).
+// freshDays: a number may be quoted only this long after it was measured; a sheet figure is never measured.
+// One definition for the lint and the finishing pass. A missing date, or one in the future (a typo), fails closed.
+export function creatorStatus(c, today, { yesDays = 90, freshDays = 30 } = {}) {
+  const now = Date.parse(today);
+  const age = (s) => { const t = Date.parse(s || ''); return Number.isNaN(t) || Number.isNaN(now) ? NaN : (now - t) / DAY; };
+  const yes = age(c?.yesAt);
+  const at = age(c?.measuredAt);
+  return {
+    named: Boolean(c) && yes >= 0 && yes <= yesDays,
+    fresh: Boolean(c) && c.numberSource === 'measured' && at >= 0 && at <= freshDays,
+  };
+}
+
+export function lint(rows, roster, { today, noteMax = 200, maxAgeDays = 183, yesDays = 90, freshDays = 30 } = {}) {
   if (!today || Number.isNaN(Date.parse(today))) throw new Error('lint needs --today YYYY-MM-DD so the age check is reproducible');
   const now = Date.parse(today);
   const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
@@ -48,7 +64,7 @@ export function lint(rows, roster, { today, noteMax = 200, maxAgeDays = 183 } = 
     return {
       ...c,
       names: all.map(token).filter((t) => t.length >= 3),
-      // Whole words only, so "Jack" never matches inside "Spear & Jackson".
+      // Whole words only, so "Jay" never matches inside "Spear & Jayson".
       patterns: all.map((n) => new RegExp(`(^|[^a-z0-9])${esc(n)}($|[^a-z0-9])`, 'i')),
       numbers: new Set((c.numbers || []).map(numKey)),
     };
@@ -93,6 +109,11 @@ export function lint(rows, roster, { today, noteMax = 200, maxAgeDays = 183 } = 
     const creator = findCreator(row.creator || '') || named[0];
     if (nums.length && !creator) err(row, 'number-without-creator', nums.join(', '));
     for (const n of nums) if (creator && !creator.numbers.has(n)) err(row, 'number-not-in-roster', `${n} is not a true number for ${creator.name}`);
+    if (creator) {
+      const st = creatorStatus(creator, today, { yesDays, freshDays });
+      if (!st.named) err(row, 'creator-not-confirmed', `${creator.name} has no yes on record in the last ${yesDays} days`);
+      if (nums.length && !st.fresh) err(row, 'number-not-fresh', `${creator.name}'s numbers were not measured in the last ${freshDays} days`);
+    }
 
     // The hook: a real source and a recent date, or the row is honest about having none.
     const hook = row.hook || {};
@@ -109,7 +130,7 @@ export function lint(rows, roster, { today, noteMax = 200, maxAgeDays = 183 } = 
       const d = Date.parse(hook.date || '');
       const limit = MAX_AGE[hook.type] ?? maxAgeDays;
       if (Number.isNaN(d)) err(row, 'hook-without-date', hook.type);
-      else if ((now - d) / 86_400_000 > limit) err(row, 'hook-stale', `${hook.date} is older than ${limit} days for a ${hook.type} hook`);
+      else if ((now - d) / DAY > limit) err(row, 'hook-stale', `${hook.date} is older than ${limit} days for a ${hook.type} hook`);
     }
 
     // The route: published address with its page, or recorded consent; never personal webmail.
@@ -146,12 +167,12 @@ export function report({ errors, warnings, checked }) {
 function main() {
   const a = args();
   if (!a.rows || !a.roster || !a.today) {
-    console.error('usage: lint-lines.mjs --rows <rows.json> --roster <roster.json> --today YYYY-MM-DD [--note-max 200] [--max-age-days 183] [--json]');
+    console.error('usage: lint-lines.mjs --rows <rows.json> --roster <roster.json> --today YYYY-MM-DD [--note-max 200] [--max-age-days 183] [--yes-days 90] [--fresh-days 30] [--json]');
     process.exit(2);
   }
   const rows = JSON.parse(readFileSync(a.rows, 'utf8'));
   const roster = JSON.parse(readFileSync(a.roster, 'utf8'));
-  const result = lint(rows, roster, { today: a.today, noteMax: Number(a['note-max'] || 200), maxAgeDays: Number(a['max-age-days'] || 183) });
+  const result = lint(rows, roster, { today: a.today, noteMax: Number(a['note-max'] || 200), maxAgeDays: Number(a['max-age-days'] || 183), yesDays: Number(a['yes-days'] || 90), freshDays: Number(a['fresh-days'] || 30) });
   console.log(a.json ? JSON.stringify(result, null, 2) : report(result));
   process.exit(result.errors.length ? 1 : 0);
 }

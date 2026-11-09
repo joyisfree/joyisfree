@@ -38,6 +38,11 @@ npm run agency:lint    -- --rows <rows.json> --roster <roster.json> --today YYYY
 npm run agency:pack    -- --sheet1 <Sheet1.csv> --rows <rows.json> --out <scratch>/pack.csv [--diff <old pack.csv>]
 npm run agency:privacy -- --names <people.txt> --terms <brands-and-creators.txt>          # exit 1 on any hit
 node agency-desk/scripts/roster.mjs --li <dir> --ima <dir> --extra <private.json> --out <scratch>/roster.json
+node agency-desk/scripts/finalise.mjs --run <team output.json> --worklist <worklist.json> --roster <roster.public.json> \
+     --config <private finalise.json> --today YYYY-MM-DD --out <scratch>/rows.json --today-csv <scratch>/today.csv
+node agency-desk/scripts/measure.mjs --channels <private channels.json> --today YYYY-MM-DD --out <scratch>/measured.json
+node agency-desk/scripts/tracker.mjs add --log <private events.jsonl> --key "Brand | Name" --event reply
+node agency-desk/scripts/tracker.mjs status --log <private events.jsonl> --today YYYY-MM-DD   # exit 1 on an overdue promise
 ```
 
 Every script that writes refuses a path inside this repository. The sheets are exported through the Drive connector
@@ -59,7 +64,9 @@ as xlsx into the scratchpad and split into one CSV per tab.
   - Rates stay private.
 - **lint:**
   - Lengths, banned phrases and unconfirmed claims.
-  - Numbers must match the roster.
+  - Numbers must match the roster, and are quotable only within 30 days of a dated measurement. A sheet figure
+    never is.
+  - A creator is named only within 90 days of their latest yes. Both rules fail closed when the date is missing.
   - One creator per message.
   - Hooks must carry a source and a date, within a freshness window by kind (sponsor 18 months, launch 6).
   - LinkedIn and search pages are never a source.
@@ -68,8 +75,26 @@ as xlsx into the scratchpad and split into one CSV per tab.
   - Colleagues never get the same note.
 - **pack:** keeps Sheet1's row order with a key column, defuses cell text that would run as a formula, and shows
   missing, orphan and changed rows.
-- **privacy:** no real address, person, brand or creator name in a tracked file. It refuses to run without its names
-  and terms lists, because a gate with nothing to look for would pass a leak.
+- **finalise:**
+  - Each row that fails the lint becomes an honest role check (five openers, so colleagues never get the same note).
+  - Warm threads, holds, wrong-company contacts and a sixth person at one brand become skips with the reason.
+  - Lanes that wait for the right creator (the private `waitFor` list) stay out of Today. Today is at most 10, one
+    per brand.
+  - It always restarts from the team's rows, so a new yes or measurement brings the fuller copy back.
+- **measure:**
+  - The median and best of a creator's recent long videos, from the public feed, with no key.
+  - Shorts and videos under 7 days old are left out.
+  - Fewer than 6 videos means no number.
+- **tracker:**
+  - An append-only log: invite, accept, dm, reply, yes, stop, promise, done.
+  - A promise needs a due date, and an overdue one fails the status.
+  - After a "stop", nothing more can be added for that person.
+  - One follow-up 7 days after an unanswered DM, and only one.
+- **privacy:**
+  - No real address, person, brand or creator name in a tracked file.
+  - It refuses to run without its names and terms lists, because a gate with nothing to look for would pass a leak.
+  - Names of three or four letters are matched as written, capital included, because skipping short names let a
+    real one through.
 
 ## Where data lives
 
@@ -80,7 +105,8 @@ details live in Leif's Google Drive, and working copies sit in the session scrat
 
 - Every click on LinkedIn, Gmail and the sheets.
 - Confirming any line that says something about his own life.
-- The postal address the engine needs before LIVE.
+- The postal address the engine needs before LIVE. It goes in **last**: an empty address is what keeps the old engine
+  from sending its old lines. Fill it only after the sheet fixes and the Mac engine fixes.
 - Allowing the website domains in the cloud environment so the website audit can run.
 - Optionally, LinkedIn's "Get a copy of your data" export (Connections), which gives every contact's current
   title in one file.

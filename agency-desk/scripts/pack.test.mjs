@@ -138,4 +138,9 @@ test('the privacy gate passes reserved domains and catches real addresses and sh
   assert.equal(scanText('a note about Jo', { names: ['Jo'] }).length, 0, 'a short first name alone is not identifying');
   assert.equal(scanText('pitched Acmemow today', { terms: ['Acmemow'] }).length, 1);
   assert.equal(scanText('pitched Acmemowers today', { terms: ['Acmemow'] }).length, 0, 'whole words only');
+  assert.equal(scanText("{ name: 'Zola', numbers: ['80k'] }", { terms: ['Zola'] }).length, 1, 'a four-letter creator name is caught');
+  for (const leak of ['see youtube.com/@zola', 'const zola = {}', 'ZOLA RATES']) {
+    assert.equal(scanText(leak, { terms: ['Zola'] }).length, 1, `a short name in a handle, a variable or capitals is caught: ${leak}`);
+  }
+  assert.equal(scanText('pitched Zolander today', { terms: ['Zola'] }).length, 0, 'still whole words only');
 });

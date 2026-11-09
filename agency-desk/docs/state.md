@@ -1,44 +1,42 @@
-# State — 8 Nov 2026, after the team meeting (the Agency Desk)
-- **Goal:** every brand contact Leif adds on LinkedIn gets a true, sourced note and DM that earns a reply; email only after a yes (Spam Act).
-- **Done:**
-  - 5 specialists and the `agency-personalise` routine.
-  - 7 scripts (audit, worklist, roster, lint, pack, privacy, lib) with tests in `npm test`, each guard shown to fail.
-  - First full run, 78 helpers and 171 web searches: 332 rows, all lint-clean. Plus 7 warm-reply drafts, a US creator scout, creator one-pagers and a profile rewrite.
-  - Real data lives only in Leif's Drive and Gmail drafts.
-- **Honest result:**
-  - Confidence: 0 High, 17 Medium, 283 Low.
-  - About 288 titles are unconfirmed, because public search cannot see LinkedIn profiles.
-  - 14 rows have dated hooks; 24 rows fell back to an honest role-check DM.
-- **Team meeting (8 Nov, 7 seats):** the plan scored 2.3/5 for "signed deals in 30 days". Deals will come from the warm brands, not cold notes. Strategy now: warm first, true numbers before reach, and nothing looks ready unless it is.
-- **Next (week 1):**
-  - Send the 3 ready warm drafts, one a day. The 4 drafts marked [WAIT] in their subject go after their confirmations.
-  - A creator yes-check: roster creators, the creators who already said yes, and US scouts. Each sends a screenshot of recent views and audience countries.
-  - Leif's LinkedIn export (Connections, Messages, Invitations) for titles and a tracker.
-  - Today v2: about 10 honest fits, measured numbers only, openers by role.
-  - LinkedIn at about 15 invites a day and no more than 100 a week.
-  - Freeze the old engine until its LIVE checks pass.
-- **Next (weeks 2 to 4):**
-  - Measure every creator: the median of the last 12 videos, 30 days fresh.
-  - A price rule: median views times 20 to 25 per 1,000.
-  - The mower lane (one brand per creator per season) and the US creator lane (YouTube Creator Partnerships, public business contacts).
-  - The tracker, a daily Today card, the follow-up clock, the reply playbook, a one-pager template and a scoreboard by hook type.
-  - Move the finishing logic from the scratchpad into the repo.
+# State — 9 Nov 2026, week 1 actioned (the Agency Desk)
+- **Goal:** every brand contact Leif adds on LinkedIn gets a true note and DM that earns a reply; email only after a yes (Spam Act).
+- **Done (all real data in Leif's Drive and Gmail drafts, none here):**
+  - 18 Gmail drafts, none sent: 7 warm brands (4 carry [WAIT: ...]) and 11 creator check-ins inside their old threads (one new email carries [CHECK: ...]).
+  - Three creators who declined our budget get no email. A fourth with no address gets a channel message for Leif to paste.
+  - Pack v2: 332 rows, 0 lint errors. Only one names a creator: the one creator with a yes in the last 90 days. 192 rows are honest role checks.
+  - Today v2: 10 rows, one per brand, none of them mower brands. Today v1 is marked old in Drive.
+  - The Week 1 kit Doc in Drive holds the send order, the sheet fixes, the reply kit and the line for the Mac session.
+  - New scripts with tests:
+    - `finalise.mjs` (the finishing pass and Today);
+    - `measure.mjs` (feed medians, needs YouTube allowed);
+    - `tracker.mjs` (promises carry dates, a stop is final).
+  - New lint rules, both failing closed: a creator is named only within 90 days of a yes, and a number is quoted only within 30 days of a dated measurement.
+  - The privacy gate now catches short names.
+- **Honest result:** the notes are true but plain. Confidence is Low, because titles still await Leif's LinkedIn export and creator numbers await fresh screenshots.
+- **Next (in order):**
+  1. Leif sends the drafts in the kit's order: one warm brand a day, the creators we owe first.
+  2. Each creator yes, with its screenshot date, goes into the private roster overrides. Re-run finalise and the fuller notes come back.
+  3. The LinkedIn export (Connections, Messages, Invitations): titles for the work list, and the tracker's history.
+  4. Allow YouTube in the network settings, then run `measure.mjs` for every roster creator and US scout.
+  5. After a mower creator says yes: release the waitFor lane for robot-mower brands.
+  6. Weeks 2 to 4 as planned: the price rule, the US creator lane, the reply scoreboard by opener.
 - **Blocked:**
-  - The website audit: both domains are refused by the environment's network policy.
-  - LIVE email waits for a postal address.
-- **For a Mac session** (the engine's code is on the Mac):
+  - The website audit and creator measuring: both domains and YouTube are refused by the network policy.
+  - LIVE email: the postal address. It goes in **last**, after the sheet fixes and the Mac fixes.
+- **For a Mac session** (the old engine's code is on the Mac; its session answers only Leif's trusted devices):
   - the address picker chooses service and support inboxes;
   - SEND_HOURS is stored as a date;
   - one contact list belongs to a different company that shares the name;
-  - the Creators tab still claims 300k for the creator whose typical video is about 5k;
+  - the Creators tab claims 300k for a creator whose typical video is about 5k;
   - the "Ready" drafts carry the old lines;
-  - one time zone is used for every brand.
+  - one time zone is used for every brand;
+  - and keep the engine frozen, so a brand that already has a draft never gets the old email as well.
 - **Traps:**
-  - New agent files register only at the next session start, so this run used `galxe-reader` for every stage.
+  - Restarts and plan-mode switches pause or drop in-flight calls. Write progress into the plan before each external step, and check list_drafts before creating anything.
+  - The Drive connector cannot take a large file, so big workbooks go to Leif as a file.
   - Web searches are capped at about 200 a session.
-  - Restarts drop in-flight calls: check list_drafts before re-creating anything.
-  - The Drive connector cannot upload a large file, so big workbooks go to Leif as a file.
+  - A few real names sit in two earlier pushed commits. Cleaning them needs a force-push on this branch, which needs Leif's yes.
 - **Proof:**
   - `npm test`;
   - `npm run agency:privacy -- --names <people> --terms <brands and creators>`: 0 hits;
-  - `npm run agency:lint -- --rows <rows.json> --roster <roster.json> --today 2026-11-08`: 0 errors.
+  - `finalise.mjs ... --today 2026-11-09`: 0 lint errors.

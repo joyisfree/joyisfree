@@ -108,7 +108,7 @@ export function token(s) {
 }
 
 // "Gizmo 361" and "Gizmo 360" are one brand typed down a column by autofill: drop trailing digits from labels
-// that carry spaces before them, and letters-then-digits labels like "Ag2".
+// that carry spaces before them, and letters-then-digits labels like "Qx2".
 export function brandKey(label) {
   const t = String(label || '').trim().toLowerCase();
   const stripped = t.replace(/[\s-]*\d+$/, '');

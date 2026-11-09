@@ -9,9 +9,15 @@ import { fileURLToPath } from 'node:url';
 import { lint } from './lint-lines.mjs';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
+// Made-up creators. Jay and Pip said yes recently and were measured recently; Rex never said yes again; Moss said
+// yes but was measured too long ago; Lark's only figure is the sheet's own.
+const fresh = { numberSource: 'measured', measuredAt: '2026-10-20', yesAt: '2026-10-20' };
 const roster = { creators: [
-  { name: 'Jay', aliases: ['Jays Channel'], numbers: ['24k', '190k'] },
-  { name: 'Gala', numbers: ['100k'] },
+  { name: 'Jay', aliases: ['Jays Channel'], numbers: ['24k', '190k'], ...fresh },
+  { name: 'Pip', numbers: ['80k'], ...fresh },
+  { name: 'Rex', numbers: ['12k'], numberSource: 'measured', measuredAt: '2026-10-20' },
+  { name: 'Moss', numbers: ['40k'], numberSource: 'measured', measuredAt: '2026-08-01', yesAt: '2026-10-20' },
+  { name: 'Lark', numbers: ['90k'], numberSource: 'roster sheet, not re-measured', yesAt: '2026-10-20' },
 ] };
 const today = '2026-11-05';
 const good = () => ({
@@ -39,7 +45,7 @@ const cases = [
   ['banned-phrase', (r) => { r.emailOpener = 'Stoked with the new mower, a total game changer.'; }],
   ['unconfirmed-claim', (r) => { r.emailOpener = 'Perfect for my huge property.'; }],
   ['number-not-in-roster', (r) => { r.connectionNote = 'Hi Ava, Jay averages 300k a video. Worth a chat?'; }],
-  ['two-creators', (r) => { r.dm = 'Jay and Gala both fit. Mind if I email you a one-pager? If not your area, just say and I won\'t follow up.'; }],
+  ['two-creators', (r) => { r.dm = 'Jay and Pip both fit. Mind if I email you a one-pager? If not your area, just say and I won\'t follow up.'; }],
   ['number-without-creator', (r) => { r.creator = ''; r.connectionNote = 'Hi Ava, our creator does 50k a video. Worth a chat?'; r.dm = 'Mind if I email you a one-pager?'; }],
   ['hook-without-source', (r) => { r.hook.source = ''; }],
   ['hook-without-date', (r) => { r.hook.date = 'recently'; }],
@@ -55,6 +61,8 @@ const cases = [
   ['email-without-consent', (r) => { r.route = 'email-consented'; r.consent = ''; }],
   ['subject-too-long', (r) => { r.subject = 'A'.repeat(61); }],
   ['generic-subject', (r) => { r.subject = 'Creators for Acme Mowers'; }],
+  ['creator-not-confirmed', (r) => { r.creator = 'Rex'; r.connectionNote = 'Hi Ava, I manage Rex (12k a video). Worth a chat for 2027?'; r.dm = 'Rex films outdoor builds. Mind if I email you a one-pager? If this isn\'t your area, just say and I won\'t follow up.'; }],
+  ['number-not-fresh', (r) => { r.creator = 'Moss'; r.connectionNote = 'Hi Ava, I manage Moss (40k a video). Worth a chat for 2027?'; r.dm = 'Moss films outdoor builds. Mind if I email you a one-pager? If this isn\'t your area, just say and I won\'t follow up.'; }],
 ];
 
 for (const [rule, mutate] of cases) {
@@ -122,10 +130,31 @@ test('two colleagues at one brand never get the same note', () => {
 test('a creator name inside a brand name is not a second creator', () => {
   const row = good();
   row.brand = 'Spear & Jayson'; // contains "Jay" only as part of a word
-  row.connectionNote = 'Hi Ava, saw Spear & Jayson backed a garden channel. Gala (100k a video) fits. Worth a chat?';
-  row.creator = 'Gala';
+  row.connectionNote = 'Hi Ava, saw Spear & Jayson backed a garden channel. Pip (80k a video) fits. Worth a chat?';
+  row.creator = 'Pip';
   row.dm = 'Mind if I email you a one-pager? If this isn\'t your area, just say and I won\'t follow up.';
   assert.deepEqual(lint([row], roster, { today }).errors, []);
+});
+
+test('a creator is named only after a yes in the last 90 days', () => {
+  const row = good();
+  const at = (yesAt) => ({ creators: roster.creators.map((c) => (c.name === 'Jay' ? { ...c, yesAt } : c)) });
+  assert.ok(lint([row], at('2026-07-01'), { today }).errors.some((e) => e.rule === 'creator-not-confirmed'), '127 days ago is too old');
+  assert.ok(lint([row], at(undefined), { today }).errors.some((e) => e.rule === 'creator-not-confirmed'), 'no yes on record fails closed');
+  assert.ok(!lint([row], at('2026-09-01'), { today }).errors.some((e) => e.rule === 'creator-not-confirmed'));
+  assert.ok(lint([row], at('2027-11-02'), { today }).errors.some((e) => e.rule === 'creator-not-confirmed'), 'a date in the future is a typo and fails closed');
+  const plain = { ...good(), creator: '', connectionNote: 'Hi Ava, I manage home and garden YouTube creators. Who looks after creator partnerships at Acme?', dm: 'Thanks for connecting. Want the one-pager here or by email? If this isn\'t your area, just say and I won\'t follow up.', hook: { type: 'none' }, confidence: 'Low' };
+  assert.deepEqual(lint([plain], at(undefined), { today }).errors, [], 'a note that names no creator needs no yes');
+});
+
+test('a number counts only when measured in the last 30 days, and a sheet figure never does', () => {
+  const row = good();
+  const with_ = (patch) => ({ creators: roster.creators.map((c) => (c.name === 'Jay' ? { ...c, ...patch } : c)) });
+  assert.ok(lint([row], with_({ measuredAt: '2026-09-20' }), { today }).errors.some((e) => e.rule === 'number-not-fresh'), '46 days is too old');
+  assert.ok(lint([row], with_({ measuredAt: undefined }), { today }).errors.some((e) => e.rule === 'number-not-fresh'), 'no date fails closed');
+  assert.ok(lint([row], with_({ numberSource: 'roster sheet, not re-measured' }), { today }).errors.some((e) => e.rule === 'number-not-fresh'));
+  row.connectionNote = 'Hi Ava, saw Acme backed a lawn channel for spring. I manage Jay, who builds outdoor projects. Worth a chat for 2027?';
+  assert.ok(!lint([row], with_({ measuredAt: '2026-01-01' }), { today }).errors.some((e) => e.rule === 'number-not-fresh'), 'no number quoted, nothing to be fresh');
 });
 
 test('skip rows are not linted, and the age check needs a date', () => {
