@@ -5,8 +5,9 @@
 // for 30 days after it was measured and then must be measured again.
 //
 //   node agency-desk/scripts/measure.mjs --channels <private channels.json> --today YYYY-MM-DD --out <measured.json>
-//        channels.json: { "<creator as in the Creators tab>": "<channel id, starts with UC>" }
-//   Needs www.youtube.com allowed in the environment's network settings. Check one creator by hand on the first run:
+//        channels.json: { "<creator as in the Creators tab>": "<@handle, channel link, or channel id starting UC>" }
+//   Needs www.youtube.com reachable: run it on a machine with internet (a Mac session) when the cloud environment
+//   blocks it, and save the output to the Drive folder. Check one creator by hand on the first run:
 //   if a feed ever links a Short as /watch, that Short would be counted.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { args, isMain, assertOutsideRepo } from './lib.mjs';
@@ -23,6 +24,26 @@ export function parseFeed(xml) {
     entries.push({ link, published, views, short: /\/shorts\//.test(link) });
   }
   return entries;
+}
+
+// A channel may be given as its id (UC...), a /channel/UC... link, an @handle or a youtube.com/@handle link.
+// Ids are used as they are; handles are looked up on the channel page.
+export function channelRef(value) {
+  const v = String(value || '').trim();
+  const id = v.match(/^(UC[\w-]{20,})$/) || v.match(/youtube\.com\/channel\/(UC[\w-]{20,})/);
+  if (id) return { id: id[1] };
+  const handle = v.match(/^@([\w.-]{3,})$/) || v.match(/youtube\.com\/@([\w.-]{3,})/);
+  if (handle) return { handle: handle[1] };
+  return { error: 'not a channel id, a channel link or an @handle' };
+}
+
+// The channel id from a channel page: the canonical link first, then the page's own metadata.
+export function parseChannelId(html) {
+  const s = String(html || '');
+  const m = s.match(/<link rel="canonical" href="https:\/\/www\.youtube\.com\/channel\/(UC[\w-]{20,})"/)
+    || s.match(/<meta itemprop="(?:identifier|channelId)" content="(UC[\w-]{20,})"/)
+    || s.match(/"externalId":"(UC[\w-]{20,})"/);
+  return m ? m[1] : null;
 }
 
 export function measure(entries, today, { n = 12, minAgeDays = 7, minVideos = 6 } = {}) {
@@ -47,10 +68,18 @@ async function main() {
   const channels = JSON.parse(readFileSync(a.channels, 'utf8'));
   const result = {};
   let ok = 0;
-  for (const [creator, id] of Object.entries(channels)) {
-    if (!/^UC[\w-]{20,}$/.test(String(id))) { result[creator] = { error: 'not a channel id (starts with UC)' }; continue; }
+  for (const [creator, value] of Object.entries(channels)) {
+    const ref = channelRef(value);
+    if (ref.error) { result[creator] = { error: ref.error }; continue; }
     try {
-      // A stalled feed must not hang the run: each request gets 15 seconds.
+      // A stalled page or feed must not hang the run: each request gets 15 seconds.
+      let id = ref.id;
+      if (!id) {
+        const page = await fetch(`https://www.youtube.com/@${ref.handle}`, { signal: AbortSignal.timeout(15_000) });
+        if (!page.ok) throw new Error(`channel page answered ${page.status}`);
+        id = parseChannelId(await page.text());
+        if (!id) throw new Error('no channel id on the channel page');
+      }
       const res = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${id}`, { signal: AbortSignal.timeout(15_000) });
       if (!res.ok) throw new Error(`feed answered ${res.status}`);
       const m = measure(parseFeed(await res.text()), a.today);

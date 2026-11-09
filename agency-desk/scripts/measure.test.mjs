@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { REPO_ROOT } from './lib.mjs';
-import { parseFeed, measure } from './measure.mjs';
+import { parseFeed, measure, channelRef, parseChannelId } from './measure.mjs';
 import { validate, parseLog, status } from './tracker.mjs';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
@@ -32,6 +32,24 @@ test('the typical video is the median of recent long videos: Shorts, fresh uploa
   assert.equal(m.measured.typical, 6000);
   assert.equal(m.measured.best, 400000);
   assert.equal(m.measured.at, '2026-11-09');
+});
+
+test('a channel can be given as an id, a channel link, an @handle or a handle link; anything else is refused', () => {
+  const id = 'UC' + 'a1B2c3D4e5F6g7H8i9J0kL';
+  assert.deepEqual(channelRef(id), { id });
+  assert.deepEqual(channelRef(`https://www.youtube.com/channel/${id}/videos`), { id });
+  assert.deepEqual(channelRef('@JaySample'), { handle: 'JaySample' });
+  assert.deepEqual(channelRef('https://www.youtube.com/@JaySample/videos'), { handle: 'JaySample' });
+  assert.ok(channelRef('Jay Sample').error);
+  assert.ok(channelRef('https://video.example/@JaySample').error, 'only youtube.com links');
+});
+
+test('the channel id comes from the page itself, or nothing does', () => {
+  const id = 'UC' + 'a1B2c3D4e5F6g7H8i9J0kL';
+  assert.equal(parseChannelId(`<html><link rel="canonical" href="https://www.youtube.com/channel/${id}"></html>`), id);
+  assert.equal(parseChannelId(`<meta itemprop="identifier" content="${id}">`), id);
+  assert.equal(parseChannelId('{"metadata":{"externalId":"' + id + '"}}'), id);
+  assert.equal(parseChannelId('<html>no id here</html>'), null);
 });
 
 test('too few long videos means no number, never a guess', () => {
