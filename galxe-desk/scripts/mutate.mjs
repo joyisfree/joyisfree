@@ -121,7 +121,7 @@ export const MUTATIONS = [
   // agents.mjs — the reader/writer firewall over .claude/agents
   ['web reader may not also act', 'agents.mjs', 'if (web.length && write.length) out.push(', 'if (false) out.push('],
   ['web reader may not hold project memory', 'agents.mjs', "if (web.length && memory === 'project') out.push(", 'if (false) out.push('],
-  ['an agent must list its tools', 'agents.mjs', "if (!fm.tools) return ['no explicit tools line", "if (false) return ['no explicit tools line"],
+  ['an agent must list its tools', 'agents.mjs', "if (!tools.length) return ['no explicit tools line", "if (false) return ['no explicit tools line"],
   ['no frontmatter fails closed', 'agents.mjs', "if (!fm) return ['no frontmatter", "if (false) return ['no frontmatter"],
   ['MCP tools count as outside content', 'agents.mjs', "|| t.startsWith('mcp__');", '|| false;'],
   // agency/scripts/ab-test.mjs — the pre-registered A/B analyser
@@ -506,6 +506,15 @@ export const MUTATIONS = [
   ["every row's order number must hold a digit, not only the first","agency/scripts/orders.mjs","if (!/\\d/.test(id)) {","if (r === 1 && !/\\d/.test(id)) {"],
   ["a refusal never echoes either of two clashing cells","agency/scripts/orders.mjs","values (rows ${had.row} and ${r + 1})","values (${had.v} and ${v}, rows ${had.row} and ${r + 1})"],
   ["a refusal never echoes a date cell","agency/scripts/orders.mjs",": ${names.created} is not a date written year first",": ${names.created} (${val('created')}) is not a date written year first"],
+  // galxe-desk/scripts/agents.mjs — YAML spellings the loader reads as a breach now fail (9 Nov 2026)
+  ["a frontmatter problem is a breach","agents.mjs","if (fm.problems.length) return fm.problems;","if (false) return fm.problems;"],
+  ["a trailing YAML comment is not part of the value","agents.mjs","if (hash !== -1) v = v.slice(0, hash).trim();","if (false) v = v.slice(0, hash).trim();"],
+  ["matching quotes are not part of the value","agents.mjs","return quoted ? quoted[2].trim() : v;","return v;"],
+  ["a [a, b] flow list of tools is read as a list","agents.mjs","return (flow ? flow[1] : v).split","return v.split"],
+  ["a tools or memory value that is not plain fails closed","agents.mjs","if (READ.has(key) && [].concat(fields[key]).some((v) => UNPLAIN.test(v))) problems.push(","if (false) problems.push("],
+  ["a key set twice fails closed","agents.mjs","if (Object.hasOwn(fields, key)) problems.push(","if (false) problems.push("],
+  ["a line that is not key: value fails closed","agents.mjs","if (!kv) problems.push(","if (false) problems.push("],
+  ["an indented line under tools or memory fails closed","agents.mjs","if (key === null || READ.has(key)) problems.push(","if (false) problems.push("],
 ];
 
 // Apply one mutation to a throwaway copy of the scripts and run the suite there. KILLED = a test went red.
