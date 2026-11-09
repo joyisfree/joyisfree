@@ -316,6 +316,61 @@ test('a seed saved as a CSV, or numbered 1st, w1, Word1 or word_1, is caught onc
   assert.deepEqual(seedEnds('12,abandon'), { lead: ['abandon'], trail: ['abandon'], words: ['abandon'], nums: [12] });
 });
 
+// Round 3 of the verifiers, 9 Nov 2026: a product sheet whose every cell is a BIP39 word ("1,dress,black" to
+// "6,belt,coral", or "dress,black" with no number) failed as a seed. A seed backup saved as a CSV has two cells, its
+// number first; a wider row, or one without its number first, is a product sheet's, and its cells are not seed words.
+const PRODUCT_SHEETS = {
+  'id,piece,colour, numbered 1 to 6': [
+    'id,piece,colour', '1,dress,black', '2,jacket,cream',
+    '3,skirt,olive', '4,bag,sand', '5,hat,coral',
+    '6,belt,ivory',
+  ],
+  'piece,colour, no number': [
+    'piece,colour', 'dress,black', 'jacket,cream',
+    'skirt,olive', 'bag,sand', 'hat,coral',
+    'belt,ivory',
+  ],
+  'piece;colour;fabric': [
+    'piece;colour;fabric', 'dress;black;cotton', 'jacket;cream;wool',
+    'skirt;olive;silk', 'bag;sand;cotton', 'hat;coral;wool',
+    'belt;ivory;silk',
+  ],
+  'an index column from 0': [
+    ',colour,piece', '0,black,dress', '1,cream,jacket',
+    '2,olive,skirt', '3,sand,bag', '4,coral,hat',
+    '5,ivory,belt',
+  ],
+  'a shoot list': [
+    'shot,piece,colour', '1,dress,black', '2,jacket,cream',
+    '3,skirt,olive', '4,bag,sand', '5,hat,coral',
+    '6,belt,ivory',
+  ],
+};
+
+test('a product sheet of BIP39 pieces and colours is not a seed: only a two-cell row, its number first, is read as cells (verifier round 3, 9 Nov 2026)', () => {
+  for (const [name, rows] of Object.entries(PRODUCT_SHEETS)) assert.deepEqual(secretHits(page('pieces.csv', rows)), [], name);
+  assert.deepEqual(seedEnds('1,dress,black').words, [], 'three cells: a product row');
+  assert.deepEqual(seedEnds('dress,black').words, [], 'two cells without a number first');
+  assert.deepEqual(seedEnds('jacket,black,small,cotton,olive,AB-12').lead, [], 'six cells, one a SKU: a product row, never split');
+  assert.deepEqual(seedEnds('1. Jacket: black, cream, olive, sand 2. dress').words, [], 'a list item mid-line is a list, not a label');
+  assert.deepEqual(seedEnds('"7" ; "abandon"').words, ['abandon'], 'a quoted two-cell backup row, with spaces');
+});
+
+// The repo's own benchmark is six pieces in four colourways each, and its numbered list ("1. Jacket: black, cream,
+// olive, sand") failed as a seed before and after the review fixes. A seed numbers one word at a time; a number with
+// several words after it heads a list.
+test('a numbered colourway list is not a seed: a number that owns more than one word heads a list (verifier round 3, 9 Nov 2026)', () => {
+  const colourways = [
+    '1. Jacket: black, cream, olive, sand', '2. Dress: black, ivory, coral, lemon',
+    '3. Skirt: olive, sand, stone, ocean', '4. Hat: cream, coral, forest, gold',
+    '5. Bag: black, silver, ivory, sand', '6. Belt: stone, olive, coral, cream',
+  ];
+  assert.deepEqual(secretHits(page('colourways.md', colourways)), []);
+  assert.deepEqual(seedEnds('1. Jacket: black, cream, olive, sand').words, [], 'one number, five words');
+  assert.deepEqual(seedEnds('Word 1: rifle').words, ['rifle'], 'a label before the number is not a second word');
+  assert.deepEqual(seedEnds('1. abandon   13. zoo').words, ['abandon', 'zoo'], 'two columns, one word to each number');
+});
+
 // An X session cookie as the browser extensions export it: one JSON object per cookie, its name and value six lines
 // apart. The names are built from pieces, so this file never holds a name beside a value.
 const AUTH = j('auth', '_token');
@@ -345,7 +400,7 @@ test('secrets: a cookie export, a cookies.txt and a seed saved as a CSV in the t
   const root = repo({ 'x-cookies.json': `${['[', ...editorCookie(AUTH, chars(HEX, 40, 97)), ']'].join('\n')}\n`, 'cookies.txt': cookiesTxt, 'wallet-backup.csv': csv });
   const r = secrets({ root, git: scanGit({ files: ['x-cookies.json', 'cookies.txt', 'wallet-backup.csv'] }).git });
   assert.equal(r.status, 'FAIL');
-  for (const at of ['x-cookies.json:13 (x-session-cookie)', 'cookies.txt:2 (x-session-cookie)', 'wallet-backup.csv:1 (bip39-seed)']) assert.ok(r.detail.includes(at), `${at} not in: ${r.detail}`);
+  for (const at of ['x-cookies.json:13 (x-session-cookie)', 'cookies.txt:2 (x-session-cookie)', 'wallet-backup.csv:2 (bip39-seed)']) assert.ok(r.detail.includes(at), `${at} not in: ${r.detail}`);
 });
 
 // 9 Nov 2026, the R2 verifier: once commas and semicolons separated seed words, a stock CSV of colours, sizes and
@@ -408,13 +463,13 @@ test('a count first in each row is not seed numbering: a numbered row joins only
   for (const [name, rows] of Object.entries(COUNT_FIRST)) assert.deepEqual(secretHits(page('order.csv', rows)), [], name);
   const s = seedWords(SEED_WORDS, 23);
   assert.deepEqual(secretHits(page('w.csv', s.map((w, i) => `${i + 1},${w}`))), [{ where: 'w.csv:1', kinds: ['bip39-seed'] }], 'a seed saved as index,word');
-  assert.deepEqual(secretHits(page('w.csv', ['index,word', ...s.map((w, i) => `${i + 1};${w}`)])), [{ where: 'w.csv:1', kinds: ['bip39-seed'] }], 'with a header and semicolons (index and word are BIP39 words, so the run starts there)');
+  assert.deepEqual(secretHits(page('w.csv', ['index,word', ...s.map((w, i) => `${i + 1};${w}`)])), [{ where: 'w.csv:2', kinds: ['bip39-seed'] }], 'with a header and semicolons');
   const t = seedWords(24, 29);
   const twoColumns = t.slice(0, 12).map((w, i) => `${i + 1}. ${w}   ${i + 13}. ${t[i + 12]}`);
   assert.ok(secretHits(page('w.md', twoColumns)).some((h) => h.kinds.includes('bip39-seed')), 'a 24-word seed in two numbered columns');
   const blocks = [...s.slice(0, 6).map((w, i) => `${i + 1}. ${w}`), '', ...s.slice(6).map((w, i) => `${i + 7}. ${w}`)];
   assert.deepEqual(secretHits(page('w.md', blocks)), [{ where: 'w.md:1', kinds: ['bip39-seed'] }], 'two numbered blocks of six across a blank line');
-  assert.deepEqual(seedEnds('4,black,dress').nums, [4]);
+  assert.deepEqual(seedEnds('| 4 | black | dress |').nums, [4]);
   assert.deepEqual(seedEnds('5. ocean 3. ladder').words, [], "numbers that fall within one line are not a seed's");
 });
 
@@ -428,8 +483,9 @@ test('leif-pages: a tilde before a number, a path after a word that is also a to
 });
 
 test('a number is numbering only when a word follows it; after its words it is a count and breaks the row', () => {
-  assert.deepEqual(seedEnds('black,small,2'), { lead: ['black', 'small'], trail: [], words: [], nums: [] });
-  assert.deepEqual(seedEnds('2,black,small'), { lead: ['black', 'small'], trail: ['black', 'small'], words: ['black', 'small'], nums: [2] });
+  assert.deepEqual(seedEnds('| black | small | 2 |'), { lead: ['black', 'small'], trail: [], words: [], nums: [] });
+  assert.deepEqual(seedEnds('| 2 | black |'), { lead: ['black'], trail: ['black'], words: ['black'], nums: [2] });
+  assert.deepEqual(seedEnds('| 2 | black | small |').words, [], 'a number that owns two words heads a list');
   assert.deepEqual(seedEnds('| 3 | ocean | 4 |'), { lead: ['ocean'], trail: [], words: [], nums: [3] });
   assert.deepEqual(seedEnds('Seed word 1: rifle').words, ['rifle'], 'the words before a number are its label');
   assert.deepEqual(seedEnds('5. word 6. zoo').words, ['word', 'zoo'], 'a numbered word is never a label');
@@ -451,7 +507,8 @@ test('a seed may repeat a word or two in any twelve in a row; a run with three r
   assert.deepEqual(secretHits(page('w.txt', twoRepeats.map((w, i) => `${i + 1}. ${w}`))), [{ where: 'w.txt:1', kinds: ['bip39-seed'] }]);
   assert.deepEqual(secretHits(page('w.txt', threeRepeats.map((w, i) => `${i + 1}. ${w}`))), []);
   const stockThenSeed = [...STOCK_LISTS['no quantity, sorted by colour'].slice(1), s.slice(0, 6).join(','), s.slice(6).join(',')];
-  assert.deepEqual(secretHits(page('mixed.csv', stockThenSeed)), [{ where: 'mixed.csv:1', kinds: ['bip39-seed'] }], 'a seed pasted under stock rows');
+  const seedAt = STOCK_LISTS['no quantity, sorted by colour'].length; // the first seed line: the stock rows are not part of its run
+  assert.deepEqual(secretHits(page('mixed.csv', stockThenSeed)), [{ where: `mixed.csv:${seedAt}`, kinds: ['bip39-seed'] }], 'a seed pasted under stock rows, six words a line');
 });
 
 // --------------------------------------------------------------------------------------------- history, then the check

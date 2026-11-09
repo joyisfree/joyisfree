@@ -488,24 +488,46 @@ function seedMark(raw) {
  * semicolons separate tokens, so a markdown table's cells and a CSV's columns (`1,about`, `1;about`) read as words;
  * until 9 Nov 2026 a CSV row was one token, not a word, and a seed saved as a spreadsheet passed.
  */
+// A CSV row is read as cells only in the one shape a seed backup takes: two cells, its number first ("1,abandon",
+// "1;abandon", "\"1\",\"abandon\""). A wider row, or one without its number first, is a product sheet's ("1,dress,black",
+// "dress,black"), and its cells are never seed words: the third round of verifiers, 9 Nov 2026, found a sheet of BIP39
+// pieces and colours failing as a seed when every comma and semicolon split a row.
+const SEED_CELLS = /^\s*["']?(#?\d{1,2}(?:st|nd|rd|th)?|\(\d{1,2}\)|(?:w|word)[_-]?\d{1,2})["']?\s*[,;]\s*["']?([A-Za-z]+)["']?\s*[,;]?\s*$/i;
+
+// A seed pasted as a comma list, half or more of it to a line ("abandon,ability,able,about,above,absent"), is read as
+// words too: six cells or more, every one a BIP39 word. A product sheet has fewer columns, or a number or a SKU in one.
+export const SEED_LIST_CELLS = 6;
+/** How many words may label the next number on a line ("Seed word #2: def"); more after a numbered word is a list. */
+export const SEED_LABEL_WORDS = 2;
+const listCells = (s) => {
+  const parts = s.split(/[,;]/).map((c) => c.trim().split(/["']/).join('').toLowerCase()).filter((c) => c !== '');
+  return parts.length >= SEED_LIST_CELLS && parts.every((c) => BIP39.has(c)) ? parts : null;
+};
+
 export function seedEnds(text) {
-  const tokens = String(text).split(/[\s|,;]+/);
+  const cells = SEED_CELLS.exec(String(text));
+  const tokens = cells ? [cells[1], cells[2]] : listCells(String(text)) ?? String(text).split(/[\s|]+/);
   const marks = tokens.map(seedMark);
   const kept = marks.map((m, i) => [m, tokens[i]]).filter(([m]) => m !== '');
   const row = [];
   const nums = []; // the numbers that number a word, in order: a seed's run on, 1, 2, 3 (secretHits joins rows by them)
   let label = 0; // where the words that may label the next number start: after the last numbered word
+  let list = false; // a number that owns more than one word heads a list ("1. Jacket: black, cream, olive, sand")
   kept.forEach(([m, raw], i) => {
     if (m !== NUMBERING) row.push(m);
     else if (typeof kept[i + 1]?.[0] !== 'string') row.push(null); // a count after its words, not numbering
     else {
-      if (!row.slice(label).includes(null)) row.length = label; // "Word 1: rifle": the words before a number label it
+      const after = row.slice(label);
+      if (nums.length && after.length > SEED_LABEL_WORDS && !after.includes(null)) list = true;
+      if (!after.includes(null)) row.length = label; // "Word 1: rifle": the words before a number label it
       label = row.length + 1;
       nums.push(Number(/\d{1,2}/.exec(raw)[0]));
     }
   });
-  // Numbers that do not rise along one line ("5. ocean 3. ladder") are not a seed's numbering.
-  if (nums.some((n, i) => i > 0 && n <= nums[i - 1])) return { lead: [], trail: [], words: [], nums };
+  if (nums.length && row.length > label && !row.slice(label).includes(null)) list = true;
+  // Numbers that do not rise along one line ("5. ocean 3. ladder") are not a seed's numbering, and a numbered list of
+  // several words to each number is a list: the repo's own six pieces in four colourways each failed as a seed.
+  if (list || nums.some((n, i) => i > 0 && n <= nums[i - 1])) return { lead: [], trail: [], words: [], nums };
   const first = row.indexOf(null);
   if (first < 0) return { lead: row, trail: row, words: row, nums };
   return { lead: row.slice(0, first), trail: row.slice(row.lastIndexOf(null) + 1), words: [], nums };
