@@ -1,6 +1,6 @@
 ---
 name: qalam
-description: "A pen-first day (Qalam). Use when the user types /qalam; brain-dumps tasks for tomorrow (a to-do list, not a new idea to build); sends a photo of their handwritten to-do page or 31-day grid; says they overslept, missed Fajr or want to wake up better; asks for their Friday review; or asks to block their MUST on the calendar. Not for project or code work, and not a digital morning brief."
+description: "Pen-first day (Qalam). Use when the user types /qalam, brain-dumps to-dos for tomorrow, sends a photo of their paper list or grid, overslept, missed Fajr, wants a Friday review or the MUST blocked."
 ---
 
 # Qalam: pen first, then the phone

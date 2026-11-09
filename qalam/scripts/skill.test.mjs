@@ -42,7 +42,7 @@ export function checkFrontmatter(md, folder) {
   for (const key of f.keys) if (!ACCOUNT_KEYS.includes(key)) problems.push(`frontmatter key "${key}" is not accepted by account skills`);
   if (f.name !== folder) problems.push(`name "${f.name}" does not match the folder "${folder}"`);
   if (!f.description) problems.push('the description is missing');
-  if (f.description.length > 500) problems.push(`the description is ${f.description.length} characters (limit 500)`);
+  if (f.description.length > 200) problems.push(`the description is ${f.description.length} characters (limit 200, claude.ai's)`);
   if (!/\bUse when\b/.test(f.description)) problems.push('the description does not say when to use the skill');
   return problems;
 }
@@ -110,7 +110,7 @@ test('each check fails on a broken fixture (the guard is wired)', () => {
   const closing = '\n---\n';
   assert.ok(checkFrontmatter(skillMd.replace(closing, `\nmodel: sonnet${closing}`), 'qalam').length, 'an extra frontmatter key');
   assert.ok(checkFrontmatter(skillMd, 'not-qalam').length, 'a name that does not match the folder');
-  assert.ok(checkFrontmatter(skillMd.replace(/^description: ".*"$/m, `description: "Use when ${'x'.repeat(500)}"`), 'qalam').length, 'a description over 500 characters');
+  assert.ok(checkFrontmatter(skillMd.replace(/^description: ".*"$/m, `description: "Use when ${'x'.repeat(192)}"`), 'qalam').length, 'a description of 201 characters');
   assert.ok(checkFrontmatter(skillMd.replace('Use when', 'Use for'), 'qalam').length, 'a description that never says when');
   assert.ok(checkFrontmatter('no frontmatter here', 'qalam').length, 'a file with no frontmatter');
   assert.ok(checkBody(skillMd + '\n'.repeat(200)).length, 'a body over 150 lines');
