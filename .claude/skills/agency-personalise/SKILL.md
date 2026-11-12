@@ -71,8 +71,15 @@ Then one easy question. The DM after they accept ends with the consent ask ("Min
      right of his own columns.
 10. **Warm replies, brands and creators.**
     - Read the thread in the main session. Write the reply as a **Gmail draft** inside that thread, never sent.
+      Leif said on 12 Nov that drafts need no permission each time: create, rewrite and file them without asking.
     - Before it goes anywhere, check the thread: a creator who declined our budget gets no "are you open?" email.
-    - A hold goes in the subject as [WAIT: ...] or [CHECK: ...].
+    - Subjects stay the thread's own "Re:" (Leif turned down [WAIT]/[CHECK] tags on 10 Nov).
+    - File it:
+      - `label_thread` puts the thread under "Joyisfree Drafts/Ready to send" or "Joyisfree Drafts/On hold".
+        A brand-new email has no thread yet, so it takes no label and is found through the log.
+      - Add one row to the Drive Sheet "Drafts log": who, folder, why or what unlocks it, the draft link, the date.
+      - Run `list_drafts` on each label to check. An older draft by Leif in the same thread gets labelled too, so
+        the log names it.
     - Any promise in a reply goes into the tracker with its date:
       `node agency-desk/scripts/tracker.mjs add --log <private events.jsonl> --key "Brand | Name" --event promise
       --note "..." --due YYYY-MM-DD`.
@@ -88,8 +95,22 @@ Then one easy question. The DM after they accept ends with the consent ask ("Min
     recorded.
   - LinkedIn-found addresses without a yes are research only.
   - Personal webmail is never used.
-- Every email names Leif and Joyisfree Studio, gives the website and an opt-out, and a postal address for US brands.
-  LIVE waits for that address.
+- Every email reads like a friend texting (Leif, 10 Nov: "no signatures that are cooked").
+  - It names Leif (and Joyisfree Studio in a first email), and ends with a short friend-style opt-out such as "Just
+    say if you'd rather I stop." That covers the Spam Act and UK PECR.
+  - No signature block, footer, links or images.
+  - US recipients also need a postal address (CAN-SPAM), so those drafts stay **On hold** until Leif has a PO box.
+    LIVE waits for it too.
+- Leif's voice, from his own sent mail (the May and June creator emails that got replies):
+  - **Keep:** a playful subject from their latest video, one specific true compliment or detail, one warm short line
+    (":)" allowed), one question, and "Leif".
+  - **Better:**
+    - 40 to 70 words;
+    - no copy-paste middle line, and no subject formula used twice in a day;
+    - mid-size, in-niche creators first;
+    - at most one sentence owning a missed promise;
+    - no date promised without a tracker entry;
+    - no haggling before there's a brief.
 - Numbers come only from the roster truth table, and only within 30 days of a dated measurement.
   - The measurement comes from `measure.mjs` on the creator's public feed, or from the creator's own screenshot.
   - Record it as `measured` in the private roster overrides: the median of the recent long videos, and the best of

@@ -1,7 +1,9 @@
-# State — 9 Nov 2026, week 1 actioned (the Agency Desk)
+# State — 12 Nov 2026, drafts filed (the Agency Desk)
 - **Goal:** every brand contact Leif adds on LinkedIn gets a true note and DM that earns a reply; email only after a yes (Spam Act).
 - **Done (all real data in Leif's Drive and Gmail drafts, none here):**
-  - 18 Gmail drafts, none sent: 7 warm brands (4 carry [WAIT: ...]) and 11 creator check-ins inside their old threads (one new email carries [CHECK: ...]).
+  - 18 Gmail drafts in Leif's own voice, none sent, filed in Gmail under "Joyisfree Drafts": 11 in "Ready to send" and 7 in "On hold" (the US brands wait for a postal address; two wait for a creator's yes; one address needs checking).
+    - The Drive Sheet "Drafts log" lists all 18 with the send order, the reason and a link. Two brand-new emails take no Gmail label, so the log is where they are found.
+    - `.claude/settings.json` lets sessions in this repo draft, label and read without a prompt, and blocks sending, deleting, trashing and sharing.
   - Three creators who declined our budget get no email. A fourth with no address gets a channel message for Leif to paste.
   - Pack v2: 332 rows, 0 lint errors. Only one names a creator: the one creator with a yes in the last 90 days. 192 rows are honest role checks.
   - Today v2: 10 rows, one per brand, none of them mower brands. Today v1 is marked old in Drive.
@@ -14,7 +16,7 @@
   - The privacy gate now catches short names.
 - **Honest result:** the notes are true but plain. Confidence is Low, because titles still await Leif's LinkedIn export and creator numbers await fresh screenshots.
 - **Next (in order):**
-  1. Leif sends the drafts in the kit's order: one warm brand a day, the creators we owe first.
+  1. Leif sends the "Ready to send" drafts in the Drafts log order (the creators we owe first, one warm brand a day) and ticks "Sent?".
   2. Each creator yes, with its screenshot date, goes into the private roster overrides. Re-run finalise and the fuller notes come back.
   3. The LinkedIn export (Connections, Messages, Invitations): titles for the work list, and the tracker's history.
   4. Allow YouTube in the network settings, then run `measure.mjs` for every roster creator and US scout.
