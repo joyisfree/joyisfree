@@ -156,9 +156,93 @@ export function lint(rows, roster, { today, noteMax = 200, maxAgeDays = 183, yes
   return { errors, warnings, checked: rows.length };
 }
 
-export function report({ errors, warnings, checked }) {
+// The email voice, from Leif's own sent mail (the May and June creator emails that got replies) and his 10 Nov rule:
+// "like a friend texting, no signatures that are cooked". 40 to 70 words, one true detail, one question, a short
+// opt-out, signed "Leif" (and "Joyisfree Studio" in a first email, so the sender is identified under the Spam Act).
+const EMAIL_OPT_OUT = /(rather i (stop|didn'?t)|say the word and i'?ll stop|won'?t email (you )?again|no reply needed|just say and i'?ll stop|if not,? just say|happy to stop)/i;
+const SIGNATURE = /(kind regards|best regards|warm(est)? regards|regards,|sincerely|best wishes|many thanks,|sent from my|^--\s*$|unsubscribe)/im;
+const LINK = /https?:\/\/|www\.|\b[a-z0-9-]+\.(com|net|org|io|co|au|uk|us|online|studio)(\b|\/)/i;
+const PHONE = /\+?\d[\d ()-]{7,}\d/;
+const SUBJECT_TAG = /\[[A-Z][A-Z ]{2,}(:[^\]]*)?\]/;
+const POSTAL = /\b(p\.?\s?o\.?\s?box|gpo box|locked bag)\b/i;
+const DATE_PROMISE = /\b(i'?ll|i will|we'?ll|we will)\b[^.?!\n]*\b(by|on|before|next|this|in|until)\s+(the end of |early |mid |late )?((mon|tues|wednes|thurs|fri|satur|sun)day|january|february|march|april|june|july|august|september|october|november|december|next week|tomorrow|the weekend)\b/i;
+const HAGGLE = /\b(drop|lower|reduce|bring down|knock down)\b[^.?!\n]{0,20}\b(rate|price|fee)s?\b|\b(best|lowest) (rate|price)\b|\bdiscount\b/i;
+const words = (s) => (String(s || '').match(/[a-z0-9][a-z0-9'’]*/gi) || []).length;
+const sentences = (s) => String(s || '').split(/(?<=[.!?])\s+|\n+/).map((x) => x.trim()).filter(Boolean);
+
+// One email: { key, subject, body, first, us (true, false, or unknown), holds, allowNumbers, confirmedClaims }.
+// The folder is "Fix first" while any error remains, "On hold" while any hold remains, else "Ready to send".
+export function lintEmail(e, { postal = '', minWords = 40, maxWords = 70 } = {}) {
+  const errors = [];
+  const warnings = [];
+  const err = (rule, detail) => errors.push({ key: e.key, rule, detail });
+  const warn = (rule, detail) => warnings.push({ key: e.key, rule, detail });
+  const body = String(e.body || '');
+  const subject = String(e.subject || '');
+  const n = words(body);
+  if (n > maxWords) err('too-long', `${n} words > ${maxWords}`);
+  if (n < minWords) warn('short', `${n} words < ${minWords}`);
+  const q = (body.match(/\?/g) || []).length;
+  if (q === 0) err('no-question', 'one easy question, so it is easy to reply');
+  if (q > 1) err('more-than-one-question', `${q} questions; keep one`);
+  if (!EMAIL_OPT_OUT.test(body)) err('no-opt-out', 'end with a short way out ("Just say if you\'d rather I stop.")');
+  const postalLine = (l) => (postal ? l === postal.trim() : POSTAL.test(l));
+  const lines = body.split('\n').map((l) => l.trim()).filter(Boolean);
+  while (lines.length && postalLine(lines.at(-1))) lines.pop();
+  if (!/^leif\b/i.test(lines.at(-1) || '')) err('no-sender', 'sign off "Leif"');
+  if (e.first && !/joyisfree/i.test(body)) err('first-email-no-studio', 'a first email names Joyisfree Studio');
+  if (SIGNATURE.test(body)) err('signature', SIGNATURE.exec(body)[0].trim());
+  if (LINK.test(body)) err('link', 'no links in the email');
+  if (PHONE.test(body)) err('phone-number', 'no phone number or footer');
+  for (const b of BANNED) if (`${subject}\n${body}`.toLowerCase().includes(b)) err('banned-phrase', b);
+  const claim = FIRST_PERSON.exec(body);
+  if (claim && !(e.confirmedClaims || []).some((c) => claim[0].toLowerCase().includes(String(c).toLowerCase()))) err('unconfirmed-claim', claim[0]);
+  const allowed = new Set((e.allowNumbers || []).map(numKey));
+  for (const x of (body.match(NUMBER) || []).map(numKey)) if (!allowed.has(x)) err('number-not-fresh', `${x}: quote a number only from a measurement in the last 30 days`);
+  if (SUBJECT_TAG.test(subject)) err('subject-tag', SUBJECT_TAG.exec(subject)[0]);
+  // A reply keeps its thread's own "Re:" subject, whatever its length, so the thread never splits.
+  if (!/^re:/i.test(subject) && subject.length > 60) err('subject-too-long', `${subject.length} > 60`);
+  if (!/^re:/i.test(subject) && GENERIC_SUBJECT.test(subject)) err('generic-subject', subject);
+  if (DATE_PROMISE.test(body)) warn('date-promise', `${DATE_PROMISE.exec(body)[0]}: add a tracker promise with its due date`);
+  if (HAGGLE.test(body)) warn('haggle-before-brief', HAGGLE.exec(body)[0]);
+
+  const hold = [...(e.holds || [])];
+  if (e.us === true && !(postal ? body.includes(postal.trim()) : POSTAL.test(body))) hold.push('US recipient: needs the postal line (CAN-SPAM)');
+  if (e.us !== true && e.us !== false) hold.push('check the country first: a US recipient needs the postal line');
+  const folder = errors.length ? 'Fix first' : hold.length ? 'On hold' : 'Ready to send';
+  return { key: e.key, errors, warnings, hold, folder };
+}
+
+// A run's emails together: each one alone, then no copy-paste middle sentence and no subject formula used twice.
+// The question and the opt-out may repeat: they are the ask and the legal line, not the personal part.
+export function lintEmails(list, opts = {}) {
+  const results = list.map((e) => lintEmail(e, opts));
+  const errors = results.flatMap((r) => r.errors);
+  const warnings = results.flatMap((r) => r.warnings);
+  const middle = new Map();
+  const subjects = new Map();
+  for (const e of list) {
+    for (const s of sentences(e.body)) {
+      if (words(s) < 8 || s.endsWith('?') || EMAIL_OPT_OUT.test(s) || /^leif\b/i.test(s)) continue;
+      const k = norm(s);
+      if (middle.has(k) && middle.get(k) !== e.key) errors.push({ key: e.key, rule: 'copy-paste-line', detail: `same sentence as the email for ${middle.get(k)}` });
+      else middle.set(k, e.key);
+    }
+    const subj = String(e.subject || '');
+    if (!/^re:/i.test(subj)) {
+      const k = norm(subj).split(' ').slice(0, 3).join(' ');
+      if (k && subjects.has(k)) warnings.push({ key: e.key, rule: 'same-subject-formula', detail: `starts like the subject for ${subjects.get(k)}` });
+      else if (k) subjects.set(k, e.key);
+    }
+  }
+  for (const r of results) if (errors.some((x) => x.key === r.key)) r.folder = 'Fix first';
+  return { errors, warnings, results, checked: list.length };
+}
+
+export function report({ errors, warnings, checked, results }, unit = 'rows') {
   const count = (xs) => xs.reduce((m, e) => ((m[e.rule] = (m[e.rule] || 0) + 1), m), {});
-  const lines = [`checked ${checked} rows · ${errors.length} errors · ${warnings.length} warnings`];
+  const lines = [`checked ${checked} ${unit} · ${errors.length} errors · ${warnings.length} warnings`];
+  if (results) lines.push(Object.entries(results.reduce((m, r) => ((m[r.folder] = (m[r.folder] || 0) + 1), m), {})).map(([f, c]) => `${f} ${c}`).join(' · '));
   for (const [k, v] of Object.entries(count(errors))) lines.push(`error ${k.padEnd(26)} ${v}`);
   for (const [k, v] of Object.entries(count(warnings))) lines.push(`warn  ${k.padEnd(26)} ${v}`);
   return lines.join('\n');
@@ -166,6 +250,12 @@ export function report({ errors, warnings, checked }) {
 
 function main() {
   const a = args();
+  if (a.emails) {
+    // node lint-lines.mjs --emails <emails.json> [--postal "<the postal line>"] [--json]
+    const result = lintEmails(JSON.parse(readFileSync(a.emails, 'utf8')), { postal: typeof a.postal === 'string' ? a.postal : '' });
+    console.log(a.json ? JSON.stringify(result, null, 2) : report(result, 'emails'));
+    process.exit(result.errors.length ? 1 : 0);
+  }
   if (!a.rows || !a.roster || !a.today) {
     console.error('usage: lint-lines.mjs --rows <rows.json> --roster <roster.json> --today YYYY-MM-DD [--note-max 200] [--max-age-days 183] [--yes-days 90] [--fresh-days 30] [--json]');
     process.exit(2);

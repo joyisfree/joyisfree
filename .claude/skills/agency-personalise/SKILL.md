@@ -80,6 +80,7 @@ Then one easy question. The DM after they accept ends with the consent ask ("Min
       - Add one row to the Drive Sheet "Drafts log": who, folder, why or what unlocks it, the draft link, the date.
       - Run `list_drafts` on each label to check. An older draft by Leif in the same thread gets labelled too, so
         the log names it.
+      - `update_draft` drops the draft's label (seen 14 Nov), so label the thread again after every rewrite.
     - Any promise in a reply goes into the tracker with its date:
       `node agency-desk/scripts/tracker.mjs add --log <private events.jsonl> --key "Brand | Name" --event promise
       --note "..." --due YYYY-MM-DD`.
@@ -87,6 +88,23 @@ Then one easy question. The DM after they accept ends with the consent ask ("Min
     - Run `tracker.mjs status --today YYYY-MM-DD` (overdue promises, follow-ups due).
     - Append to `agency-desk/docs/errors.md`.
     - Rewrite `agency-desk/docs/state.md` (15 lines or fewer).
+
+## The automatic run (Mon, Wed, Fri; Leif, 12 Nov: "automatic, I don't have to do anything")
+
+It drafts only for people Leif added since the last run, and never sends.
+1. Pull both sheets (step 0, then `python3 -I agency-desk/scripts/split-xlsx.py`). Download the Drafts log, pack v2 and
+   the "Desk memory" file from the Drive folder.
+2. `node agency-desk/scripts/newrows.mjs --li <dir>/li --ima <dir>/ima --seen <log>,<pack>,<memory> --log <events.jsonl>
+   --out <scratch>/newrows.json`. "nothing new" ends the run with a one-line note.
+3. Run one Gmail search over the new addresses (`{to:a to:b}`, THREAD_VIEW_METADATA_ONLY). Save the result to a file
+   and read it with a script. Anyone already emailed goes into the memory, not into a draft.
+4. Research each new person with `agency-reader`, at most 2 searches each: niche, country, size, and the latest video
+   with its date.
+   - No fit (giant, off-niche, another agency's talent, channel not found): the memory records why.
+   - No recent video found: no draft, because the detail must be true.
+5. Write each email in Leif's voice, lint it with `--emails` to 0 errors, create it, and file it (step 10). Then add
+   its address to the memory and its row to the log.
+6. End with three lines for Leif: new drafts (Ready, On hold), skipped and why, and anything only he can do.
 
 ## Rules that are not bent
 
@@ -99,8 +117,10 @@ Then one easy question. The DM after they accept ends with the consent ask ("Min
   - It names Leif (and Joyisfree Studio in a first email), and ends with a short friend-style opt-out such as "Just
     say if you'd rather I stop." That covers the Spam Act and UK PECR.
   - No signature block, footer, links or images.
-  - US recipients also need a postal address (CAN-SPAM), so those drafts stay **On hold** until Leif has a PO box.
-    LIVE waits for it too.
+  - US recipients, creators as well as brands, also need a postal address (CAN-SPAM), so those drafts stay
+    **On hold** until Leif has one; an unknown country waits too. LIVE waits for it as well.
+  - `node agency-desk/scripts/lint-lines.mjs --emails <emails.json>` checks all of this. The folder it prints is the
+    folder used, and it exits 1 while any error remains.
 - Leif's voice, from his own sent mail (the May and June creator emails that got replies):
   - **Keep:** a playful subject from their latest video, one specific true compliment or detail, one warm short line
     (":)" allowed), one question, and "Leif".

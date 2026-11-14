@@ -1,7 +1,17 @@
-# State — 12 Nov 2026, drafts filed (the Agency Desk)
+# State — 14 Nov 2026, the automatic run (the Agency Desk)
 - **Goal:** every brand contact Leif adds on LinkedIn gets a true note and DM that earns a reply; email only after a yes (Spam Act).
+- **Done 14 Nov:**
+  - `newrows.mjs`: who on the sheets has a name and an email but no draft and no email yet.
+  - The email voice check, `lint-lines.mjs --emails`.
+  - `split-xlsx.py`.
+  - The "automatic run" section in the skill.
+  - The dry run on the real sheets:
+    - every brand person is already in the pack;
+    - 101 of the 108 un-ticked creators had been emailed from the old address;
+    - the 7 left were researched: 6 are no fit, and the seventh has no recent video to quote.
+  - The guardian ruled that US creators need the postal line too, so drafts were moved: now 5 "Ready to send" and 13 "On hold".
 - **Done (all real data in Leif's Drive and Gmail drafts, none here):**
-  - 18 Gmail drafts in Leif's own voice, none sent, filed in Gmail under "Joyisfree Drafts": 11 in "Ready to send" and 7 in "On hold" (the US brands wait for a postal address; two wait for a creator's yes; one address needs checking).
+  - 18 Gmail drafts in Leif's own voice, none sent, filed in Gmail under "Joyisfree Drafts" (the US brands and creators wait for a postal address; two wait for a creator's yes; one address needs checking).
     - The Drive Sheet "Drafts log" lists all 18 with the send order, the reason and a link. Two brand-new emails take no Gmail label, so the log is where they are found.
     - `.claude/settings.json` lets sessions in this repo draft, label and read without a prompt, and blocks sending, deleting, trashing and sharing.
   - Three creators who declined our budget get no email. A fourth with no address gets a channel message for Leif to paste.
@@ -16,7 +26,7 @@
   - The privacy gate now catches short names.
 - **Honest result:** the notes are true but plain. Confidence is Low, because titles still await Leif's LinkedIn export and creator numbers await fresh screenshots.
 - **Next (in order):**
-  1. Leif sends the "Ready to send" drafts in the Drafts log order (the creators we owe first, one warm brand a day) and ticks "Sent?".
+  1. Leif sends the 5 "Ready to send" drafts (the creators we owe first) and ticks "Sent?" in the Drafts log. The Mon, Wed and Fri run drafts for anyone he adds to the sheets.
   2. Each creator yes, with its screenshot date, goes into the private roster overrides. Re-run finalise and the fuller notes come back.
   3. The LinkedIn export (Connections, Messages, Invitations): titles for the work list, and the tracker's history.
   4. Allow YouTube in the network settings, then run `measure.mjs` for every roster creator and US scout.
