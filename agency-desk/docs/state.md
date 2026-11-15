@@ -2,7 +2,7 @@
 - **Goal:** every brand contact Leif adds on LinkedIn gets a true note and DM that earns a reply; email only after a yes (Spam Act).
 - **Done 15 Nov:**
   - Leif allowed YouTube and both website domains.
-  - `measure.mjs` reads the channel's Videos page when the public feed answers 404, as it does from the cloud. It also returns the latest video, the true detail a note opens with. Run it with `NODE_USE_ENV_PROXY=1`.
+  - `measure.mjs` read the channel's Videos page when the public feed answered 404. **Withdrawn the same day:** YouTube's terms ban scripts on its pages, so measuring moves to the official YouTube Data API, and the 15 Nov page-read numbers are set aside until they are re-measured that way.
   - 10 roster and warm creators are measured (private overrides, and the Drive "Desk memory" folder). One same-name channel was rejected as the wrong person.
   - The email lint holds Canadian recipients too (CASL), per the guardian.
   - Countries confirmed from the channels: one creator is in Canada and two are in the US, so all three stay On hold.
@@ -10,7 +10,7 @@
   - `newrows.mjs`: who on the sheets has a name and an email but no draft and no email yet.
   - The email voice check, `lint-lines.mjs --emails`.
   - `split-xlsx.py`.
-  - The "automatic run" section in the skill.
+  - A scheduled Mon, Wed and Fri drafting run (switched off on 15 Nov: drafts happen only when Leif says so).
   - The dry run on the real sheets:
     - every brand person is already in the pack;
     - 101 of the 108 un-ticked creators had been emailed from the old address;
@@ -32,7 +32,7 @@
   - The privacy gate now catches short names.
 - **Honest result:** the notes are true but plain. Confidence is Low, because titles still await Leif's LinkedIn export and creator numbers await fresh screenshots.
 - **Next (in order):**
-  1. Leif sends the 5 "Ready to send" drafts (the creators we owe first) and ticks "Sent?" in the Drafts log. The Mon, Wed and Fri run drafts for anyone he adds to the sheets.
+  1. Leif sends the 5 "Ready to send" drafts (the creators we owe first) and ticks "Sent?" in the Drafts log. Nothing drafts itself: a draft is made only when he says "draft it".
   2. Each creator yes, with its screenshot date, goes into the private roster overrides. Re-run finalise and the fuller notes come back.
   3. The LinkedIn export (Connections, Messages, Invitations): titles for the work list, and the tracker's history.
   4. Re-run `measure.mjs` monthly (a number is quotable for 30 days), and for each new creator before a draft.

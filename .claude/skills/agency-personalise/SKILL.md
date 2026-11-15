@@ -70,8 +70,9 @@ Then one easy question. The DM after they accept ends with the consent ask ("Min
    - Upload it to Drive as a new version of the pack. Leif's sheet pulls it with one IMPORTRANGE formula, to the
      right of his own columns.
 10. **Warm replies, brands and creators.**
-    - Read the thread in the main session. Write the reply as a **Gmail draft** inside that thread, never sent.
-      Leif said on 12 Nov that drafts need no permission each time: create, rewrite and file them without asking.
+    - Read the thread in the main session. When Leif says "draft it", write the reply as a **Gmail draft** inside
+      that thread, never sent. Drafts happen only when Leif says so, and a sheet he hands over waits until he says
+      go (Leif, 15 Nov: "Only when I tell you to").
     - Before it goes anywhere, check the thread: a creator who declined our budget gets no "are you open?" email.
     - Subjects stay the thread's own "Re:" (Leif turned down [WAIT]/[CHECK] tags on 10 Nov).
     - File it:
@@ -91,27 +92,24 @@ Then one easy question. The DM after they accept ends with the consent ask ("Min
     - Append to `agency-desk/docs/errors.md`.
     - Rewrite `agency-desk/docs/state.md` (15 lines or fewer).
 
-## The automatic run (Mon, Wed, Fri; Leif, 12 Nov: "automatic, I don't have to do anything")
+## When Leif hands over a sheet and says go (nothing runs by itself)
 
-It drafts only for people Leif added since the last run, and never sends.
-1. Pull both sheets (step 0, then `python3 -I agency-desk/scripts/split-xlsx.py`). Download the current Drafts log,
-   pack v2 and every file in the Drive folder "Desk memory". The memory is append-only: each run adds one small dated
-   CSV (email, status, why) and never edits an older one.
-2. `node agency-desk/scripts/newrows.mjs --li <dir>/li --ima <dir>/ima --seen <log>,<pack>,<memory> --log <events.jsonl>
-   --out <scratch>/newrows.json`. "nothing new" ends the run with a one-line note.
-3. Run one Gmail search over the new addresses (`{to:a to:b}`, THREAD_VIEW_METADATA_ONLY). Save the result to a file
+There is no scheduled run: Leif switched it off on 15 Nov ("Only when I tell you to & if I give you excel sheet don't
+do anything until I tell you"). When he says go:
+1. Pull both sheets (step 0, then `python3 -I agency-desk/scripts/split-xlsx.py`). Download the current Drafts log
+   and every file in the Drive folder "Desk memory". The memory is append-only: each pass adds one small dated CSV
+   (email, status, why) and never edits an older one.
+2. `node agency-desk/scripts/newrows.mjs --li <dir>/li --ima <dir>/ima --seen <log>,<memory> --log <events.jsonl>
+   --out <scratch>/newrows.json` lists who has a name and an email but no draft and no email yet.
+3. Run one Gmail search over those addresses (`{to:a to:b}`, THREAD_VIEW_METADATA_ONLY). Save the result to a file
    and read it with a script. Anyone already emailed goes into the memory, not into a draft.
-4. Find each new creator's channel (YouTube's search page, channels filter). Run
-   `NODE_USE_ENV_PROXY=1 node agency-desk/scripts/measure.mjs --channels <private channels.json>` for their typical
-   views and their `latest` video (title, link, date); the channel's About page gives the country.
-   - Check identity before recording a number. The name alone is not enough: the address, niche and audience must
-     match the sheet, because a same-name channel once turned out to be another agency's talent.
-   - `agency-reader` (at most 2 searches) is only for what YouTube can't show, such as a brand person's role.
-   - No fit (giant, off-niche, another agency's talent, channel not found): the memory records why.
-   - No recent video: no draft, because the detail must be true.
-5. Write each email in Leif's voice, lint it with `--emails` to 0 errors, create it, and file it (step 10). Then add
-   its address to the memory and its row to the log.
-6. End with three lines for Leif: new drafts (Ready, On hold), skipped and why, and anything only he can do.
+4. Each new creator's numbers come from the YouTube Data API only, never from YouTube's pages (its terms ban scripts
+   on them). Check identity before recording a number: the address, niche and audience must match the sheet, because
+   a same-name channel once turned out to be another agency's talent. No fit, or no recent video: the memory records
+   why, and there is no draft.
+5. A draft is written only when Leif says "draft it": in his voice, linted with `--emails` to 0 errors, created and
+   filed (step 10), then added to the memory and the log.
+6. End with three lines for Leif: what is ready, who was skipped and why, and anything only he can do.
 
 ## Rules that are not bent
 
@@ -139,8 +137,8 @@ It drafts only for people Leif added since the last run, and never sends.
     - no date promised without a tracker entry;
     - no haggling before there's a brief.
 - Numbers come only from the roster truth table, and only within 30 days of a dated measurement.
-  - The measurement comes from `measure.mjs` (the feed, or the channel's Videos page when the feed answers 404), or
-    from the creator's own screenshot.
+  - The measurement comes from `measure.mjs` through the YouTube Data API only (YouTube's terms ban scripts on its
+    pages, and its robots.txt disallows the search page and the feed), or from the creator's own screenshot.
   - Record it as `measured` in the private roster overrides: the median of the recent long videos, and the best of
     them.
   - A sheet figure, subscribers or an old pitch is never a number we quote.
