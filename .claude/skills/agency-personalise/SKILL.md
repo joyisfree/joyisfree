@@ -101,10 +101,14 @@ It drafts only for people Leif added since the last run, and never sends.
    --out <scratch>/newrows.json`. "nothing new" ends the run with a one-line note.
 3. Run one Gmail search over the new addresses (`{to:a to:b}`, THREAD_VIEW_METADATA_ONLY). Save the result to a file
    and read it with a script. Anyone already emailed goes into the memory, not into a draft.
-4. Research each new person with `agency-reader`, at most 2 searches each: niche, country, size, and the latest video
-   with its date.
+4. Find each new creator's channel (YouTube's search page, channels filter). Run
+   `NODE_USE_ENV_PROXY=1 node agency-desk/scripts/measure.mjs --channels <private channels.json>` for their typical
+   views and their `latest` video (title, link, date); the channel's About page gives the country.
+   - Check identity before recording a number. The name alone is not enough: the address, niche and audience must
+     match the sheet, because a same-name channel once turned out to be another agency's talent.
+   - `agency-reader` (at most 2 searches) is only for what YouTube can't show, such as a brand person's role.
    - No fit (giant, off-niche, another agency's talent, channel not found): the memory records why.
-   - No recent video found: no draft, because the detail must be true.
+   - No recent video: no draft, because the detail must be true.
 5. Write each email in Leif's voice, lint it with `--emails` to 0 errors, create it, and file it (step 10). Then add
    its address to the memory and its row to the log.
 6. End with three lines for Leif: new drafts (Ready, On hold), skipped and why, and anything only he can do.
@@ -120,8 +124,8 @@ It drafts only for people Leif added since the last run, and never sends.
   - It names Leif (and Joyisfree Studio in a first email), and ends with a short friend-style opt-out such as "Just
     say if you'd rather I stop." That covers the Spam Act and UK PECR.
   - No signature block, footer, links or images.
-  - US recipients, creators as well as brands, also need a postal address (CAN-SPAM), so those drafts stay
-    **On hold** until Leif has one; an unknown country waits too. LIVE waits for it as well.
+  - US recipients (CAN-SPAM) and Canadian recipients (CASL), creators as well as brands, also need a postal address.
+    Those drafts stay **On hold** until Leif has one, and so does an unknown country. LIVE waits for it as well.
   - `node agency-desk/scripts/lint-lines.mjs --emails <emails.json>` checks all of this. The folder it prints is the
     folder used, and it exits 1 while any error remains.
 - Leif's voice, from his own sent mail (the May and June creator emails that got replies):
@@ -135,7 +139,8 @@ It drafts only for people Leif added since the last run, and never sends.
     - no date promised without a tracker entry;
     - no haggling before there's a brief.
 - Numbers come only from the roster truth table, and only within 30 days of a dated measurement.
-  - The measurement comes from `measure.mjs` on the creator's public feed, or from the creator's own screenshot.
+  - The measurement comes from `measure.mjs` (the feed, or the channel's Videos page when the feed answers 404), or
+    from the creator's own screenshot.
   - Record it as `measured` in the private roster overrides: the median of the recent long videos, and the best of
     them.
   - A sheet figure, subscribers or an old pitch is never a number we quote.

@@ -1,5 +1,11 @@
-# State — 14 Nov 2026, the automatic run (the Agency Desk)
+# State — 15 Nov 2026, YouTube open, roster measured (the Agency Desk)
 - **Goal:** every brand contact Leif adds on LinkedIn gets a true note and DM that earns a reply; email only after a yes (Spam Act).
+- **Done 15 Nov:**
+  - Leif allowed YouTube and both website domains.
+  - `measure.mjs` reads the channel's Videos page when the public feed answers 404, as it does from the cloud. It also returns the latest video, the true detail a note opens with. Run it with `NODE_USE_ENV_PROXY=1`.
+  - 10 roster and warm creators are measured (private overrides, and the Drive "Desk memory" folder). One same-name channel was rejected as the wrong person.
+  - The email lint holds Canadian recipients too (CASL), per the guardian.
+  - Countries confirmed from the channels: one creator is in Canada and two are in the US, so all three stay On hold.
 - **Done 14 Nov:**
   - `newrows.mjs`: who on the sheets has a name and an email but no draft and no email yet.
   - The email voice check, `lint-lines.mjs --emails`.
@@ -29,11 +35,11 @@
   1. Leif sends the 5 "Ready to send" drafts (the creators we owe first) and ticks "Sent?" in the Drafts log. The Mon, Wed and Fri run drafts for anyone he adds to the sheets.
   2. Each creator yes, with its screenshot date, goes into the private roster overrides. Re-run finalise and the fuller notes come back.
   3. The LinkedIn export (Connections, Messages, Invitations): titles for the work list, and the tracker's history.
-  4. Allow YouTube in the network settings, then run `measure.mjs` for every roster creator and US scout.
+  4. Re-run `measure.mjs` monthly (a number is quotable for 30 days), and for each new creator before a draft.
   5. After a mower creator says yes: release the waitFor lane for robot-mower brands.
   6. Weeks 2 to 4 as planned: the price rule, the US creator lane, the reply scoreboard by opener.
 - **Blocked:**
-  - The website audit and creator measuring: both domains and YouTube are refused by the network policy.
+  - The website fixes are Leif's to make (the site is built in Zyro). They are listed in the Drive Doc "Website fixes".
   - LIVE email: the postal address. It goes in **last**, after the sheet fixes and the Mac fixes.
 - **For a Mac session** (the old engine's code is on the Mac; its session answers only Leif's trusted devices):
   - the address picker chooses service and support inboxes;

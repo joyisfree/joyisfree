@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { REPO_ROOT } from './lib.mjs';
-import { parseFeed, measure, channelRef, parseChannelId } from './measure.mjs';
+import { parseFeed, measure, channelRef, parseChannelId, parseVideosPage } from './measure.mjs';
 import { validate, parseLog, status } from './tracker.mjs';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
@@ -121,4 +121,34 @@ test('the tracker CLI appends, never edits, and will not add to someone who said
   code = 0;
   try { execFileSync(process.execPath, [join(here, 'tracker.mjs'), 'status', '--today', '2026-11-09', '--log', join(REPO_ROOT, 'events.jsonl')], { stdio: 'pipe' }); } catch (e) { code = e.status; }
   assert.equal(code, 2, 'the log never lives in the repository');
+});
+
+// YouTube's public feed answers 404 from the cloud (seen 15 Nov), so the channel's own Videos page is read instead.
+// It lists long videos only (Shorts have their own tab), with views and an age such as "2w ago".
+const lockup = (id, title, views, age) => `{"richItemRenderer":{"content":{"lockupViewModel":{"contentImage":{"thumbnailViewModel":{"image":{"sources":[{"url":"https://i.ytimg.com/vi/${id}/hq720.jpg"}]}}},"metadata":{"lockupMetadataViewModel":{"title":{"content":"${title}"},"metadata":{"contentMetadataViewModel":{"metadataRows":[{"metadataParts":[{"text":{"content":"${views}"}}${age ? `,{"text":{"content":"${age}"}}` : ''}]}]}}}}}}}`;
+const page = (items) => `<html><script>var ytInitialData = {"contents":[${items.join(',')}]};</script></html>`;
+
+test('the Videos page gives id, title, views and an approximate date; an upcoming video with no age is left out', () => {
+  const e = parseVideosPage(page([
+    lockup('aaaaaaaaaa1', 'Painting the old door', '50K views', '1d ago'),
+    lockup('aaaaaaaaaa2', 'Three months in the farmhouse', '72K', '10 days ago'),
+    lockup('aaaaaaaaaa3', 'A garden wedding', '1.2M views', '2w ago'),
+    lockup('aaaaaaaaaa4', 'Roof day', '12,345 views', '1mo ago'),
+    lockup('aaaaaaaaaa5', 'Premiere soon', 'Scheduled', ''),
+  ]), '2026-11-15');
+  assert.deepEqual(e.map((x) => x.views), [50000, 72000, 1200000, 12345]);
+  assert.deepEqual(e.map((x) => x.published), ['2026-11-14', '2026-11-05', '2026-11-01', '2026-10-16']);
+  assert.equal(e[0].link, 'https://www.youtube.com/watch?v=aaaaaaaaaa1');
+  assert.equal(e[1].title, 'Three months in the farmhouse');
+  assert.ok(e.every((x) => !x.short));
+});
+
+test('measuring from the page: the newest video is the true detail to write from, and too-new uploads stay out of the number', () => {
+  const ages = ['1d ago', '10d ago', '2w ago', '3w ago', '4w ago', '1mo ago', '1mo ago', '2mo ago'];
+  const views = ['50K', '72K', '105K', '75K', '89K', '84K', '88K', '60K'];
+  const m = measure(parseVideosPage(page(ages.map((a, i) => lockup(`bbbbbbbbbb${i}`, `Video ${i}`, views[i], a))), '2026-11-15'), '2026-11-15');
+  assert.equal(m.ok, true);
+  assert.equal(m.measured.n, 7, 'the 1-day-old video is still climbing');
+  assert.equal(m.measured.typical, 84000);
+  assert.deepEqual(m.latest, { title: 'Video 0', link: 'https://www.youtube.com/watch?v=bbbbbbbbbb0', published: '2026-11-14' });
 });

@@ -62,6 +62,11 @@ test('a US recipient waits On hold for the postal line; an unknown country waits
   assert.equal(lintEmail(good({ us: true }), { postal: 'PO Box 1, Sample NSW 2000' }).folder, 'On hold', 'the line must be in the email, not just known');
   assert.equal(lintEmail(good({ us: true, body: body.replace('Leif, Joyisfree Studio', 'Leif, Joyisfree Studio\nPO Box 1, Sample NSW 2000') }), { postal: 'PO Box 1, Sample NSW 2000' }).folder, 'Ready to send');
   assert.match(lintEmail(good({ us: undefined })).hold.join(' '), /country/);
+  // The country decides: the US (CAN-SPAM) and Canada (CASL) need the postal line; anywhere else does not.
+  assert.match(lintEmail(good({ us: undefined, country: 'Canada' })).hold.join(' '), /CASL/);
+  assert.match(lintEmail(good({ us: undefined, country: 'United States' })).hold.join(' '), /CAN-SPAM/);
+  assert.equal(lintEmail(good({ us: undefined, country: 'Australia' })).folder, 'Ready to send');
+  assert.equal(lintEmail(good({ us: undefined, country: 'CA', body: body.replace('Leif, Joyisfree Studio', 'Leif, Joyisfree Studio\nPO Box 1, Sample NSW 2000') })).folder, 'Ready to send');
   assert.equal(lintEmail(good({ holds: ['needs their yes on LinkedIn'] })).folder, 'On hold');
   assert.equal(lintEmail(good({ subject: '[CHECK] x' })).folder, 'Fix first', 'an error never files as ready');
 });

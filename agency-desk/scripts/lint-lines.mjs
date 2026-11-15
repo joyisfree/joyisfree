@@ -207,8 +207,12 @@ export function lintEmail(e, { postal = '', minWords = 40, maxWords = 70 } = {})
   if (HAGGLE.test(body)) warn('haggle-before-brief', HAGGLE.exec(body)[0]);
 
   const hold = [...(e.holds || [])];
-  if (e.us === true && !(postal ? body.includes(postal.trim()) : POSTAL.test(body))) hold.push('US recipient: needs the postal line (CAN-SPAM)');
-  if (e.us !== true && e.us !== false) hold.push('check the country first: a US recipient needs the postal line');
+  // The US (CAN-SPAM) and Canada (CASL) want the sender's postal address in the email itself.
+  const c = String(e.country || '').trim().toLowerCase();
+  const law = e.us === true || /^(us|usa|united states( of america)?)$/.test(c) ? 'CAN-SPAM' : /^(ca|canada)$/.test(c) ? 'CASL' : '';
+  const known = Boolean(c) || e.us === true || e.us === false;
+  if (law && !(postal ? body.includes(postal.trim()) : POSTAL.test(body))) hold.push(`${law === 'CASL' ? 'Canadian' : 'US'} recipient: needs the postal line (${law})`);
+  if (!known) hold.push('check the country first: a US or Canadian recipient needs the postal line');
   const folder = errors.length ? 'Fix first' : hold.length ? 'On hold' : 'Ready to send';
   return { key: e.key, errors, warnings, hold, folder };
 }
