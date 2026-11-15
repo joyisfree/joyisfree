@@ -1,6 +1,6 @@
 ---
 name: agency-personalise
-description: The agency desk's routine. Use when Leif adds brand people to the LinkedIn sheet, drops profile PDFs in the Drive folder, a warm brand replies, or he asks for personalisations, connection notes, DMs, follow-ups, a creator pitch or an audit of the agency sheets. Not for the studio app or the Galxe desk.
+description: The agency desk's routine. Use when Leif says "personalise" a creator (a YouTube handle) or a brand person, pastes someone's LinkedIn posts, says "draft it" or "forget" someone, hands over the LinkedIn sheet and says go, a warm brand replies, or he asks for connection notes, DMs, follow-ups, a one-pager, a creator pitch or an audit of the agency sheets. Not for the studio app or the Galxe desk.
 ---
 
 # Agency personalise routine
@@ -9,13 +9,19 @@ Leif finds the right person at a brand and connects on LinkedIn by hand. The des
 reply, and keeps every word true. Judgement is Claude's; every click on LinkedIn, Gmail and the sheets is Leif's.
 Nothing here automates his accounts.
 
-## The three true things in every note
+## What a first message says
 
-1. I know your job (their role, and what it is judged on).
-2. I know your brand's moment: a creator it backed, a launch, a season. Each comes with a link and a date.
-3. Here is the one creator who fits, with the honest number from the roster truth table.
+1. I know your job (their role, when we know it).
+2. I know your brand's moment: a creator it featured, a launch, a season. Each comes with a link and a date.
+3. One question, which is also the consent ask, then an easy way out and "Leif, Joyisfree Studio".
 
-Then one easy question. The DM after they accept ends with the consent ask ("Mind if I email you a one-pager?").
+The creator who fits, and every number, wait for the one-pager that goes out after a yes. A note or a DM never names
+a creator and never quotes a number. Two example DMs (made-up names) that pass every check:
+
+```text
+Thanks for connecting, Maya. Saw Acme Garden just launched its balcony potting bench. I match home and garden YouTube creators with brands. If creator partnerships are yours, want a one-pager here or by email? If this isn't your area, just say and I won't follow up. Leif, Joyisfree Studio
+Thanks for connecting, Tom. Acme Herbs' spring page leads with its indoor herb kits. I help home and garden brands find YouTube creators who fit. Mind if I email you a one-pager? No worries if not, and I won't follow up. Leif, Joyisfree Studio
+```
 
 ## Where data lives (the joyisfree repo is public)
 

@@ -3,6 +3,9 @@ import { resolve, relative, isAbsolute, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readFileSync, realpathSync } from 'node:fs';
 
+// An engagement rate is our own sum, not YouTube's: wherever the figure goes, this label goes with it.
+export const ENGAGEMENT_LABEL = 'engagement rate (our calculation from YouTube data)';
+
 // The repository root, found from this file's own location so a symlink or a space in a path does not move it.
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
