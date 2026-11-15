@@ -16,7 +16,6 @@ export const BANNED = [
 // How long a hook stays true enough to quote, by kind (days from the event or publish date, never the read date).
 export const MAX_AGE = { sponsor: 548, launch: 183, news: 183, season: 400, role: 365, value: 400, warm: 365, post: 183 };
 export const NOTE_MAX = 200; // a connection note is 200 characters at most
-export const DM_MAX = 600;
 // "my huge property", "my 250 year old heritage house": up to four words may sit between the pronoun and the thing
 // claimed. "My roster is home and garden YouTubers" is about the creators, not Leif's life, so it never matches.
 export const FIRST_PERSON = /\b((my|our) (?:(?!(?:roster|creators?|channels?|clients|team|are|is|make|makes|cover|covers|home|and|garden|diy)\b)[a-z0-9'-]+ ){0,4}(house|home|property|land|kids?|wife|husband|garden|shop|office|backyard|place|balcony|cafe|offices)(?! and garden|,? garden| and diy|-garden| improvement)|we're running|i (own|bought|use|have been using)|wife|husband|my kid'?s)\b/i;
@@ -69,6 +68,7 @@ function jaccard(a, b) {
   return inter / (x.size + y.size - inter);
 }
 const numKey = (s) => s.toLowerCase().replace(/\s+/g, '');
+const sentences = (s) => String(s || '').split(/(?<=[.!?])\s+|\n+/).map((x) => x.trim()).filter(Boolean);
 // Two colleagues' lines are the same line when they match, or share four words in five.
 const close = (a, b) => norm(a) === norm(b) || jaccard(a, b) >= 0.8;
 // What is personal in a DM: everything but the opt-out and the sign-off, which every colleague's DM shares.
@@ -146,7 +146,7 @@ export function lint(rows, roster, { today, noteMax = NOTE_MAX, maxAgeDays = 183
       const asked = (dm.match(/\?/g) || []).length;
       if (asked !== 1) err(row, 'dm-questions', `${asked} questions: the DM asks exactly one`);
       if (!sentences(dm).some((s) => s.includes('?') && CONSENT.test(s))) err(row, 'dm-no-consent-ask', 'the DM\'s question must ask before emailing ("Mind if I email you a one-pager?")');
-      if (dm.length > DM_MAX) err(row, 'dm-too-long', `${dm.length} > ${DM_MAX} characters`);
+      if (dm.length > 600) err(row, 'dm-too-long', `${dm.length} > 600 characters`);
       if (!OPT_OUT.test(dm)) err(row, 'dm-no-opt-out', 'the DM gives an easy way out ("If this isn\'t your area, just say and I won\'t follow up")');
       if (!/\bleif\b/i.test(dm) || !/\bjoyisfree studio\b/i.test(dm)) err(row, 'dm-no-sender', 'the DM names its sender ("Leif, Joyisfree Studio")');
       if (/https?:\/\/|www\./i.test(dm)) err(row, 'link-in-dm', 'no link in the first message');
@@ -236,7 +236,6 @@ const POSTAL = /\b(p\.?\s?o\.?\s?box|gpo box|locked bag)\b/i;
 const DATE_PROMISE = /\b(i'?ll|i will|we'?ll|we will)\b[^.?!\n]*\b(by|on|before|next|this|in|until)\s+(the end of |early |mid |late )?((mon|tues|wednes|thurs|fri|satur|sun)day|january|february|march|april|june|july|august|september|october|november|december|next week|tomorrow|the weekend)\b/i;
 const HAGGLE = /\b(drop|lower|reduce|bring down|knock down)\b[^.?!\n]{0,20}\b(rate|price|fee)s?\b|\b(best|lowest) (rate|price)\b|\bdiscount\b/i;
 const words = (s) => (String(s || '').match(/[a-z0-9][a-z0-9'’]*/gi) || []).length;
-const sentences = (s) => String(s || '').split(/(?<=[.!?])\s+|\n+/).map((x) => x.trim()).filter(Boolean);
 
 // One email: { key, subject, body, first, us (true, false, or unknown), holds, allowNumbers, confirmedClaims }.
 // The folder is "Fix first" while any error remains, "On hold" while any hold remains, else "Ready to send".

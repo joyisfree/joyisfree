@@ -17,14 +17,14 @@
 //        [--today-csv <today.csv>] [--today-max 10] [--postal "<the postal line>"]
 import { readFileSync, writeFileSync } from 'node:fs';
 import { args, isMain, assertOutsideRepo, toCSV } from './lib.mjs';
-import { lint, report, wantsNote, NOTE_MAX, DM_MAX } from './lint-lines.mjs';
+import { lint, report, wantsNote, NOTE_MAX } from './lint-lines.mjs';
 // A row carrying any of these flags stays in the pack but never reaches Today. "waits:" comes from the private
 // config's waitFor list (a lane that waits for the right creator); "confirm creator first" is the team's own hold.
 export const BLOCK = ['no honest fit', 'address at another company', 'wrong company', 'warm brand', 'invalid', 'waits:', 'confirm creator first', 'before pitching'];
 export const MAX_PER_BRAND = 5; // the sixth person at a brand waits until one of the first five answers
 
-// Five variants of each line, so up to five colleagues at one brand never get the same note or the same DM. The
-// brand is always written " at {b}", so a line still reads when a brand too long for it is left out.
+// Five variants of each line, so up to five colleagues at one brand never get the same note or the same DM. A line
+// names the brand only as " at {b}", so it still reads when the brand is left out.
 const NOTES = [
   'Hi {f}, I run Joyisfree Studio, a small agency for home and garden YouTube creators. Do you look after creator partnerships at {b}? No worries if not.',
   "Hi {f}, I match home and garden YouTube creators with brands that fit them. Are creator partnerships at {b} yours? If it's not your area, no worries.",
@@ -49,12 +49,7 @@ const ASK = [
   "If you're the right person for creator partnerships at {b}, shall I send a one-pager?",
 ];
 const OUT = "If this isn't your area, just say and I won't follow up. Leif, Joyisfree Studio";
-const fill = (t, f, b) => t.replaceAll('{f}', f).replaceAll('{b}', b);
-// The fullest version that fits the limit: with the brand, then without it, then without the first name either.
-const within = (max, t, f, b) => {
-  const bare = t.replaceAll(' at {b}', '');
-  return [fill(t, f, b), fill(bare, f, b), fill(bare, 'there', b)].find((x) => x.length <= max);
-};
+const fill = (t, f, b) => t.replaceAll(' at {b}', b ? ` at ${b}` : '').replaceAll('{f}', f);
 
 export function firstName(name) {
   const n = String(name || '').replace(/[^A-Za-zÀ-ɏ' -]/g, '').trim().split(/\s+/)[0];
@@ -65,9 +60,11 @@ export function firstName(name) {
 // the consent ask, the way out and the sender. It names no creator and quotes no number, whatever the roster says:
 // those wait for the one-pager, after a yes.
 export function roleCheck(row, brand, i, { rule = '', noHonestFit = '' } = {}) {
-  const f = firstName(row.name);
-  const b = brand.label;
   const v = ((i % NOTES.length) + NOTES.length) % NOTES.length;
+  const name = firstName(row.name);
+  // The fullest wording the note has room for: with the brand, then without it, then without the first name either.
+  // The DM follows the note, so the two never disagree, and a brand cell full of notes never fills five DMs.
+  const [f, b] = [[name, brand.label], [name, ''], ['there', '']].find(([x, y]) => fill(NOTES[v], x, y).length <= NOTE_MAX);
   const middle = rule === 'us-only' ? "I'm adding US creators for spring and will only come back with one who fits." : MIDDLE[v];
   // Drop review notes and any earlier rewrite's own flags, so a row rewritten twice does not carry them twice.
   const flags = (row.flags || []).filter((x) => !/^(guardian|pilot critic|panel|honest role check|rewritten:|no honest fit:)/.test(x));
@@ -75,10 +72,11 @@ export function roleCheck(row, brand, i, { rule = '', noHonestFit = '' } = {}) {
   flags.push('honest role check (no dated hook to stand on yet)');
   return {
     ...row,
-    connectionNote: wantsNote(row) ? within(NOTE_MAX, NOTES[v], f, b) : '', // a bare invite carries no note
-    dm: within(DM_MAX, [OPEN[v], middle, ASK[v], OUT].join(' '), f, b),
+    connectionNote: wantsNote(row) ? fill(NOTES[v], f, b) : '', // a bare invite carries no note
+    dm: fill([OPEN[v], middle, ASK[v], OUT].join(' '), f, b),
+    bump: '', // the follow-up was written for the copy that failed, so it goes with it
     emailOpener: 'Thanks for saying yes on LinkedIn. Here is the one-pager I mentioned.',
-    subject: `For ${b}: our creator one-pager`.slice(0, 60),
+    subject: `For ${brand.label}: our creator one-pager`.slice(0, 60),
     hook: { type: 'none', text: `role check, opener ${v + 1}` }, confidence: 'Low', flags, // the opener number feeds the reply scoreboard
   };
 }

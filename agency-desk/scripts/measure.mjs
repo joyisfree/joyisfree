@@ -18,6 +18,8 @@ import { ApiStop, createLedger, channel, uploads, videos, nextChunk } from './yo
 
 const DAY = 86_400_000;
 const SHORT_MAX_SEC = 180;
+const LAST = 12; // how many long videos a measurement is taken from
+const MIN_AGE_DAYS = 7; // a younger video's views are still climbing
 
 // A channel may be given as its id (UC...), a /channel/UC... link, an @handle or a youtube.com/@handle link.
 // Ids are used as they are; handles are looked up through the API.
@@ -45,7 +47,7 @@ export function entriesFromVideos(vids) {
 
 // The videos a measurement is taken from: the newest n long ones that are at least minAgeDays old. Exported so
 // that any other sum over a creator's videos (an average, an engagement rate) uses the very same ones.
-export function recentLong(entries, today, { n = 12, minAgeDays = 7 } = {}) {
+export function recentLong(entries, today, { n = LAST, minAgeDays = MIN_AGE_DAYS } = {}) {
   const now = Date.parse(today);
   if (Number.isNaN(now)) throw new Error('measure needs --today YYYY-MM-DD');
   return entries
@@ -54,7 +56,7 @@ export function recentLong(entries, today, { n = 12, minAgeDays = 7 } = {}) {
     .slice(0, n);
 }
 
-export function measure(entries, today, { n = 12, minAgeDays = 7, minVideos = 6 } = {}) {
+export function measure(entries, today, { n = LAST, minAgeDays = MIN_AGE_DAYS, minVideos = 6 } = {}) {
   const long = recentLong(entries, today, { n, minAgeDays });
   // The newest long video is the true detail a note can open with, whatever its age.
   const newest = entries.filter((e) => !e.short && !Number.isNaN(Date.parse(e.published))).sort((a, b) => Date.parse(b.published) - Date.parse(a.published))[0];

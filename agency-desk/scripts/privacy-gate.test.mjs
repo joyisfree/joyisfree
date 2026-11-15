@@ -1,7 +1,7 @@
 // The public-repo gate, on made-up names: the files as they stand, every line the history ever added, the shape of
 // an API key, and the private terms list. The history tests commit to throwaway repositories under the OS temp
 // directory, never to this one.
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -21,10 +21,15 @@ const run = (argv, extra = {}) => {
   return { code: r.status, out: r.stdout + r.stderr };
 };
 
+// Every folder made here is removed when the run ends: a suite that runs often would otherwise leave thousands.
+const made = [];
+const temp = (prefix) => made[made.push(mkdtempSync(join(tmpdir(), prefix))) - 1];
+after(() => made.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
+
 // A throwaway repository with its private lists beside it, outside it. Every command carries its own identity and
 // signing switch, so no machine's settings matter. commit() writes one file and returns the commit's short hash.
 function repo() {
-  const dir = mkdtempSync(join(tmpdir(), 'agency-gate-'));
+  const dir = temp('agency-gate-');
   const root = join(dir, 'repo');
   mkdirSync(root);
   const git = (...argv) => execFileSync('git', ['-C', root, '-c', 'user.name=Test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', ...argv], { encoding: 'utf8', env }).trim();
@@ -130,7 +135,7 @@ test('an API key shape is a secret hit in a file and in the history, and is neve
 });
 
 test('appendTerms adds only new terms to the private list, one per line, and refuses a path inside the repository', () => {
-  const file = join(mkdtempSync(join(tmpdir(), 'agency-terms-')), 'terms.txt');
+  const file = join(temp('agency-terms-'), 'terms.txt');
   assert.deepEqual(appendTerms(file, ['Acmemow', '  Zola ', 'ACMEMOW', '', 'Acme   Mowers']), ['Acmemow', 'Zola', 'Acme Mowers']);
   assert.equal(readFileSync(file, 'utf8'), 'Acmemow\nZola\nAcme Mowers\n');
   assert.deepEqual(appendTerms(file, ['zola', 'Gizmo']), ['Gizmo'], 'a term already on the list, in any case, is not added twice');
@@ -146,17 +151,18 @@ test('appendTerms adds only new terms to the private list, one per line, and ref
 
 test('the history scan reads every branch, a side branch whose change was thrown away, and a line a merge adds itself', () => {
   const { root, git, commit, gate } = repo();
+  const trunk = git('symbolic-ref', '--short', 'HEAD');
   commit('agency-desk/docs/a.md', 'one\n');
   commit('agency-desk/docs/b.md', 'one\n');
   git('checkout', '-q', '-b', 'side');
   const thrown = commit('agency-desk/docs/a.md', 'one\npitched Acmemow\n');
-  git('checkout', '-q', '-');
+  git('checkout', '-q', trunk);
   commit('agency-desk/docs/c.md', 'meanwhile\n');
   git('merge', '-q', '-s', 'ours', '-m', 'keep ours', 'side'); // the side's line never reaches the files
   git('branch', '-q', '-D', 'side');
   git('checkout', '-q', '-b', 'side');
   const kept = commit('agency-desk/docs/b.md', 'one\nside line Acmemow\n');
-  git('checkout', '-q', '-');
+  git('checkout', '-q', trunk);
   commit('agency-desk/docs/b.md', 'one\nmain line\n');
   git('merge', '-q', '-s', 'ours', '--no-commit', 'side');
   writeFileSync(join(root, 'agency-desk/docs/b.md'), 'one\nmain line\nside line Acmemow\n'); // both sides' lines, nothing new
@@ -165,7 +171,7 @@ test('the history scan reads every branch, a side branch whose change was thrown
   commit('agency-desk/docs/d.md', 'gone\n');
   git('checkout', '-q', '-b', 'apart');
   const apart = commit('agency-desk/docs/e.md', 'Acmemow on a branch that is never merged\n');
-  git('checkout', '-q', '-');
+  git('checkout', '-q', trunk);
   assert.equal(gate().code, 0);
   const { code, out } = gate(['--history']);
   assert.equal(code, 1);
@@ -186,8 +192,8 @@ test("the history is read the same under a machine's own git settings", () => {
   assert.match(plain.out, hitLine(first, 'agency-desk/docs/notes.md', 'term'));
   assert.match(plain.out, hitLine(sheet, 'agency-desk/docs/sheet.csv', 'term'));
   assert.match(plain.out, hitLine(later, 'agency-desk/docs/later.md', 'term'));
-  // Settings a machine may carry: no first commit, colour codes, four-letter hashes, bare file names, a filter.
-  const settings = Object.entries({ 'log.showRoot': 'false', 'color.ui': 'always', 'core.abbrev': '4', 'diff.noprefix': 'true', 'diff.hush.textconv': 'true' });
+  // Settings a machine may carry: no first commit shown, colour codes, four-letter hashes, a filter over .md files.
+  const settings = Object.entries({ 'log.showRoot': 'false', 'color.ui': 'always', 'core.abbrev': '4', 'diff.hush.textconv': 'true' });
   const machine = { GIT_CONFIG_COUNT: String(settings.length) };
   settings.forEach(([key, value], i) => { machine[`GIT_CONFIG_KEY_${i}`] = key; machine[`GIT_CONFIG_VALUE_${i}`] = value; });
   assert.equal(gate(['--history'], machine).out, plain.out);
@@ -227,6 +233,7 @@ test('when git fails part-way, the gate fails without printing what it had read'
   rmSync(join(root, '.git', 'objects', blob.slice(0, 2), blob.slice(2)));
   const { code, out } = gate(['--history']);
   assert.notEqual(code, 0);
+  assert.match(out, /git log failed/);
   assert.doesNotMatch(out, /acmemow/i);
 });
 

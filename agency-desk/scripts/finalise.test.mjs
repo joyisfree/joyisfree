@@ -90,11 +90,15 @@ test('the role check keeps the US-only line, the opener number and the flags tha
   assert.equal(rc.confidence, 'Low');
   assert.deepEqual(rc.flags, ['address at another company: check', 'no honest fit: makes pool pumps; nobody on the roster covers pools', 'honest role check (no dated hook to stand on yet)']);
   assert.ok(!/US creators/.test(roleCheck(row, { label: 'Acme Mowers' }, 7).dm));
+  assert.match(rc.connectionNote, /^Hi Ava, /);
+  assert.equal(roleCheck({ ...row, nextStep: 'Invite' }, { label: 'Acme Mowers' }, 7).connectionNote, '', 'a bare invite carries no note');
+  assert.equal(roleCheck({ ...row, nextStep: 'DM now' }, { label: 'Acme Mowers' }, 7).connectionNote, '');
 });
 
 test('the five role checks pass every rule for any brand and first name, with the note inside 200 characters', () => {
-  const long = 'The Sample Outdoor Living, Garden Furniture and Barbecue Company of Greater Western Sydney';
-  const names = [undefined, () => '  ', () => 'Maximiliana-Alexandrina Wolfeschlegelstein Sample', () => "D'Arcy O'Neil-Smythe"];
+  const long = 'The Sample Outdoor Living, Garden Furniture and Barbecue Company of Greater Sampleville';
+  const endless = 'Annabella'.repeat(9); // one unbroken first name, 81 letters
+  const names = [undefined, () => '  ', () => 'Maximiliana-Alexandrina Sample', () => "D'Arcy O'Neil-Smythe", () => `${endless} Sample`];
   for (const label of ['Acme Mowers', 'Spear & Jayson', "Gran's Garden Co.", long, `${long}, ${long} and ${long}`]) {
     for (const rule of ['', 'us-only']) {
       for (const name of names) {
@@ -106,12 +110,14 @@ test('the five role checks pass every rule for any brand and first name, with th
       }
     }
   }
-  assert.match(five('Acme Mowers')[0].connectionNote, /Acme Mowers/, 'a brand that fits is named');
-  assert.ok(!five(long)[0].connectionNote.includes(long) && five(long)[0].dm.includes(long), 'a brand too long for the note is left out of the note only');
+  assert.match(five('Acme Mowers')[0].connectionNote, /^Hi Ava, .* at Acme Mowers\?/, 'a name and a brand that fit are both there');
+  assert.match(five('Acme Mowers', { name: () => `${endless} Sample` })[0].connectionNote, /^Hi there, /, 'a first name too long for the note is left out');
+  assert.ok(!sent(five(long)[0]).replace(five(long)[0].subject, '').includes('Sample Outdoor'), 'a brand too long for the note is left out of the note and the DM');
+  assert.match(five(long)[0].connectionNote, /Do you look after creator partnerships\? No worries if not\.$/, 'and the line still reads');
 });
 
 test('five colleagues at one brand get five different notes and DMs, and pass the colleague checks', () => {
-  for (const label of ['Bigco', 'The Sample Outdoor Living, Garden Furniture and Barbecue Company of Greater Western Sydney']) {
+  for (const label of ['Bigco', 'The Sample Outdoor Living, Garden Furniture and Barbecue Company of Greater Sampleville']) {
     for (const rule of ['', 'us-only']) {
       for (const from of [0, 3]) {
         const rows = five(label, { rule, from });
@@ -122,6 +128,9 @@ test('five colleagues at one brand get five different notes and DMs, and pass th
       }
     }
   }
+  // Apart from the opt-out and the sign-off, no sentence appears in two of the five: nothing to spot side by side.
+  const sentences = five('Bigco').flatMap((r) => r.dm.replace(OUT, '').trim().split(/(?<=[.?])\s+/).map((x) => x.replace(/\b(Ava|Ben|Cal|Dee|Eli)\b/, '')));
+  assert.equal(new Set(sentences).size, sentences.length, sentences.join(' | '));
   // Through the finishing pass: all five fail as the team wrote them, and all five are rewritten.
   const rows = worklist[5].people.slice(0, 5).map((p, i) => naming(p.key, 'Jay', { contactOrder: i + 1, nextStep: 'Invite + note' }));
   const out = finalise({ rows, worklist, roster, today });
@@ -151,8 +160,19 @@ test('a note or DM naming a creator becomes a role check, even a creator who sai
   }
 });
 
+test('a follow-up written for the copy that failed goes with it', () => {
+  const key = 'Acme Mowers | Ava Sample';
+  // The fault is in the bump alone. A role check that kept it could never pass, and the pass would never end.
+  const out = finalise({ rows: [teamRow(key, 'Jay', { bump: 'Hi there, floating this back up: Jay has a lawn build out this week.' })], worklist, roster, today });
+  assert.ok(find(out, key).flags.includes('honest role check (no dated hook to stand on yet)'));
+  assert.equal(find(out, key).bump, '');
+  assert.deepEqual(out.lint.errors, []);
+  const kept = teamRow(key, 'Jay', { bump: 'Hi there, floating this back up in case it got buried. No worries if not.' });
+  assert.equal(find(finalise({ rows: [kept], worklist, roster, today }), key).bump, kept.bump, 'a follow-up that passes stays');
+});
+
 test('a row with a passing brand detail is kept as the team wrote it', () => {
-  const row = teamRow('Acme Mowers | Ava Sample', 'Jay', { creatorNumber: '24k a video' });
+  const row = teamRow('Acme Mowers | Ava Sample', 'Jay', { creatorNumber: '24k a video', hold: 'left over from an earlier pass' });
   const out = finalise({ rows: [row], worklist, roster, today });
   const ava = find(out, row.key);
   assert.equal(ava.connectionNote, row.connectionNote);
@@ -163,6 +183,7 @@ test('a row with a passing brand detail is kept as the team wrote it', () => {
   assert.ok(!('creator' in ava) && !('creatorNumber' in ava), 'no creator field in the output');
   assert.equal(ava.fit, 'Jay');
   assert.ok(!('nextStep' in ava) && !('hold' in ava), 'not held: the next step is left for a later step to assign');
+  assert.ok(!('nextStep' in find(finalise({ rows: [row], worklist, roster, today, connected: new Set([row.key]) }), row.key)), 'connected or not');
   assert.deepEqual(out.lint.errors, []);
   assert.deepEqual(out.lint.holds, []);
   assert.deepEqual(pickToday(out.rows, worklist).map((r) => r.key), [row.key]);
@@ -208,6 +229,9 @@ test('a held Canadian row is not rewritten: a bare invite with no note, or "Wait
   assert.deepEqual([connected.nextStep, connected.connectionNote, connected.dm], ['Wait', '', row.dm]);
   const already = find(finalise({ rows: [{ ...row, nextStep: 'DM now' }], worklist, roster, today }), row.key);
   assert.equal(already.nextStep, 'Wait', '"DM now" means connected: the message still waits');
+  // The note is dropped with the hold, so a fault in the note alone is no reason to rewrite the DM.
+  const noWayOut = finalise({ rows: [{ ...row, connectionNote: 'Hi there, saw your brand backed a lawn channel for spring. Are creator partnerships yours?' }], worklist, roster, today });
+  assert.deepEqual([find(noWayOut, row.key).dm, noWayOut.stats.rewritten, noWayOut.lint.errors], [row.dm, 0, []]);
   // A country nobody knows waits the same way.
   const uma = find(finalise({ rows: [teamRow('Mistco | Uma Sample', 'Jay', { nextStep: 'Invite + note' })], worklist, roster, today }), 'Mistco | Uma Sample');
   assert.deepEqual([uma.nextStep, uma.connectionNote], ['Invite', '']);

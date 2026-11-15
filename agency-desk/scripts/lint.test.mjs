@@ -40,6 +40,13 @@ const colleague = (patch = {}) => ({
   hook: { type: 'launch', text: 'the spring catalogue leads with a battery range', source: 'https://acme.example/catalogue', date: '2026-10-10' },
   ...patch,
 });
+// Ava's own LinkedIn post, which Leif pasted: it has no link, so it carries a topic and is never quoted.
+const post = (patch = {}) => ({
+  ...good(), confidence: 'Medium',
+  connectionNote: 'Hi Ava, enjoyed your post about the spring range. Are creator partnerships yours? No worries if not.',
+  dm: `Thanks for connecting, Ava. Your post about the spring range caught my eye. If creator partnerships are yours, want a one-pager here or by email? ${OUT}`,
+  hook: { type: 'post', topic: 'the spring range', text: 'Proud of the team: our spring range lands in stores next week after two years of work.', source: 'paste', date: '2026-10-20', ...patch },
+});
 const rules = (rows, opts) => lint(rows, roster, { today, ...opts }).errors.map((e) => e.rule);
 
 test('a good row passes with no errors', () => {
@@ -242,6 +249,9 @@ test('two colleagues never stand on the same detail: the same evidence id, or fa
   assert.deepEqual(pair({ source: link }, { source: link }), shared, 'no ids: the link decides');
   assert.deepEqual(pair({ evidence: 'e1', source: link }, { source: link }), shared, 'one id is not two');
   assert.deepEqual(pair({}, {}), []);
+  // Each colleague's own post: "paste" is how both arrived, not a link they share.
+  const his = colleague({ confidence: 'Medium', hook: { type: 'post', topic: 'the trade show', text: 'Great to meet so many growers at the trade show.', source: 'paste', date: '2026-10-22' } });
+  assert.deepEqual(rules([post(), his]), []);
 });
 
 test('a creator name inside a brand name is not a creator in the message', () => {
@@ -285,14 +295,6 @@ test('the email check and the row check read a country the same way', () => {
   assert.equal(countryLaw(undefined), '');
 });
 
-// Ava's own LinkedIn post, which Leif pasted: it has no link, so it carries a topic and is never quoted.
-const post = (patch = {}) => ({
-  ...good(), confidence: 'Medium',
-  connectionNote: 'Hi Ava, enjoyed your post about the spring range. Are creator partnerships yours? No worries if not.',
-  dm: `Thanks for connecting, Ava. Your post about the spring range caught my eye. If creator partnerships are yours, want a one-pager here or by email? ${OUT}`,
-  hook: { type: 'post', topic: 'the spring range', text: 'Proud of the team: our spring range lands in stores next week after two years of work.', source: 'paste', date: '2026-10-20', ...patch },
-});
-
 test('a LinkedIn post hook is pasted or a screenshot, never a link, with a date and a topic', () => {
   assert.deepEqual(rules([post()]), []);
   assert.deepEqual(rules([post({ source: 'screenshot' })]), []);
@@ -306,12 +308,13 @@ test('a LinkedIn post hook is pasted or a screenshot, never a link, with a date 
 test('a post hook goes stale after 183 days, and a screenshot is never High confidence', () => {
   assert.deepEqual(rules([post({ date: '2026-05-06' })]), [], '183 days');
   assert.deepEqual(rules([post({ date: '2026-05-05' })]), ['hook-stale'], '184 days');
+  assert.deepEqual(rules([post({ date: '2026-05-05' })], { maxAgeDays: 400 }), ['hook-stale'], 'its own limit, not the default for an unknown kind');
   assert.deepEqual(rules([{ ...post({ source: 'screenshot' }), confidence: 'High' }]), ['screenshot-hook-high'], 'a screenshot cannot be checked twice');
   assert.deepEqual(rules([{ ...post(), confidence: 'High' }]), []);
 });
 
 test('a post is referred to by topic: six of its words in a row, in the note, DM or bump, is a quote', () => {
-  const lifted = 'our spring range lands in stores next week';
+  const lifted = 'spring range lands in stores next'; // exactly six
   for (const field of ['connectionNote', 'dm', 'bump']) {
     const row = post();
     row[field] = field === 'dm' ? row.dm.replace('Your post about the spring range caught my eye.', `Loved "${lifted}".`) : `Loved "${lifted}". No worries if not.`;
@@ -320,7 +323,7 @@ test('a post is referred to by topic: six of its words in a row, in the note, DM
   const row = post();
   row.dm = row.dm.replace('caught my eye.', 'caught my eye, and so did hearing the spring range lands in stores soon.');
   assert.deepEqual(rules([row]), [], 'five words in a row is still her topic, in our words');
-  row.dm = post().dm.replace('caught my eye.', 'caught my eye: OUR SPRING RANGE, lands in stores next week!');
+  row.dm = post().dm.replace('caught my eye.', 'caught my eye: OUR SPRING RANGE, lands in stores!');
   assert.deepEqual(rules([row]), ['post-quoted'], 'capitals and punctuation do not hide a quote');
 });
 

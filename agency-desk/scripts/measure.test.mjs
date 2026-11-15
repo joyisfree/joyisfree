@@ -17,7 +17,10 @@ const TODAY = '2026-11-15';
 const NOON = new Date('2026-11-15T20:00:00Z'); // midday on 15 Nov in California
 const JAY = 'UC' + 'jay'.padEnd(22, '0');
 const KIT = 'UC' + 'kit'.padEnd(22, '0');
-const tmp = () => mkdtempSync(join(tmpdir(), 'agency-measure-'));
+// One scratch folder for the measuring tests, outside the repository, removed when the tests end.
+const SCRATCH = mkdtempSync(join(tmpdir(), 'agency-measure-'));
+process.on('exit', () => rmSync(SCRATCH, { recursive: true, force: true }));
+const tmp = () => mkdtempSync(join(SCRATCH, 't-'));
 // A path inside the repository, where nothing may ever be written. If a guard breaks, the test still removes it.
 const inRepo = (t, name) => { const p = join(REPO_ROOT, name); t.after(() => rmSync(p, { force: true })); return p; };
 
@@ -87,6 +90,7 @@ test('measures from API fixtures with exact dates and leaves out a 45-second Sho
   const m = measure(entries, TODAY);
   assert.equal(m.ok, true);
   assert.equal(m.measured.n, 6, 'long0000003 to long0000008: 7 days to the second counts, a second less does not');
+  assert.deepEqual(recentLong(entries, TODAY).map((e) => e.link.slice(-11)), ['long0000003', 'long0000004', 'long0000005', 'long0000006', 'long0000007', 'long0000008']);
   assert.equal(m.measured.typical, 86000);
   assert.equal(m.measured.best, 105000, 'no Short is the best video, however many views it has');
   assert.equal(m.measured.method, 'YouTube Data API: median of the last 6 long videos, each at least 7 days old');
@@ -112,6 +116,8 @@ test('recentLong hands back the very videos the median was taken from, newest fi
   const m = measure(entries, '2026-11-09');
   assert.deepEqual([m.measured.n, m.measured.best], [12, 1400]);
   assert.deepEqual(ids(recentLong(entries, '2026-11-09', { n: 3, minAgeDays: 30 })), ['v8', 'v7', 'v6']);
+  const older = measure(entries, '2026-11-09', { n: 3, minAgeDays: 30, minVideos: 3 }).measured;
+  assert.deepEqual([older.n, older.typical, older.method], [3, 800, 'YouTube Data API: median of the last 3 long videos, each at least 30 days old']);
   assert.throws(() => recentLong(entries, 'yesterday'), /today/);
 });
 
@@ -126,7 +132,8 @@ test('a channel can be given as an id, a channel link, an @handle or a handle li
 });
 
 test('too few long videos means no number, never a guess: hidden views and an unknown length do not count', () => {
-  const few = [vid('a', '2026-10-01T08:00:00Z', 1000), vid('b', '2026-10-02T08:00:00Z', 2000), vid('c', '2026-10-03T08:00:00Z', null), vid('d', '2026-10-04T08:00:00Z', 3000, null)];
+  const noLength = { id: 'e', title: 'Video e', publishedAt: '2026-10-05T08:00:00Z', views: 4000, live: false };
+  const few = [vid('a', '2026-10-01T08:00:00Z', 1000), vid('b', '2026-10-02T08:00:00Z', 2000), vid('c', '2026-10-03T08:00:00Z', null), vid('d', '2026-10-04T08:00:00Z', 3000, null), noLength];
   const m = measure(entriesFromVideos(few), '2026-11-09');
   assert.equal(m.ok, false);
   assert.equal(m.why, 'only 2 long videos at least 7 days old in the last 50 uploads (need 6)');
@@ -217,7 +224,7 @@ globalThis.fetch = async (url) => {
   return new Response(JSON.stringify(answers[new URL(url).pathname.split('/').pop()]), { status: 200 });
 };
 `);
-  return spawnSync(process.execPath, ['--import', pathToFileURL(pre).href, join(here, 'measure.mjs'), ...argv], { encoding: 'utf8' });
+  return spawnSync(process.execPath, ['--import', pathToFileURL(pre).href, join(here, 'measure.mjs'), ...argv], { encoding: 'utf8', timeout: 60_000 });
 }
 
 test('the measurer refuses to write its measurements or its ledger inside the repository, and to run half told', (t) => {

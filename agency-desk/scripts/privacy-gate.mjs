@@ -10,9 +10,10 @@
 //                  "<short hash> <file> <kind>", never with its value, which would repeat the leak in a log.
 //   --known        commits already known to hold old hits, by seven or more characters of their hashes. Their hits
 //                  are listed as known and do not fail the gate; a hit in any other commit still does.
-//   --emails-only  runs without the two lists, for addresses alone.
+//   --emails-only  runs without the two lists: addresses and key shapes only.
 //   The shape of a Google API key is a hit of kind "secret" on every run, and is never printed. Exit 2 when the
-//   gate cannot tell what it was asked: no lists, a flag it does not know, or nothing to read under the paths.
+//   gate cannot do what it was asked: no lists, a flag it does not know, a --known that is not a list of hashes,
+//   or nothing to read under the paths.
 import { readFileSync, appendFileSync, existsSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
@@ -59,12 +60,12 @@ export function listFiles(paths, root = REPO_ROOT) {
   return out.split('\0').filter(Boolean).filter((f) => existsSync(join(root, f)) && statSync(join(root, f)).isFile());
 }
 
-// Every line any commit ever added under the paths, on every branch. The options pin what git prints, so that no
-// machine's settings and no shape of history can hide a line: headers of the hash alone (an author's name or address
-// in a header would be a false alarm), side branches whose changes were thrown away (--full-history), the first
-// commit (--root), files git calls binary (--text), no local filter (--no-textconv), no colour codes, bare file
-// names (--no-prefix), and for a merge the lines neither parent had (--cc). A hit carries its commit, its file and
-// its kind, never its value.
+// Every line any commit ever added under the paths, on every branch (--all). The options pin what git prints, so
+// that no machine's settings and no shape of history can hide a line: headers of the hash alone (an author's name
+// or address in a header would be a false alarm), side branches whose changes were thrown away (--full-history),
+// the first commit (--root), files git calls binary (--text), no local filter (--no-textconv), no colour codes,
+// bare file names (--no-prefix), hashes of seven characters (--abbrev), the changed lines alone (-U0) and, for a
+// merge, the lines neither parent had (--cc). A hit carries its commit, its file and its kind, never its value.
 export function scanHistory(paths, lists = {}, root = REPO_ROOT) {
   let log;
   try {
@@ -81,7 +82,7 @@ export function scanHistory(paths, lists = {}, root = REPO_ROOT) {
   let plus = ''; // what starts an added line inside a hunk: "+", or "++" where a merge has two parents
   let added = [];
   const flush = () => {
-    for (const h of added.length ? scanText(added.join('\n'), lists) : []) hits.push({ ...commit, file, kind: h.kind });
+    if (added.length) hits.push(...scanText(added.join('\n'), lists).map((h) => ({ ...commit, file, kind: h.kind })));
     added = [];
   };
   for (const line of log.split('\n')) {
