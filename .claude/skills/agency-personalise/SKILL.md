@@ -77,7 +77,9 @@ Then one easy question. The DM after they accept ends with the consent ask ("Min
     - File it:
       - `label_thread` puts the thread under "Joyisfree Drafts/Ready to send" or "Joyisfree Drafts/On hold".
         A brand-new email has no thread yet, so it takes no label and is found through the log.
-      - Add one row to the Drive Sheet "Drafts log": who, folder, why or what unlocks it, the draft link, the date.
+      - The Drive Sheet "Drafts log" lists who, folder, why or what unlocks it, the draft link and the date. The Drive
+        connector can rename a file but never change its content, so a changed log is a new dated log, and the last
+        one is retitled "OLD". Keep Leif's "Sent?" ticks from it.
       - Run `list_drafts` on each label to check. An older draft by Leif in the same thread gets labelled too, so
         the log names it.
       - `update_draft` drops the draft's label (seen 14 Nov), so label the thread again after every rewrite.
@@ -92,8 +94,9 @@ Then one easy question. The DM after they accept ends with the consent ask ("Min
 ## The automatic run (Mon, Wed, Fri; Leif, 12 Nov: "automatic, I don't have to do anything")
 
 It drafts only for people Leif added since the last run, and never sends.
-1. Pull both sheets (step 0, then `python3 -I agency-desk/scripts/split-xlsx.py`). Download the Drafts log, pack v2 and
-   the "Desk memory" file from the Drive folder.
+1. Pull both sheets (step 0, then `python3 -I agency-desk/scripts/split-xlsx.py`). Download the current Drafts log,
+   pack v2 and every file in the Drive folder "Desk memory". The memory is append-only: each run adds one small dated
+   CSV (email, status, why) and never edits an older one.
 2. `node agency-desk/scripts/newrows.mjs --li <dir>/li --ima <dir>/ima --seen <log>,<pack>,<memory> --log <events.jsonl>
    --out <scratch>/newrows.json`. "nothing new" ends the run with a one-line note.
 3. Run one Gmail search over the new addresses (`{to:a to:b}`, THREAD_VIEW_METADATA_ONLY). Save the result to a file
