@@ -31,6 +31,64 @@ Thanks for connecting, Tom. Acme Herbs' spring page leads with its indoor herb k
 - Before every push: `git grep -nE '@[a-z0-9-]+\.[a-z]{2,}'` over `agency-desk/` must show only example.com
   addresses.
 
+## Co-working: personalise on request (the main way of working since 15 Nov)
+
+Leif hunts the people. He names one, and the desk does the homework, so he never watches 20 videos or reads 20
+posts to write one message. Nothing runs by itself, and nothing is drafted until he says "draft it".
+
+**A creator: "personalise @handle"** (a channel link or id works too)
+1. `NODE_USE_ENV_PROXY=1 node agency-desk/scripts/person.mjs --creator @handle --today YYYY-MM-DD --out <scratch>/desk
+   --ledger <scratch>/desk/units.json --terms <private terms.txt> --overrides <private overrides.json>`
+   - It prunes first: evidence 30 days old is deleted, and evidence 25 days old is listed for a refresh.
+   - It reads the channel, its last 50 uploads and the top comments on six videos through the YouTube Data API
+     (about 10 units of the 10,000 free a day). It never reads YouTube's pages.
+   - The identity gate decides whether anything is written. An exact handle from Leif is its own proof. A channel
+     found by name (`--found-by-name`) needs the sheet's address, its domain, or a niche and country match.
+   - A named stop ("key missing", "quota") is told to Leif in plain words. Nothing is retried around it.
+2. Read `<dir>/brief-input.md` and write the brief as JSON (see Digest). Run check 1 to 0 errors:
+   `node agency-desk/scripts/provenance.mjs --brief <brief.json> --pack <dir>/evidence.json`.
+3. Check 2: `agency-guardian` rereads the brief against the evidence. A veto is a cross.
+4. Write their tab in the Desk doc (under Creators) and their Board row. Two ticks only when both checks passed.
+
+**A brand person: "personalise Name at Brand", then Leif pastes their own posts**
+- Leif copies the person's LinkedIn Activity > Posts page, or sends screenshots. Claude never opens linkedin.com.
+- Save the paste to a scratch file and run `node agency-desk/scripts/person.mjs --person "Name" --brand "Brand"
+  --paste <file> --today YYYY-MM-DD --out <scratch>/desk --terms <private terms.txt>`. For screenshots, type out
+  what they show, keep LinkedIn's "Feed post number N" lines, and add `--screenshot`.
+- Reposts, comments on other people's posts and reactions are dropped as the paste is read, and the file is deleted
+  afterwards. A headline at another company is flagged "changed job?".
+- Then the brief, the two checks, and their section in the brand's tab, as for a creator. A detail seen only in a
+  screenshot gets one tick at most.
+
+**"forget Name"**: `person.mjs --forget "Name / Brand" --out <scratch>/desk` removes the saved evidence. Then remove
+their tab and their Board row. Say plainly what stays: the doc's history, this chat, and any Gmail draft (only Leif
+can delete one).
+
+## Digest: from evidence to a brief
+
+The script reads, Claude writes, and two checks prove it.
+- `evidence.json` holds items. Each has an id, its exact words, a link and a date. The id says what it is:
+  `t:` a title, `s:` a sponsor line, `st:` a standing partner (a line in most descriptions), `p:` YouTube's
+  paid-promotion flag, `f:` a plan they announced, `c:` a chapter, `d:` a description line, `a:` a viewer's comment,
+  `r:` the creator's reply to a viewer, `li:` their own LinkedIn post, `m:` a search pointer (never quotable).
+- The brief is JSON: `{ who, lines: [{ section, text, cites, read?, audience?, ask? }] }`.
+  - `brief`: the 60-second read for Leif (what they are making now, the story so far, what viewers love, sponsors
+    they take, the best opener).
+  - `hook`: three, ranked. `block`: two subject ideas, two compliment lines, one question (`ask: true`).
+- What check 1 enforces:
+  - every line cites ids from this person's own pack, and a quote appears there word for word;
+  - an interpretation starts "My read:" (`read: true`);
+  - a viewer's words are quoted as viewers' words (`audience: true`), never as the creator's;
+  - a LinkedIn post is referred to by its topic, never quoted (six of their words in a row is a quote);
+  - "partnered" needs a sponsor line or the paid flag, otherwise the word is "featured";
+  - health, family hardship, children, religion, politics and money troubles are never a hook;
+  - figures are never typed into a line.
+- The Numbers on a tab are copied from `brief-input.md` exactly as the script wrote them: typical and best views,
+  how often they post, the last upload, and the engagement rate with its label, "engagement rate (our calculation
+  from YouTube data)". "Mostly Shorts", "comments off" and "not in English" are said as they are, never shown as 0.
+- Every tab carries its refresh-by date, 30 days after the data was read. On that date the tab is refreshed, or its
+  YouTube lines are removed.
+
 ## Before the run: the hybrid check (costs almost nothing)
 
 - Read the titles and one-line summaries of Leif's recent sessions (a session list, never whole transcripts). Skip any

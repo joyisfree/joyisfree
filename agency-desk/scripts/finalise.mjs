@@ -1,94 +1,100 @@
 #!/usr/bin/env node
 // The finishing pass. Every row the team wrote either passes the lint as written or becomes an honest role check
-// ("who looks after creator partnerships?") that claims nothing beyond the roster. Rows that must not be messaged
-// become skips with the reason, and the Today list takes only rows with nothing blocking them.
+// ("if creator partnerships are yours, want a one-pager?") that names no creator and quotes no number. Rows that
+// must not be messaged become skips with the reason, a row whose country is Canada or unknown waits (a bare invite
+// can still go), and the Today list takes only rows with nothing blocking them.
 //
-// It always starts again from the team's own rows, so when a creator says yes (roster yesAt) or is measured again
-// (roster measuredAt), the team's fuller copy comes back by itself on the next run.
+// It always starts again from the team's own rows, so when a country becomes known or the postal line arrives, the
+// copy the team wrote is still there on the next run.
 //
 // Private facts come from --config, a JSON file kept outside the repository:
 //   { "warmThread": { "<brand id>": "<who>" }, "hold": ["<brand id>"], "wrongCompany": { "<brand id>": "<why>" },
-//     "waitFor": { "<brand id>": "<what the lane waits for>" } }
+//     "waitFor": { "<brand id>": "<what the lane waits for>" },
+//     "country": { "<brand id>": "<country>" }, "personCountry": { "<Brand | Name>": "<country>" } }
 //
 //   node agency-desk/scripts/finalise.mjs (--run <team output.json> | --rows <team rows.json>) --worklist <worklist.json>
 //        --roster <roster.public.json> --config <finalise.json> --today YYYY-MM-DD --out <rows.json>
-//        [--today-csv <today.csv>] [--today-max 10]
+//        [--today-csv <today.csv>] [--today-max 10] [--postal "<the postal line>"]
 import { readFileSync, writeFileSync } from 'node:fs';
 import { args, isMain, assertOutsideRepo, toCSV } from './lib.mjs';
-import { lint, report, creatorStatus } from './lint-lines.mjs';
+import { lint, report, wantsNote, NOTE_MAX, DM_MAX } from './lint-lines.mjs';
 // A row carrying any of these flags stays in the pack but never reaches Today. "waits:" comes from the private
 // config's waitFor list (a lane that waits for the right creator); "confirm creator first" is the team's own hold.
 export const BLOCK = ['no honest fit', 'address at another company', 'wrong company', 'warm brand', 'invalid', 'waits:', 'confirm creator first', 'before pitching'];
 export const MAX_PER_BRAND = 5; // the sixth person at a brand waits until one of the first five answers
 
-// Five variants, so up to five colleagues at one brand never get the same note.
+// Five variants of each line, so up to five colleagues at one brand never get the same note or the same DM. The
+// brand is always written " at {b}", so a line still reads when a brand too long for it is left out.
 const NOTES = [
-  'Hi {f}, I run Joyisfree Studio, a small agency for home and garden YouTube creators. Do you look after creator partnerships at {b}?',
-  'Hi {f}, I match home and garden YouTube creators with brands that fit them. Who looks after creator partnerships at {b}: you or someone on your team?',
-  'Hi {f}, I work with home, garden and DIY creators on YouTube. Are creator partnerships part of your role at {b}?',
-  'Hi {f}, Leif here. I place home and garden YouTubers with brands. Is creator work at {b} yours, or a colleague\'s?',
-  'Hi {f}, my agency works with DIY, home and garden YouTube channels. Who handles creator partnerships at {b}?',
+  'Hi {f}, I run Joyisfree Studio, a small agency for home and garden YouTube creators. Do you look after creator partnerships at {b}? No worries if not.',
+  "Hi {f}, I match home and garden YouTube creators with brands that fit them. Are creator partnerships at {b} yours? If it's not your area, no worries.",
+  'Hi {f}, I work with home, garden and DIY creators on YouTube. Is creator work at {b} part of your role? Happy to leave it if not.',
+  "Hi {f}, Leif here. I place home and garden YouTubers with brands. Is creator work at {b} yours, or a colleague's? No worries if not.",
+  "Hi {f}, my agency works with DIY, home and garden YouTube channels. Who handles creator partnerships at {b}? If it's not you, I'll leave it there.",
 ];
-const OPEN = [
-  'Thanks for connecting, {f}. Quick one: do you look after creator partnerships at {b}, or is that someone else on your team?',
-  "Thanks for connecting, {f}. Who's the right person for creator partnerships at {b}: you, or someone on your team?",
-  'Thanks for connecting, {f}. Are YouTube creator partnerships part of your role at {b}, or should I speak with someone else?',
-  'Thanks for accepting, {f}. Is creator work at {b} something you look after?',
-  'Good to connect, {f}. Who should I speak with about creator partnerships at {b}?',
+const OPEN = ['Thanks for connecting, {f}.', 'Good to connect, {f}.', 'Thanks for accepting, {f}.', 'Hi {f}, thanks for connecting.', 'Glad we connected, {f}.'];
+const MIDDLE = [
+  'I match home and garden YouTube creators with brands that fit them.',
+  'I help home and garden brands find YouTube creators who fit.',
+  'I manage home and garden YouTube creators and only pitch where one genuinely fits.',
+  'I work with home, garden and DIY creators on YouTube.',
+  'I run a small agency for home and garden YouTube creators.',
 ];
-const ASK = ['If so, want a short one-pager here or by email?', "If it's you, want the one-pager here or by email?",
-  'If they are, want the one-pager here or by email?', 'If it is, want the one-pager here or by email?',
-  'If it lands with you, want the one-pager here or by email?'];
+// The one question: it checks the role and asks before anything is sent, so there is never a second ask.
+const ASK = [
+  'If creator partnerships at {b} are yours, want a one-pager here or by email?',
+  'If you look after creator work at {b}, mind if I send you a one-pager?',
+  'If creator partnerships at {b} sit with you, can I send a one-pager here?',
+  'If YouTube creators are part of your role at {b}, would you like a one-pager here or by email?',
+  "If you're the right person for creator partnerships at {b}, shall I send a one-pager?",
+];
 const OUT = "If this isn't your area, just say and I won't follow up. Leif, Joyisfree Studio";
 const fill = (t, f, b) => t.replaceAll('{f}', f).replaceAll('{b}', b);
+// The fullest version that fits the limit: with the brand, then without it, then without the first name either.
+const within = (max, t, f, b) => {
+  const bare = t.replaceAll(' at {b}', '');
+  return [fill(t, f, b), fill(bare, f, b), fill(bare, 'there', b)].find((x) => x.length <= max);
+};
 
 export function firstName(name) {
   const n = String(name || '').replace(/[^A-Za-zÀ-ɏ' -]/g, '').trim().split(/\s+/)[0];
   return n || 'there';
 }
 
-// Can brand copy name this creator today, and quote their numbers? The lint's own definition, so the two never drift.
-export const creatorState = creatorStatus;
-
-// The honest fallback: who looks after creator partnerships? It names a creator only after a recent yes, and
-// quotes their number only when it was measured recently.
-export function roleCheck(row, brand, i, { creator = null, state = { named: false, fresh: false }, rule = '', noHonestFit = '' } = {}) {
+// The honest fallback, for a row with no true, dated detail to stand on: who Leif is, one question that is also
+// the consent ask, the way out and the sender. It names no creator and quotes no number, whatever the roster says:
+// those wait for the one-pager, after a yes.
+export function roleCheck(row, brand, i, { rule = '', noHonestFit = '' } = {}) {
   const f = firstName(row.name);
   const b = brand.label;
   const v = ((i % NOTES.length) + NOTES.length) % NOTES.length;
-  let middle = 'I manage home and garden YouTube creators and only pitch where one genuinely fits.';
-  let name = '';
-  let number = '';
-  if (rule === 'us-only') middle = "I'm adding US creators for spring and will only come back with one who fits.";
-  else if (creator && state.named) {
-    name = creator.name;
-    if (state.fresh && creator.phrase) { middle = `I look after ${creator.phrase}.`; number = creator.phrase; }
-    else middle = `I look after ${creator.name}${creator.describe ? `, ${creator.describe}` : ''}.`;
-  }
-  let dm = [fill(OPEN[v], f, b), middle, ASK[v], OUT].join(' ');
-  if (dm.length > 480 && name) { dm = [fill(OPEN[v], f, b), `I look after ${name}.`, ASK[v], OUT].join(' '); number = ''; }
+  const middle = rule === 'us-only' ? "I'm adding US creators for spring and will only come back with one who fits." : MIDDLE[v];
   // Drop review notes and any earlier rewrite's own flags, so a row rewritten twice does not carry them twice.
   const flags = (row.flags || []).filter((x) => !/^(guardian|pilot critic|panel|honest role check|rewritten:|no honest fit:)/.test(x));
-  if (noHonestFit && !name) flags.push(`no honest fit: ${String(noHonestFit).slice(0, 80)}`);
+  if (noHonestFit) flags.push(`no honest fit: ${String(noHonestFit).slice(0, 80)}`);
   flags.push('honest role check (no dated hook to stand on yet)');
   return {
-    ...row, connectionNote: fill(NOTES[v], f, b), dm, creator: name, creatorNumber: number,
-    emailOpener: `Thanks for saying yes on LinkedIn. Here is the one-pager I mentioned${name ? ` on ${name}` : ''}.`,
-    subject: (name ? `${b} + ${name}: the one-pager` : `For ${b}: our creator one-pager`).slice(0, 60),
+    ...row,
+    connectionNote: wantsNote(row) ? within(NOTE_MAX, NOTES[v], f, b) : '', // a bare invite carries no note
+    dm: within(DM_MAX, [OPEN[v], middle, ASK[v], OUT].join(' '), f, b),
+    emailOpener: 'Thanks for saying yes on LinkedIn. Here is the one-pager I mentioned.',
+    subject: `For ${b}: our creator one-pager`.slice(0, 60),
     hook: { type: 'none', text: `role check, opener ${v + 1}` }, confidence: 'Low', flags, // the opener number feeds the reply scoreboard
   };
 }
 
 const skipRow = (key, reason, flag) => ({ key, route: 'skip', skipReason: reason, hook: { type: 'none' }, confidence: 'Low', contactOrder: 9, wave: 9, flags: [flag] });
 
-export function finalise({ rows: teamRows, worklist, roster, config = {}, picks = {}, today, maxRounds = 4, yesDays = 90, freshDays = 30 }) {
+// postal: Leif's postal line, when he has one. connected: the keys of people he is already connected to.
+export function finalise({ rows: teamRows, worklist, roster, config = {}, picks = {}, today, maxRounds = 4, postal = '', connected = new Set() }) {
   if (!today || Number.isNaN(Date.parse(today))) throw new Error('finalise needs --today YYYY-MM-DD');
   const brandOf = new Map();
   const addrOf = new Map();
   for (const b of worklist) for (const p of b.people) { brandOf.set(p.key, b); addrOf.set(p.key, p.address || ''); }
   const byId = new Map(worklist.map((b) => [b.id, b]));
-  const byName = new Map((roster.creators || []).map((c) => [c.name, c]));
-  const rows = (teamRows || []).filter((r) => r && brandOf.has(r.key)).map((r) => ({ ...r, flags: [...(r.flags || [])] }));
+  // The matchmaker's pick never reaches a message: it stays on the row as "fit", for the brand's tab only.
+  const rows = (teamRows || []).filter((r) => r && brandOf.has(r.key))
+    .map(({ creator, creatorNumber, ...r }) => ({ ...r, ...(creator ? { fit: creator } : {}), flags: [...(r.flags || [])] }));
   const have = new Set(rows.map((r) => r.key));
   const add = (key, reason, flag) => { if (!have.has(key)) { rows.push(skipRow(key, reason, flag)); have.add(key); } };
   for (const [id, who] of Object.entries(config.warmThread || {})) {
@@ -105,6 +111,8 @@ export function finalise({ rows: teamRows, worklist, roster, config = {}, picks 
     const b = brandOf.get(r.key);
     r.brand = b.label;
     r.name = r.key.split(' | ').slice(1).join(' | ') || r.key;
+    // The country is never the team's to say: the person's own when Leif has given it, else the brand's.
+    r.country = config.personCountry?.[r.key] || config.country?.[b.id] || b.country || '';
     for (const k of ['contactOrder', 'wave']) { const n = parseInt(r[k], 10); r[k] = Number.isFinite(n) ? n : 9; }
     if (r.route === 'skip') continue;
     // The private lists win over anything the team wrote: a held brand or a live thread never gets a cold note.
@@ -129,7 +137,22 @@ export function finalise({ rows: teamRows, worklist, roster, config = {}, picks 
     });
   }
 
-  let result = lint(rows, roster, { today, yesDays, freshDays });
+  // A hold is not an error: the row keeps its copy and waits. Someone already connected waits for the country or
+  // the postal line; anyone else gets a bare invite, which carries no message. Then the lint reads what is left.
+  const check = () => {
+    for (const r of rows) if (r.route !== 'skip' && !wantsNote(r)) r.connectionNote = '';
+    const first = lint(rows, roster, { today, postal });
+    if (!first.holds.length) return first;
+    const held = new Set(first.holds.map((h) => h.key));
+    for (const r of rows) {
+      if (!held.has(r.key)) continue;
+      r.nextStep = connected.has(r.key) || ['DM now', 'Wait'].includes(r.nextStep) ? 'Wait' : 'Invite';
+      r.connectionNote = '';
+    }
+    return lint(rows, roster, { today, postal });
+  };
+
+  let result = check();
   let rewritten = 0;
   let subjects = 0;
   for (let round = 0; round < maxRounds && result.errors.length; round++) {
@@ -139,24 +162,23 @@ export function finalise({ rows: teamRows, worklist, roster, config = {}, picks 
       const rules = bad.get(r.key);
       if (!rules || r.route === 'skip') return;
       if (rules.size === 1 && rules.has('generic-subject')) {
-        r.subject = (r.creator ? `${r.brand} + ${r.creator}?` : `For ${r.brand}: one creator idea`).slice(0, 60);
+        r.subject = `For ${r.brand}: one creator idea`.slice(0, 60);
         subjects++;
         return;
       }
       const b = brandOf.get(r.key);
-      const creator = byName.get(r.creator || '') || null;
       // Colleagues at one brand get consecutive openers by contact rank (all different, whichever round rewrites
       // them); brands start at different openers, so replies show which wording works.
       const offset = [...b.id].reduce((s, ch) => s + ch.charCodeAt(0), 0);
-      const next = roleCheck(r, b, (rank.get(r.key) ?? 0) + offset, {
-        creator, state: creatorState(creator, today, { yesDays, freshDays }), rule: b.rule?.route, noHonestFit: picks[b.id]?.noHonestFit,
-      });
+      const next = roleCheck(r, b, (rank.get(r.key) ?? 0) + offset, { rule: b.rule?.route, noHonestFit: picks[b.id]?.noHonestFit });
       next.flags.push(`rewritten: ${[...rules].sort().join(', ')}`);
       rows[i] = next;
       rewritten++;
     });
-    result = lint(rows, roster, { today, yesDays, freshDays });
+    result = check();
   }
+  const why = new Map(result.holds.map((h) => [h.key, h.detail]));
+  for (const r of rows) { if (why.has(r.key)) r.hold = why.get(r.key); else delete r.hold; }
   return { rows, lint: result, stats: { rewritten, subjects } };
 }
 
@@ -189,7 +211,7 @@ export function todayTable(list) {
 function main() {
   const a = args();
   if ((!a.run && !a.rows) || !a.worklist || !a.roster || !a.today || !a.out) {
-    console.error('usage: finalise.mjs (--run <team output.json> | --rows <rows.json>) --worklist <worklist.json> --roster <roster.json> [--config <finalise.json>] --today YYYY-MM-DD --out <rows.json> [--today-csv <today.csv>] [--today-max 10]');
+    console.error('usage: finalise.mjs (--run <team output.json> | --rows <rows.json>) --worklist <worklist.json> --roster <roster.json> [--config <finalise.json>] --today YYYY-MM-DD --out <rows.json> [--today-csv <today.csv>] [--today-max 10] [--postal "<the postal line>"]');
     process.exit(2);
   }
   let out;
@@ -205,11 +227,10 @@ function main() {
     for (const batch of res.research || []) for (const b of batch?.brands || []) if (b?.id) picks[b.id] = b;
   } else teamRows = read(a.rows);
   const worklist = read(a.worklist);
-  const { rows, lint: result, stats } = finalise({ rows: teamRows, worklist, roster: read(a.roster), config: a.config ? read(a.config) : {}, picks, today: a.today });
+  const { rows, lint: result, stats } = finalise({ rows: teamRows, worklist, roster: read(a.roster), config: a.config ? read(a.config) : {}, picks, today: a.today, postal: typeof a.postal === 'string' ? a.postal : '' });
   writeFileSync(out, JSON.stringify(rows, null, 1));
   const live = rows.filter((r) => r.route !== 'skip');
-  const named = live.filter((r) => r.creator).length;
-  console.log(`rows ${rows.length} · live ${live.length} · skip ${rows.length - live.length} · rewritten ${stats.rewritten} · subjects fixed ${stats.subjects} · naming a creator ${named}`);
+  console.log(`rows ${rows.length} · live ${live.length} · skip ${rows.length - live.length} · rewritten ${stats.rewritten} · subjects fixed ${stats.subjects} · held ${result.holds.length}`);
   if (todayCsv) {
     const list = pickToday(rows, worklist, { max: Number(a['today-max'] || 10) });
     writeFileSync(todayCsv, toCSV(todayTable(list)));

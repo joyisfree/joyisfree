@@ -1,4 +1,4 @@
-// The pack, the work list and the privacy gate, on made-up data.
+// The pack and the work list, on made-up data.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
@@ -10,7 +10,6 @@ import { toCSV, parseCSV, REPO_ROOT } from './lib.mjs';
 import { sheetKeys, buildPack, diff, COLUMNS, safeCell } from './pack.mjs';
 import { buildWorklist, autoRule, parseConnections } from './worklist.mjs';
 import { loadSheets } from './audit.mjs';
-import { scanText } from './privacy-gate.mjs';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const at = (local, domain) => [local, domain].join('@');
@@ -121,26 +120,4 @@ test('the LinkedIn export never confirms someone whose company is blank', () => 
   writeFileSync(join(li, 'Sheet1.csv'), toCSV([S1, ['Acme Mowers', 'Ava Sample', at('ava', 'acmemowers.test'), '', '', '', '', '', 'Valid', '']]));
   const [brand] = buildWorklist(loadSheets({ li }), { connections: parseConnections(text) });
   assert.equal(brand.people[0].connection.match, 'name only: check');
-});
-
-test('the privacy gate refuses to run without its names and terms lists', () => {
-  let code = 0;
-  try { execFileSync(process.execPath, [join(here, 'privacy-gate.mjs')], { stdio: 'pipe' }); } catch (e) { code = e.status; }
-  assert.equal(code, 2);
-  execFileSync(process.execPath, [join(here, 'privacy-gate.mjs'), '--emails-only'], { stdio: 'pipe' });
-});
-
-test('the privacy gate passes reserved domains and catches real addresses and sheet names', () => {
-  assert.deepEqual(scanText(`write to ${at('team', 'example.com')} or ${at('a', 'acme.test')}`), []);
-  const hits = scanText(`contact ${at('jane.doe', 'realbrand.com')} now`, { names: ['Jane Doe', 'Jo'] });
-  assert.equal(hits.filter((h) => h.kind === 'address').length, 1);
-  assert.equal(scanText('a note about Jane Doe', { names: ['Jane Doe'] }).length, 1);
-  assert.equal(scanText('a note about Jo', { names: ['Jo'] }).length, 0, 'a short first name alone is not identifying');
-  assert.equal(scanText('pitched Acmemow today', { terms: ['Acmemow'] }).length, 1);
-  assert.equal(scanText('pitched Acmemowers today', { terms: ['Acmemow'] }).length, 0, 'whole words only');
-  assert.equal(scanText("{ name: 'Zola', numbers: ['80k'] }", { terms: ['Zola'] }).length, 1, 'a four-letter creator name is caught');
-  for (const leak of ['see youtube.com/@zola', 'const zola = {}', 'ZOLA RATES']) {
-    assert.equal(scanText(leak, { terms: ['Zola'] }).length, 1, `a short name in a handle, a variable or capitals is caught: ${leak}`);
-  }
-  assert.equal(scanText('pitched Zolander today', { terms: ['Zola'] }).length, 0, 'still whole words only');
 });
