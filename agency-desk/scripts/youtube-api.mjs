@@ -3,9 +3,11 @@
 // page and the feed, so the desk reads the official YouTube Data API v3 and nothing else. Every other desk script
 // reads through this file, and a test fails if a network call appears in any of them.
 //
-// The key is never here: not in code, files, logs or links. Leif saves it as a network secret for
-// www.googleapis.com (header X-Goog-Api-Key) and the session's HTTPS proxy adds that header by itself, so this code
-// makes plain requests. Node's fetch only goes through the proxy when run with NODE_USE_ENV_PROXY=1.
+// The key is never here: not in code, files, logs or links. Leif saves it in the environment's settings, one of two
+// ways. As a network secret for www.googleapis.com (header X-Goog-Api-Key), the session's HTTPS proxy adds the header
+// by itself and this code never sees the key. Where the settings offer no network secrets, he saves it as the
+// variable YOUTUBE_API_KEY, and this file sends it as that same header, to www.googleapis.com and nowhere else.
+// Node's own requests only go through the proxy when run with NODE_USE_ENV_PROXY=1.
 //
 //   NODE_USE_ENV_PROXY=1 node agency-desk/scripts/youtube-api.mjs --check --ledger <ledger.json outside the repo>
 //        one 1-unit call: prints "key works · 1 unit", or the plain reason it stopped (exit 3)
@@ -16,6 +18,15 @@ import { args, isMain, assertOutsideRepo } from './lib.mjs';
 export const BASE = 'https://www.googleapis.com/youtube/v3/';
 const KEY_PARAM = /^(key|api_key|access_token)$/i;
 const KEY_SHAPE = /AIza[\w-]{30,}/; // how a Google API key looks
+export const KEY_ENV = 'YOUTUBE_API_KEY'; // the variable the key is read from when it is not a network secret
+const KEY_HEADER = 'X-Goog-Api-Key';
+
+// No message this file writes may repeat a key: not the one in use, and not anything shaped like one.
+function hush(text, key) {
+  let s = String(text ?? '');
+  if (key) s = s.split(key).join('[key]');
+  return s.replace(new RegExp(KEY_SHAPE.source, 'g'), '[key]');
+}
 
 // A link under BASE and nowhere else, with no key in it: links end up in logs, errors and shell history.
 export function apiUrl(path, params = {}) {
@@ -36,7 +47,7 @@ export function apiUrl(path, params = {}) {
 // up to two hours earlier the rest of the year, so "after 7pm" holds all year.
 const SAY = {
   redirect: "YouTube's API answered with a redirect, and a redirect is never followed",
-  'key-missing': "the YouTube key is missing or not valid for this API: it is saved in this environment's settings as a network secret for www.googleapis.com (header X-Goog-Api-Key), never typed into a chat or a file",
+  'key-missing': "the YouTube key is missing or not valid for this API: it is saved in this environment's settings, as a network secret for www.googleapis.com (header X-Goog-Api-Key) or as the variable YOUTUBE_API_KEY, never typed into a chat or a file; a key saved after this session started may only reach a new session",
   'api-not-enabled': "the key arrived but the API is switched off: turn on YouTube Data API v3 for the key's project",
   quota: "today's YouTube allowance is used up: it resumes after 7pm Sydney (midnight Pacific)",
   'quota-local': "the desk's own daily cap is reached (90 searches or 9,000 units): it resumes after 7pm Sydney (midnight Pacific)",
@@ -94,16 +105,28 @@ function spend(file, day, cost, search) {
   writeFileSync(file, `${JSON.stringify(all, null, 2)}\n`);
 }
 
-// One request, with a deadline that also covers reading the answer. It is never followed anywhere, and it carries
-// no header at all: the proxy adds the key, so a credential written here could only ever be a leak.
-async function ask(url, fetch, timeoutMs) {
+// The header a request carries. None when no key was handed in: the key is then a network secret, and the proxy
+// adds it. A key from the variable must look like one before it goes anywhere, and the stop never repeats it.
+function keyHeader(key) {
+  if (key === undefined || key === null || key === '') return null;
+  const k = String(key).trim();
+  if (!/^[\w-]{20,100}$/.test(k)) throw new ApiStop('key-missing', `the ${KEY_ENV} variable is set but does not look like a key`);
+  return { [KEY_HEADER]: k };
+}
+
+// One request, with a deadline that also covers reading the answer. It is never followed anywhere, so a header
+// never reaches another host. It carries no header at all when the key is a network secret, and one header, the
+// key, when the key came from the variable.
+async function ask(url, fetch, timeoutMs, headers) {
   let res;
   let text;
   try {
-    res = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) });
+    res = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(timeoutMs), ...(headers && { headers }) });
     text = await res.text();
   } catch (e) {
-    throw new ApiStop('network', e?.name === 'TimeoutError' ? `no answer in ${timeoutMs / 1000} seconds` : e?.cause?.code || e?.cause?.message || e?.message);
+    // The request's own error can quote a header, so what it says is hushed before it is passed on.
+    const said = e?.name === 'TimeoutError' ? `no answer in ${timeoutMs / 1000} seconds` : e?.cause?.code || e?.cause?.message || e?.message;
+    throw new ApiStop('network', hush(said, headers?.[KEY_HEADER]));
   }
   if ((res.status >= 300 && res.status < 400) || res.type === 'opaqueredirect') throw new ApiStop('redirect', `status ${res.status}`);
   let body = null;
@@ -111,28 +134,32 @@ async function ask(url, fetch, timeoutMs) {
   return { status: res.status, body };
 }
 
-// One counted call. ctx is { ledger, fetch, now, cost, timeoutMs, retryMs }: the ledger is required, the rest are
-// for tests. Returns the answer's JSON; throws an ApiStop when the run must end, and a plain error (with `status`
-// and `reason`) for an answer about this one request, such as a 404, which a reader may turn into "not found".
-export async function apiGet(path, params = {}, { fetch = globalThis.fetch, ledger, cost = path === 'search' ? 100 : 1, now = () => new Date(), timeoutMs = 15_000, retryMs = 1_000 } = {}) {
+// One counted call. ctx is { ledger, key, fetch, now, cost, timeoutMs, retryMs }: the ledger is required, the key
+// is read from the YOUTUBE_API_KEY variable at the time of the call, and the rest are for tests. Returns the
+// answer's JSON; throws an ApiStop when the run must end, and a plain error (with `status` and `reason`) for an
+// answer about this one request, such as a 404, which a reader may turn into "not found".
+export async function apiGet(path, params = {}, { fetch = globalThis.fetch, ledger, key = process.env[KEY_ENV], cost = path === 'search' ? 100 : 1, now = () => new Date(), timeoutMs = 15_000, retryMs = 1_000 } = {}) {
   const url = apiUrl(path, params);
   if (!ledger) throw new Error('apiGet needs a ledger file: a call that cannot be counted is not made');
   const file = assertOutsideRepo(ledger);
+  const headers = keyHeader(key); // a key that is not one stops here, before anything is counted or sent
   const day = pacificDay(now());
   const search = path === 'search' ? 1 : 0;
   const used = readLedger(file, day);
   if (used.searches + search > LIMITS.searches || used.units + cost > LIMITS.units) throw new ApiStop('quota-local');
 
-  let res = await ask(url, fetch, timeoutMs);
+  let res = await ask(url, fetch, timeoutMs, headers);
   if (res.status >= 500) { // often a blip: one more try a moment later, and no more
     await new Promise((r) => { setTimeout(r, retryMs); });
-    res = await ask(url, fetch, timeoutMs);
+    res = await ask(url, fetch, timeoutMs, headers);
     if (res.status >= 500) throw new ApiStop('server', `status ${res.status}`);
   }
   if (res.status >= 400) {
     // Google names the reason in errors[].reason, in details[].reason or in status, depending on the error's age.
     const error = res.body?.error;
-    const reasons = [].concat(error?.errors || [], error?.details || [], { reason: error?.status }).map((x) => x?.reason).filter((r) => typeof r === 'string' && /^\w+$/.test(r));
+    // A reason is one plain word, and it gets printed: one that hush() would change (it holds a key) is dropped.
+    const reasons = [].concat(error?.errors || [], error?.details || [], { reason: error?.status }).map((x) => x?.reason)
+      .filter((r) => typeof r === 'string' && /^\w+$/.test(r) && hush(r, headers?.[KEY_HEADER]) === r);
     const has = (...names) => names.some((n) => reasons.includes(n));
     const keyRefused = reasons.some((r) => r.startsWith('API_KEY_')); // not valid, expired, or blocked by its own restrictions
     if (res.status === 401 || keyRefused || /unregistered callers|API key not valid|missing a valid API key/i.test(String(error?.message))) throw new ApiStop('key-missing');

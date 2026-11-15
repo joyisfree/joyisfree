@@ -12,6 +12,9 @@ import { measure, recentLong, channelRef, entriesFromVideos, measureAll } from '
 import { ApiStop, videos } from './youtube-api.mjs';
 import { validate, parseLog, status } from './tracker.mjs';
 
+// A real key never rides in a test: if this machine holds one, this process and the ones it starts forget it here.
+delete process.env.YOUTUBE_API_KEY;
+
 const here = fileURLToPath(new URL('.', import.meta.url));
 const TODAY = '2026-11-15';
 const NOON = new Date('2026-11-15T20:00:00Z'); // midday on 15 Nov in California

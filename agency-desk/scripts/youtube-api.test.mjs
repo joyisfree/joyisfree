@@ -9,9 +9,12 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { REPO_ROOT } from './lib.mjs';
 import {
-  BASE, LIMITS, ApiStop, apiUrl, apiGet, pacificDay, createLedger, durationSec, channel, uploads, videos, topComments,
+  BASE, LIMITS, KEY_ENV, ApiStop, apiUrl, apiGet, pacificDay, createLedger, durationSec, channel, uploads, videos, topComments,
   searchMentions, nextChunk,
 } from './youtube-api.mjs';
+
+// A real key never rides in a test: if this machine holds one, this process and the ones it starts forget it here.
+delete process.env.YOUTUBE_API_KEY;
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const NOON = new Date('2026-11-15T20:00:00Z'); // midday on 15 Nov in California
@@ -20,7 +23,10 @@ const CH = 'UC' + 'a1B2c3D4e5F6g7H8i9J0kL';
 const UPLOADS = 'UU' + 'a1B2c3D4e5F6g7H8i9J0kL';
 const RAW = 'RAW-ANSWER-7731'; // rides in every fake error: no stop may ever repeat it
 
-const tmp = () => mkdtempSync(join(tmpdir(), 'agency-yt-'));
+// One scratch folder for the whole file, outside the repository, removed when the tests end.
+const SCRATCH = mkdtempSync(join(tmpdir(), 'agency-yt-'));
+process.on('exit', () => rmSync(SCRATCH, { recursive: true, force: true }));
+const tmp = () => mkdtempSync(join(SCRATCH, 't-'));
 // A path inside the repository, where nothing may ever be written. If a guard breaks, the test still removes it.
 const inRepo = (t, name) => { const p = join(REPO_ROOT, name); t.after(() => rmSync(p, { force: true })); return p; };
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status });
@@ -84,7 +90,7 @@ test('another host is impossible: the path is one resource name and nothing else
   }
 });
 
-test('no request ever carries a credential: no header at all, only a deadline and the no-redirect rule', async () => {
+test('with the key saved as a network secret, no request carries a credential: no header at all, only a deadline and the no-redirect rule', async () => {
   const f = fake({ '*': () => ({ items: [] }) });
   const c = ctx(f);
   await apiGet('videos', { part: 'id', id: 'aaaaaaaaaa1' }, c);
@@ -102,6 +108,66 @@ test('no request ever carries a credential: no header at all, only a deadline an
     assert.equal(init.redirect, 'manual');
     assert.ok(init.signal instanceof AbortSignal);
   }
+});
+
+// The shape of a key only, built here so no key-shaped text sits in the repo.
+const FAKE_KEY = `AI${'za'}${'Sy'.padEnd(35, 'k')}`;
+
+test('a key saved as the YOUTUBE_API_KEY variable rides as one header, to the API only, and never in a link', async () => {
+  assert.equal(KEY_ENV, 'YOUTUBE_API_KEY');
+  const f = fake({ '*': () => ({ items: [] }) });
+  await apiGet('videos', { part: 'id', id: 'aaaaaaaaaa1' }, ctx(f, { key: FAKE_KEY }));
+  await searchMentions('Acme Garden', {}, ctx(f, { key: `  ${FAKE_KEY}\n` }));
+  assert.equal(f.calls.length, 2);
+  for (const { url, init } of f.calls) {
+    assert.ok(url.startsWith(BASE), url);
+    assert.ok(!url.includes(FAKE_KEY), 'the key is never in the link');
+    assert.deepEqual(Object.keys(init).sort(), ['headers', 'redirect', 'signal']);
+    assert.deepEqual(init.headers, { 'X-Goog-Api-Key': FAKE_KEY }, 'one header, the key as saved without the spaces around it');
+    assert.equal(init.redirect, 'manual', 'a redirect is never followed, so the header never reaches another host');
+  }
+  // With no key handed in, the variable is what is read, at the time of the call.
+  process.env[KEY_ENV] = FAKE_KEY;
+  try {
+    const g = fake({ videos: () => ({ items: [] }) });
+    await apiGet('videos', { part: 'id', id: 'aaaaaaaaaa1' }, ctx(g));
+    assert.deepEqual(g.calls[0].init.headers, { 'X-Goog-Api-Key': FAKE_KEY });
+  } finally { delete process.env[KEY_ENV]; }
+  const h = fake({ videos: () => ({ items: [] }) });
+  await apiGet('videos', { part: 'id', id: 'aaaaaaaaaa1' }, ctx(h));
+  assert.ok(!('headers' in h.calls[0].init), 'and with the variable gone, no header again');
+});
+
+test('a variable that does not look like a key stops before any request, and no stop ever repeats a key', async () => {
+  for (const bad of ['two words', `${FAKE_KEY}\nX-Other: 1`, 'short', `"${FAKE_KEY}"`, 'k'.repeat(300)]) {
+    const f = fake({ '*': () => ({ items: [] }) });
+    const c = ctx(f, { key: bad });
+    await assert.rejects(apiGet('videos', { part: 'id', id: 'aaaaaaaaaa1' }, c), (e) => {
+      stop('key-missing', /YOUTUBE_API_KEY variable is set but does not look like a key/)(e);
+      assert.ok(!e.message.includes(bad) && !e.message.includes(FAKE_KEY), 'the stop never repeats what the variable holds');
+      return true;
+    });
+    assert.equal(f.calls.length, 0, 'nothing is sent with a broken key');
+    assert.ok(!existsSync(c.ledger));
+  }
+  // The request's own error can quote a header: the stop that reports it must not. That holds for a key in a shape
+  // Google has not used yet (it is hushed by its value), and for key-shaped text when the proxy holds the key.
+  const NEWER = `zz-${'q'.repeat(30)}`;
+  for (const [quoted, key] of [[FAKE_KEY, FAKE_KEY], [NEWER, NEWER], [FAKE_KEY, undefined]]) {
+    const loud = async () => { throw new TypeError(`Headers.append: "${quoted}" is an invalid header value.`); };
+    await assert.rejects(apiGet('videos', { part: 'id', id: 'aaaaaaaaaa1' }, ctx({ fetch: loud }, { key })), (e) => {
+      stop('network', /\[key\]/)(e);
+      assert.ok(!e.message.includes(quoted), 'the stop never repeats a key');
+      return true;
+    });
+  }
+  // And an answer about one request (a 404, say) never repeats it either, whatever the API wrote back.
+  const echo = fake({ videos: () => json({ error: { code: 404, message: FAKE_KEY, errors: [{ reason: FAKE_KEY.replace(/-/g, '_') }] } }, 404) });
+  await assert.rejects(apiGet('videos', { part: 'id', id: 'aaaaaaaaaa1' }, ctx(echo, { key: FAKE_KEY })), (e) => {
+    assert.equal(e.status, 404);
+    assert.ok(!e.message.includes(FAKE_KEY) && !String(e.reason).includes(FAKE_KEY), e.message);
+    return true;
+  });
 });
 
 test('every request has a 15-second deadline, and no answer by then is a network stop', async () => {
@@ -145,7 +211,7 @@ test('a missing or refused key is a key-missing stop: it says where the key is s
   ];
   for (const answer of answers) {
     const c = ctx(fake({ channels: answer }));
-    await assert.rejects(channel({ handle: 'JaySample' }, c), stop('key-missing', /network secret for www\.googleapis\.com/));
+    await assert.rejects(channel({ handle: 'JaySample' }, c), stop('key-missing', /network secret for www\.googleapis\.com \(header X-Goog-Api-Key\) or as the variable YOUTUBE_API_KEY.*never typed into a chat or a file.*new session/));
     assert.ok(!existsSync(c.ledger));
   }
 });
@@ -499,13 +565,20 @@ test('no other desk script talks to the network: the one fetch call is in youtub
 });
 
 // The command line runs in its own process, so it gets its fetch from a preloaded file: still no network.
-function cli(argv, answer) {
+function cli(argv, answer, env = {}) {
   const dir = tmp();
   const pre = join(dir, 'fake-fetch.mjs');
-  writeFileSync(pre, `globalThis.fetch = async () => new Response(${JSON.stringify(JSON.stringify(answer.body))}, { status: ${answer.status} });\n`);
+  // The fake writes down the headers it was sent, so a test can see what the command line really put on the wire.
+  const seen = join(dir, 'seen.json');
+  writeFileSync(pre, `import { writeFileSync } from 'node:fs';
+globalThis.fetch = async (url, init) => {
+  writeFileSync(${JSON.stringify(seen)}, JSON.stringify({ url, headers: init?.headers ?? null }));
+  return new Response(${JSON.stringify(JSON.stringify(answer.body))}, { status: ${answer.status} });
+};
+`);
   const ledger = join(dir, 'ledger.json');
-  const r = spawnSync(process.execPath, ['--import', pathToFileURL(pre).href, join(here, 'youtube-api.mjs'), ...argv(ledger)], { encoding: 'utf8' });
-  return { status: r.status, stdout: r.stdout, stderr: r.stderr, said: r.stdout + r.stderr, ledger };
+  const r = spawnSync(process.execPath, ['--import', pathToFileURL(pre).href, join(here, 'youtube-api.mjs'), ...argv(ledger)], { encoding: 'utf8', timeout: 60_000, env: { ...process.env, ...env } });
+  return { status: r.status, stdout: r.stdout, stderr: r.stderr, said: r.stdout + r.stderr, ledger, seen: existsSync(seen) ? JSON.parse(readFileSync(seen, 'utf8')) : null };
 }
 const regions = { status: 200, body: { kind: 'youtube#i18nRegionListResponse', items: [{ id: 'AU' }] } };
 
@@ -513,6 +586,23 @@ test('--check makes one 1-unit call and says the key works, and nothing else', (
   const r = cli((ledger) => ['--check', '--ledger', ledger], regions);
   assert.deepEqual([r.status, r.stdout, r.stderr], [0, 'key works · 1 unit\n', '']);
   assert.deepEqual(Object.values(JSON.parse(readFileSync(r.ledger, 'utf8'))), [{ units: 1, searches: 0 }]);
+});
+
+test('--check sends the key from the variable as the header and never prints it, and sends no header without one', () => {
+  const r = cli((ledger) => ['--check', '--ledger', ledger], regions, { YOUTUBE_API_KEY: FAKE_KEY });
+  assert.deepEqual([r.status, r.stdout, r.stderr], [0, 'key works · 1 unit\n', '']);
+  assert.deepEqual(r.seen.headers, { 'X-Goog-Api-Key': FAKE_KEY });
+  assert.ok(!r.seen.url.includes(FAKE_KEY));
+  const none = cli((ledger) => ['--check', '--ledger', ledger], regions);
+  assert.equal(none.seen.headers, null, 'the proxy adds a network secret by itself');
+  const refused = cli((ledger) => ['--check', '--ledger', ledger], { status: 400, body: { error: { code: 400, message: `API key not valid. ${FAKE_KEY}`, errors: [{ reason: 'badRequest' }] } } }, { YOUTUBE_API_KEY: FAKE_KEY });
+  assert.equal(refused.status, 3);
+  assert.ok(!refused.said.includes(FAKE_KEY), 'a refused key is never printed back');
+  const broken = cli((ledger) => ['--check', '--ledger', ledger], regions, { YOUTUBE_API_KEY: 'not a key' });
+  assert.equal(broken.status, 3);
+  assert.match(broken.stderr, /does not look like a key/);
+  assert.equal(broken.seen, null, 'nothing was sent');
+  assert.ok(!broken.said.includes('not a key'));
 });
 
 test('--check on a stop prints the plain reason and exits 3, never the raw answer', () => {

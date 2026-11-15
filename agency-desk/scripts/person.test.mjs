@@ -8,6 +8,9 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { slug, identity, creatorRun, personRun, prune, forget, brandCountry, handleGuesses, channelMatch, confirmMention, doFirst, brandRun } from './person.mjs';
 
+// A real key never rides in a test: if this machine holds one, this process and the ones it starts forget it here.
+delete process.env.YOUTUBE_API_KEY;
+
 const TODAY = '2026-11-16';
 const NOW = '2026-11-16T01:00:00Z';
 const day = (n) => new Date(Date.parse(`${TODAY}T00:00:00Z`) - n * 86_400_000).toISOString();
