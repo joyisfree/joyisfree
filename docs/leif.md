@@ -1,8 +1,21 @@
 # Your page, Leif
 
-Updated Monday 9 November 2026. If any other page in this repo seems to ask you for something, this page wins.
+Updated Thursday 19 November 2026. If any other page in this repo seems to ask you for something, this page wins.
 
-**Nothing here needs you today. 0 minutes.**
+**About 5 minutes, three small steps, all about your Claude setup.** Nothing about the label or the desk needs you.
+
+## Your Claude setup (from the 19 November sweep)
+
+The full record, with every finding and its source, is `ALPHA.md` in your Google Drive (only you can open it).
+
+1. **Remove the Postiz plugin from your Claude plugins** (about 2 minutes). It can post to X and 27 other channels
+   through Postiz's own servers, Postiz had three critical security fixes on 2 November, and nothing of yours uses
+   it. If you ever connected a social account inside Postiz, disconnect it there too.
+2. **In Claude Code, type /skill-doctor and then /usage, and paste both results to Claude** (about 2 minutes). They
+   show which of your roughly 160 plugin skills you actually use. Claude then suggests which whole plugins to switch
+   off; Vercel and Supabase stay, because the studio app runs on them.
+3. **Make this GitHub repository private** (about 1 minute). It is public at the moment, and nothing in it needs to
+   be.
 
 ## Your one live decision page is the agency's
 
