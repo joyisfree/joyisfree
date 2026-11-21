@@ -4,37 +4,72 @@
 // survives its removal with the suite still green is a guard with no test behind it, and this command exits 1 and
 // names it. This is how "the guards are shown to fail" (studio rule 3) is proven by one command, not asserted.
 //
-//   node galxe-desk/scripts/mutate.mjs                 # run every mutation in the repo, report killed / survived
-//   node galxe-desk/scripts/mutate.mjs --only agency   # only the mutations whose file path contains "agency"
-//   node galxe-desk/scripts/mutate.mjs --list          # just list the mutations
+//   node galxe-desk/scripts/mutate.mjs                        # every mutation, four suites at a time
+//   node galxe-desk/scripts/mutate.mjs --only agency,ledger   # those whose file path contains a term; a term that
+//                                                             # selects nothing is refused, never "0 of 0"
+//   node galxe-desk/scripts/mutate.mjs --since origin/main    # only those a change since that commit can reach
+//   node galxe-desk/scripts/mutate.mjs --add lines.json --group "<one line>"   # check, run, then write a batch
+//   node galxe-desk/scripts/mutate.mjs --list                 # just list them (after --only and --since)
+//   --jobs N (1 to 16, default 4 or fewer CPUs), --timeout-ms N (per suite run, default 120000), --verbose
+//   (every result in list order, so --jobs 1 and --jobs 4 print the same bytes)
 //
 // Each mutation is a single, exact string swap that neutralises one guard. `from` must occur once in its file.
 // It covers the whole repo, not only the desk: a bare file name means galxe-desk/scripts/<name>; anything with a
 // slash is a path from the repo root. Each mutation runs in a full throwaway copy of the repo, against the test
-// suite of the directory the file lives in.
+// suite of the file (SUITE_FOR) or else of the directory it lives in (SUITES).
+//
+// Only KILLED counts: the suite exited 1 with a failed test in its TAP summary. A suite that stays green is
+// SURVIVED; one past its deadline is TIMEOUT; a signal, an output overflow or any other exit is CRASHED. Every
+// suite is first run once unmutated, and a suite that is not green then makes each of its mutations BASELINE_RED,
+// because a test that was already red proves nothing about the guard. So no crash, hang or red-before-the-change
+// can ever read as "every guard bites".
+//
+// A guard of this file needs a `from` that does not also match its own line in MUTATIONS, so each one ends in a line
+// break or holds a backslash or a double quote, all of which the JSON of that line escapes (--add checks this).
 
-import { cpSync, mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync, realpathSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, dirname, resolve, relative, sep } from 'node:path';
+import { cpSync, mkdtempSync, readFileSync, writeFileSync, renameSync, rmSync, existsSync, statSync, readdirSync, realpathSync } from 'node:fs';
+import { tmpdir, availableParallelism } from 'node:os';
+import { join, dirname, basename, resolve, relative, sep, isAbsolute, posix } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(DIR, '..', '..');
+export const SELF_REL = 'galxe-desk/scripts/mutate.mjs';
 
-// The test files each directory's guards are judged by. execFileSync would not expand a '*.test.mjs' glob without a
-// shell, so they are listed; a missing file is skipped, and a directory whose suite is empty refuses to run.
+// The test files each directory's guards are judged by. A spawned child would not expand a '*.test.mjs' glob
+// without a shell, so they are listed; a missing file is skipped, and a directory whose suite is empty refuses.
 export const SUITES = {
   'galxe-desk/scripts': ['gate.test.mjs', 'ledger.test.mjs', 'crawl.test.mjs', 'do-card.test.mjs', 'verify-link.test.mjs', 'gigapot.test.mjs', 'agents.test.mjs', 'decision.test.mjs'],
   'agency/scripts': ['ab-test.test.mjs', 'creator-pilot.test.mjs', 'orders.test.mjs', 'realised.test.mjs'],
   '.claude/skills/joy-revise/scripts': ['worth-it.test.mjs'],
   scripts: ['prove.test.mjs'],
+  'claude-setup/skills/joy-boot/scripts': ['boot.test.mjs'],
+};
+
+// A file judged by its own suite, not its folder's (paths from the repo root). This beats SUITES: mutate.mjs's own
+// guards are judged by mutate.test.mjs alone, so the desk's mutations never pay for it. A listed test file that
+// does not exist yet is skipped, and a file whose suite is then empty is NO_SUITE, never its folder's suite.
+export const SUITE_FOR = {
+  'galxe-desk/scripts/mutate.mjs': ['galxe-desk/scripts/mutate.test.mjs'],
+  '.claude/hooks/guard.mjs': ['.claude/hooks/guard.test.mjs'],
+  '.claude/workflows/fix-verify.js': ['scripts/workflows.test.mjs'],
+  '.claude/workflows/review-3x.js': ['scripts/workflows.test.mjs'],
+  'scripts/corpus/corpus.mjs': ['scripts/prove.test.mjs'],
+};
+
+// Files a folder's tests read that neither an import nor the folder's own top level shows (for --since). An entry
+// ending in "/" covers everything under that folder: agents.test.mjs checks every file in .claude/agents.
+export const READS = {
+  '.claude/skills/joy-revise/scripts': ['galxe-desk/docs/decision-2026-10-31.json'],
+  'galxe-desk/scripts': ['.claude/agents/'],
 };
 
 export const relPath = (file) => (file.includes('/') ? file : `galxe-desk/scripts/${file}`);
 
-// Never copied into a mutation's throwaway repo: history, dependencies, fetched pages and the pilot's private data.
-const SKIP = ['.git', 'node_modules', join('galxe-desk', 'rulebook', 'pages'), join('agency', 'pilot')];
+// Never copied into a mutation's throwaway repo: history, dependencies, fetched pages, the pilot's private data and
+// other worktrees (a worktree of this repo lives under .claude/worktrees and is a whole second copy).
+const SKIP = ['.git', 'node_modules', join('galxe-desk', 'rulebook', 'pages'), join('agency', 'pilot'), join('.claude', 'worktrees')];
 
 // name | file | from (exact, unique) | to
 export const MUTATIONS = [
@@ -587,58 +622,661 @@ export const MUTATIONS = [
   ["two words may label a number","scripts/prove.mjs","export const SEED_LABEL_WORDS = 2;","export const SEED_LABEL_WORDS = 1;"],
   ["a list line is not seed words","scripts/prove.mjs","if (list || nums.some(","if (nums.some("],
   ["commas and semicolons split only a backup row or a comma list","scripts/prove.mjs","String(text).split(/[\\s|]+/);","String(text).split(/[\\s|,;]+/);"],
+  // claude-setup/skills/joy-boot/scripts/boot.mjs, folded in from its own mutate.mjs (21 Nov 2026) (added by mutate --add)
+  ["a big transcript is told to compact at 150,000 tokens, not ten times that","claude-setup/skills/joy-boot/scripts/boot.mjs","big: 150_000,","big: 1_500_000,"],
+  // galxe-desk/scripts/mutate.mjs: its own guards, judged by mutate.test.mjs (21 Nov 2026) (added by mutate --add)
+  ["--only: a term that selects nothing refuses the run","galxe-desk/scripts/mutate.mjs","    if (sel.unmatched.length) {\n","    if (false) {\n"],
+  ["--only: each term that selects nothing is named","galxe-desk/scripts/mutate.mjs","const unmatched = terms.filter((t) => !list.some((m) => hit(m, t))); // each term must select something\n","const unmatched = []; // each term must select something\n"],
+  ["--only: a list of no term is refused","galxe-desk/scripts/mutate.mjs","if (!terms.length) o.errors.push(`--only ${JSON.stringify(v)} names no term`); // \"--only ,\" is not \"everything\"\n","if (false) o.errors.push(`--only ${JSON.stringify(v)} names no term`); // \"--only ,\" is not \"everything\"\n"],
+  ["an unknown argument is refused, not ignored","galxe-desk/scripts/mutate.mjs","} else o.errors.push(`unknown argument ${JSON.stringify(a)}`); // a typo is refused, not ignored\n","} // a typo is refused, not ignored\n"],
+  ["an empty run is never \"every guard bites\"","galxe-desk/scripts/mutate.mjs","    return { lines, code: 1 }; // an empty run is never \"every guard bites\"\n","    return { lines, code: 0 }; // an empty run is never \"every guard bites\"\n"],
+  ["a timeout is TIMEOUT, never a kill","galxe-desk/scripts/mutate.mjs","  if (timedOut) return 'TIMEOUT'; // past its deadline, whatever killed it\n","  if (false) return 'TIMEOUT'; // past its deadline, whatever killed it\n"],
+  ["a signal is CRASHED, never a kill","galxe-desk/scripts/mutate.mjs","  if (signal || overflow) return 'CRASHED'; // stopped from outside, or more output than the buffer holds\n","  if (overflow) return 'CRASHED'; // stopped from outside, or more output than the buffer holds\n"],
+  ["an output overflow is CRASHED, never a kill","galxe-desk/scripts/mutate.mjs","  if (signal || overflow) return 'CRASHED'; // stopped from outside, or more output than the buffer holds\n","  if (signal) return 'CRASHED'; // stopped from outside, or more output than the buffer holds\n"],
+  ["exit 0 is SURVIVED","galxe-desk/scripts/mutate.mjs","  if (code === 0) return 'SURVIVED'; // green with the guard gone\n","  if (false) return 'SURVIVED'; // green with the guard gone\n"],
+  ["a kill needs exit 1","galxe-desk/scripts/mutate.mjs","  if (code === 1 && FAILED_TEST.test(String(stdout ?? ''))) return 'KILLED'; // a test went red\n","  if (FAILED_TEST.test(String(stdout ?? ''))) return 'KILLED'; // a test went red\n"],
+  ["a kill needs a failed test in the summary","galxe-desk/scripts/mutate.mjs","  if (code === 1 && FAILED_TEST.test(String(stdout ?? ''))) return 'KILLED'; // a test went red\n","  if (code === 1) return 'KILLED'; // a test went red\n"],
+  ["\"# fail 0\" is not a failed test","galxe-desk/scripts/mutate.mjs","const FAILED_TEST = /^# fail [1-9]/m;\n","const FAILED_TEST = /^# fail /m;\n"],
+  ["the failed-test count is read at the start of a line","galxe-desk/scripts/mutate.mjs","const FAILED_TEST = /^# fail [1-9]/m;\n","const FAILED_TEST = /# fail [1-9]/;\n"],
+  ["only KILLED counts","galxe-desk/scripts/mutate.mjs","    else bad++; // only KILLED counts\n","    // only KILLED counts\n"],
+  ["a result that never came back fails the run","galxe-desk/scripts/mutate.mjs","      bad++; // a result that never came back is a failed run, never a shorter one\n","      // a result that never came back is a failed run, never a shorter one\n"],
+  ["a baseline must pass at least one test","galxe-desk/scripts/mutate.mjs","  if (!stopped && r.code === 0 && pass >= 1 && fail === 0) return null; // the one green baseline\n","  if (!stopped && r.code === 0 && fail === 0) return null; // the one green baseline\n"],
+  ["a baseline with a failed test is red","galxe-desk/scripts/mutate.mjs","  if (!stopped && r.code === 0 && pass >= 1 && fail === 0) return null; // the one green baseline\n","  if (!stopped && r.code === 0 && pass >= 1) return null; // the one green baseline\n"],
+  ["a baseline must exit 0","galxe-desk/scripts/mutate.mjs","  if (!stopped && r.code === 0 && pass >= 1 && fail === 0) return null; // the one green baseline\n","  if (!stopped && pass >= 1 && fail === 0) return null; // the one green baseline\n"],
+  ["a signalled, late or overflowing baseline is red","galxe-desk/scripts/mutate.mjs","  const stopped = !r || r.signal || r.timedOut || r.overflow;\n","  const stopped = !r;\n"],
+  ["a red baseline makes its mutations BASELINE_RED","galxe-desk/scripts/mutate.mjs","    const key = p.suite.join('\\n');\n    if (red.has(key))","    const key = p.suite.join('\\n');\n    if (false)"],
+  ["a baseline that is not green is recorded","galxe-desk/scripts/mutate.mjs","    if (why) red.set(key, why); // the suite was not green before any mutation\n","    // the suite was not green before any mutation\n"],
+  ["a deadline marks the run TIMEOUT","galxe-desk/scripts/mutate.mjs","      timedOut = true; // the deadline passed\n","      // the deadline passed\n"],
+  ["a deadline stops the run","galxe-desk/scripts/mutate.mjs","      timedOut = true; // the deadline passed\n      stop(child);\n","      timedOut = true; // the deadline passed\n"],
+  ["a deadline stops the whole process group","galxe-desk/scripts/mutate.mjs","const stop = (child) => { try { process.kill(-child.pid, 'SIGKILL'); } catch { try { child.kill('SIGKILL'); } catch { /* gone */ } } };\n","const stop = (child) => { try { child.kill('SIGKILL'); } catch { /* gone */ } };\n"],
+  ["an output overflow is marked","galxe-desk/scripts/mutate.mjs","        overflow = true; // the output ran past the buffer\n","        // the output ran past the buffer\n"],
+  ["a suite's output is read whole up to 64 MiB","galxe-desk/scripts/mutate.mjs","export const MAX_BUFFER = 64 * 1024 * 1024;\n","export const MAX_BUFFER = 1024 * 1024;\n"],
+  ["a nested test runner still prints TAP","galxe-desk/scripts/mutate.mjs","    delete env.NODE_TEST_CONTEXT; // set under node --test, where a nested runner prints no TAP and exits 0\n","    // set under node --test, where a nested runner prints no TAP and exits 0\n"],
+  ["the default deadline is 120 s","galxe-desk/scripts/mutate.mjs","export const DEFAULT_TIMEOUT_MS = 120_000;\n","export const DEFAULT_TIMEOUT_MS = 1_200_000;\n"],
+  ["--jobs above 16 is refused","galxe-desk/scripts/mutate.mjs","|| Number(v) > 16) o.errors.push(`--jobs must be a whole number from 1 to 16, not ${JSON.stringify(v)}`);\n","|| false) o.errors.push(`--jobs must be a whole number from 1 to 16, not ${JSON.stringify(v)}`);\n"],
+  ["--jobs below 1 is refused","galxe-desk/scripts/mutate.mjs","if (!/^\\d+$/.test(v) || Number(v) < 1 || Number(v) > 16)","if (!/^\\d+$/.test(v) || Number(v) > 16)"],
+  ["--jobs must be a whole number","galxe-desk/scripts/mutate.mjs","if (!/^\\d+$/.test(v) || Number(v) < 1 || Number(v) > 16)","if (Number(v) < 1 || Number(v) > 16)"],
+  ["--timeout-ms must be a positive whole number","galxe-desk/scripts/mutate.mjs","if (!/^\\d+$/.test(v) || Number(v) < 1) o.errors.push(`--timeout-ms","if (false) o.errors.push(`--timeout-ms"],
+  ["the default is four jobs, or fewer CPUs","galxe-desk/scripts/mutate.mjs","export const DEFAULT_JOBS = Math.min(4, availableParallelism());\n","export const DEFAULT_JOBS = Math.min(4, availableParallelism()) + 1;\n"],
+  ["results are stored by list position","galxe-desk/scripts/mutate.mjs","        results[i] = await worker(items[i], i);\n","        results.push(await worker(items[i], i));\n"],
+  ["a worker that throws is CRASHED in its own slot","galxe-desk/scripts/mutate.mjs","        results[i] = crashed(items[i], err);\n","        throw err;\n"],
+  ["the pool never runs more than --jobs at once","galxe-desk/scripts/mutate.mjs","Math.max(1, Math.min(jobs, items.length)) }, lane));\n","Math.max(1, items.length) }, lane));\n"],
+  ["the pool runs --jobs at once","galxe-desk/scripts/mutate.mjs","Math.max(1, Math.min(jobs, items.length)) }, lane));\n","Math.max(1, Math.min(1, items.length)) }, lane));\n"],
+  ["an empty result slot is found","galxe-desk/scripts/mutate.mjs","  for (let i = 0; i < n; i++) if (!results?.[i] || typeof results[i].status !== 'string') out.push(i);\n","  for (let i = 0; i < n; i++) if (false) out.push(i);\n"],
+  ["--since: a revision that looks like an option never reaches git","galxe-desk/scripts/mutate.mjs","|| rev.startsWith('-')) return { error: `--since needs a revision, not ${JSON.stringify(rev)}` }; // never an option to git\n",") return { error: `--since needs a revision, not ${JSON.stringify(rev)}` }; // never an option to git\n"],
+  ["--since: the revision must verify as a commit","galxe-desk/scripts/mutate.mjs","  if (!verified) return { error: `${rev} does not verify as a commit in this repository` };\n","  if (false) return { error: `${rev} does not verify as a commit in this repository` };\n"],
+  ["--since: rev-parse must print a commit id","galxe-desk/scripts/mutate.mjs","const verified = v?.code === 0 && /^[0-9a-f]{40}([0-9a-f]{24})?$/.test(sha);\n","const verified = v?.code === 0;\n"],
+  ["--since: a failed git diff is never \"nothing changed\"","galxe-desk/scripts/mutate.mjs","  if (diff?.code !== 0) return { error: `git diff against ${rev} failed (exit ${diff?.code}), so what changed is unknown` };\n","  if (false) return { error: `git diff against ${rev} failed (exit ${diff?.code}), so what changed is unknown` };\n"],
+  ["--since: a failed git ls-files is never \"nothing untracked\"","galxe-desk/scripts/mutate.mjs","  if (extra?.code !== 0) return { error: `git ls-files failed (exit ${extra?.code}), so the untracked files are unknown` };\n","  if (false) return { error: `git ls-files failed (exit ${extra?.code}), so the untracked files are unknown` };\n"],
+  ["--since: untracked files count as changed","galxe-desk/scripts/mutate.mjs","  const all = [...new Set([...nul(diff.stdout), ...nul(extra.stdout)])];\n","  const all = [...new Set([...nul(diff.stdout)])];\n"],
+  ["--since: another worktree is not a change here","galxe-desk/scripts/mutate.mjs","  return { sha, files: all.filter((f) => !f.startsWith('.claude/worktrees/')).sort() }; // another worktree is another checkout\n","  return { sha, files: all.sort() }; // another worktree is another checkout\n"],
+  ["--since: a failed diff of mutate.mjs refuses the run","galxe-desk/scripts/mutate.mjs","      if (d?.code !== 0) {\n","      if (false) {\n"],
+  ["--since: imports are followed through files no suite owns","galxe-desk/scripts/mutate.mjs","      if (SCRIPT.test(target)) visit(target); // followed through files no suite owns\n","      // followed through files no suite owns\n"],
+  ["--since: imports are followed however deep","galxe-desk/scripts/mutate.mjs","      stack.push(d); // and what that imports\n","      // and what that imports\n"],
+  ["--since: a changed test file selects its suite's guards","galxe-desk/scripts/mutate.mjs","    for (const start of [rel, ...tests]) for (const f of reach(start)) if (changed.has(f)) return true;\n","    for (const start of [rel]) for (const f of reach(start)) if (changed.has(f)) return true;\n"],
+  ["--since: a changed file selects its own guards","galxe-desk/scripts/mutate.mjs","    for (const start of [rel, ...tests]) for (const f of reach(start)) if (changed.has(f)) return true;\n","    for (const start of [...tests]) for (const f of reach(start)) if (changed.has(f)) return true;\n"],
+  ["--since: a data file under the same top-level folder selects","galxe-desk/scripts/mutate.mjs","    for (const c of changed) if (!c.endsWith('.mjs') && c.startsWith(`${top}/`)) return true; // a data file nearby\n","    // a data file nearby\n"],
+  ["--since: a file READS lists selects","galxe-desk/scripts/mutate.mjs","    return (reads[dirOf(rel)] ?? []).some(readChanged);\n","    return false;\n"],
+  ["--since: a hunk outside MUTATIONS is code","galxe-desk/scripts/mutate.mjs","      if (!inside) outside = true; // this hunk changed code, not a line of the list\n","      // this hunk changed code, not a line of the list\n"],
+  ["--since: changed code in mutate.mjs runs its own guards","galxe-desk/scripts/mutate.mjs","    if (rel === self && own.outside) return true;\n","    if (false) return true;\n"],
+  ["--since: only lines inside MUTATIONS name mutations","galxe-desk/scripts/mutate.mjs","      if (next > open && next < close) added.push(line.slice(1)); // a line of the list, by its own line number\n","      added.push(line.slice(1)); // a line of the list, by its own line number\n"],
+  ["--since: an added line selects the mutations it names","galxe-desk/scripts/mutate.mjs","    let hit = list.flatMap((m, i) => (spellings(m[0]).some((s) => t.includes(s)) ? [i] : []));\n","    let hit = [];\n"],
+  ["--since: a name is found inside a JSON string","galxe-desk/scripts/mutate.mjs","[name, JSON.stringify(name).slice(1, -1), name.split('\\\\')","[name, name.split('\\\\')"],
+  ["--since: a name is found inside a single-quoted string","galxe-desk/scripts/mutate.mjs",", name.split('\\\\').join('\\\\\\\\').split(\"'\").join(\"\\\\'\")];","];"],
+  ["--since: a group's path line selects that file's guards","galxe-desk/scripts/mutate.mjs","    if (!hit.length) hit = list.flatMap((m, i) => (t.includes(m[1]) ? [i] : [])); // a group's path line\n","    // a group's path line\n"],
+  ["--since: a line that names nothing selects every mutation","galxe-desk/scripts/mutate.mjs","    if (!hit.length) hit = list.map((_, i) => i); // an added line that names nothing: every mutation\n","    // an added line that names nothing: every mutation\n"],
+  ["--since: mutate.mjs changed with no hunk selects everything","galxe-desk/scripts/mutate.mjs","  const unknown = selfChanged && own.hunks === 0; // mutate.mjs changed but no hunk says how: run everything\n","  const unknown = false; // mutate.mjs changed but no hunk says how: run everything\n"],
+  ["--since: a changed script no mutation names is UNGUARDED","galxe-desk/scripts/mutate.mjs","SCRIPT.test(f) && !/\\.test\\.m?js$/.test(f)","false && !/\\.test\\.m?js$/.test(f)"],
+  ["a file's own suite beats its folder's","galxe-desk/scripts/mutate.mjs","  if (Object.hasOwn(suiteFor, rel)) return [...suiteFor[rel]]; // a file's own suite beats its folder's\n","  // a file's own suite beats its folder's\n"],
+  ["--add needs --group","galxe-desk/scripts/mutate.mjs","if (o.add !== undefined && o.group === undefined) o.errors.push('--add needs --group \"<one line>\"');\n","if (false) o.errors.push('--add needs --group \"<one line>\"');\n"],
+  ["--add takes no --only, --since or --list","galxe-desk/scripts/mutate.mjs","if (o.add !== undefined && (o.only || o.since !== undefined || o.list)) o.errors.push('--add runs its own batch only; drop --only, --since and --list');\n","if (false) o.errors.push('--add runs its own batch only; drop --only, --since and --list');\n"],
+  ["--add needs a group","galxe-desk/scripts/mutate.mjs","  if (typeof group !== 'string' || !group.trim()) problems.push('--group must name the batch in one line');\n","  if (false) problems.push('--group must name the batch in one line');\n"],
+  ["--add refuses a group with a line break","galxe-desk/scripts/mutate.mjs","  else if (/[\\r\\n\\u2028\\u2029]/.test(group)) problems.push(","  else if (false) problems.push("],
+  ["--add refuses an empty batch","galxe-desk/scripts/mutate.mjs","  if (!Array.isArray(batch) || !batch.length) {\n","  if (!Array.isArray(batch)) {\n"],
+  ["--add refuses a line that is not four strings","galxe-desk/scripts/mutate.mjs","    if (!Array.isArray(line) || line.length !== 4 || !line.every((x) => typeof x === 'string')) {\n","    if (!Array.isArray(line)) {\n"],
+  ["--add refuses an empty from","galxe-desk/scripts/mutate.mjs","    if (from === '') problems.push(`${tag}: from is empty`);\n","    if (false) problems.push(`${tag}: from is empty`);\n"],
+  ["--add refuses a from that equals its to","galxe-desk/scripts/mutate.mjs","    if (from === to) problems.push(`${tag}: from and to are the same, so no guard is removed`);\n","    if (false) problems.push(`${tag}: from and to are the same, so no guard is removed`);\n"],
+  ["--add refuses a name already in MUTATIONS","galxe-desk/scripts/mutate.mjs","  const taken = new Set(mutations.map((m) => m[0]));\n","  const taken = new Set();\n"],
+  ["--add refuses a name used twice in the batch","galxe-desk/scripts/mutate.mjs","    taken.add(name); // a second line of the batch may not reuse it either\n","    // a second line of the batch may not reuse it either\n"],
+  ["--add refuses an absolute path","galxe-desk/scripts/mutate.mjs","    if (isAbsolute(path) || /^[A-Za-z]:/.test(path)) {\n","    if (false) {\n"],
+  ["--add refuses a path holding \"..\"","galxe-desk/scripts/mutate.mjs","    if (path.includes('..')) {\n","    if (false) {\n"],
+  ["--add refuses a missing file","galxe-desk/scripts/mutate.mjs","    if (!existsSync(p) || !statSync(p).isFile()) {\n","    if (false) {\n"],
+  ["--add refuses a file with no suite","galxe-desk/scripts/mutate.mjs","    if (!suiteOf(rel, { root, suites, suiteFor }).length) problems.push(`${tag}: ${rel} has no suite to judge it`);\n","    if (false) problems.push(`${tag}: ${rel} has no suite to judge it`);\n"],
+  ["--add refuses a from found no times or twice","galxe-desk/scripts/mutate.mjs","    if (found.status) problems.push(`${tag}: from ${found.status === 'NO_MATCH' ? 'is not found' : 'occurs more than once'} in ${rel}`);\n","    if (false) problems.push(`${tag}: from ${found.status === 'NO_MATCH' ? 'is not found' : 'occurs more than once'} in ${rel}`);\n"],
+  ["--add refuses a from that would match its own written line","galxe-desk/scripts/mutate.mjs","    else if (rel === target && ins?.text && findOnce(ins.text, from).status) problems.push(`${tag}: from would also match its own line once written into ${rel}`);\n","    else if (false) problems.push(`${tag}: from would also match its own line once written into ${rel}`);\n"],
+  ["--add refuses a harness with two closing lines","galxe-desk/scripts/mutate.mjs","  if (open < 0 || lines.lastIndexOf('export const MUTATIONS = [') !== open || closes.length !== 1 || closes[0] < open) {\n","  if (open < 0 || lines.lastIndexOf('export const MUTATIONS = [') !== open || closes.length < 1 || closes[0] < open) {\n"],
+  ["--add counts only KILLED","galxe-desk/scripts/mutate.mjs","    if (r?.status !== 'KILLED') notKilled.push(`line ${k + 1} (${JSON.stringify(batch[k][0])}) was not killed: ${r?.status ?? 'MISSING'}${r?.detail ? ` — ${r.detail}` : ''}`);\n","    if (false) notKilled.push(`line ${k + 1} (${JSON.stringify(batch[k][0])}) was not killed: ${r?.status ?? 'MISSING'}${r?.detail ? ` — ${r.detail}` : ''}`);\n"],
+  ["--add writes nothing unless every line is killed","galxe-desk/scripts/mutate.mjs","  if (notKilled.length) return { ok: false, problems: notKilled }; // nothing is written unless every line bites\n","  // nothing is written unless every line bites\n"],
+  ["--add checks the re-imported list ends with the batch","galxe-desk/scripts/mutate.mjs","  if (JSON.stringify(tail) !== JSON.stringify(batch)) {\n","  if (false) {\n"],
+  ["--add puts the old bytes back","galxe-desk/scripts/mutate.mjs","    writeAtomic(target, before); // the old bytes go back\n","    // the old bytes go back\n"],
+  // galxe-desk/scripts/mutate.mjs: a READS folder entry, so .claude/agents reaches agents.mjs (21 Nov 2026) (added by mutate --add)
+  ["--since: a READS folder entry covers what is under it","galxe-desk/scripts/mutate.mjs","  const readChanged = (f) => (f.endsWith('/') ? [...changed].some((c) => c.startsWith(f)) : changed.has(f)); // a folder entry covers what is under it\n","  const readChanged = (f) => changed.has(f); // a folder entry covers what is under it\n"],
+  ["--since: a changed agent file reruns the desk's firewall guards","galxe-desk/scripts/mutate.mjs","  'galxe-desk/scripts': ['.claude/agents/'],\n","\n"],
 ];
 
-// Apply one mutation to a throwaway copy of the scripts and run the suite there. KILLED = a test went red.
-function runOne(m, root) {
+// ---------------------------------------------------------------------------------------------------------------
+// The runner. Pure pieces are exported so mutate.test.mjs can judge them on a fixture repo, with git, the child
+// process and the copy injected where a test fakes a crash, a timeout or a git failure.
+
+export const MAX_BUFFER = 64 * 1024 * 1024;
+export const DEFAULT_TIMEOUT_MS = 120_000;
+export const DEFAULT_JOBS = Math.min(4, availableParallelism());
+const FAILED_TEST = /^# fail [1-9]/m;
+const LIVE = new Set();
+
+const posixRel = (p) => p.split(sep).join('/');
+export const dirOf = (rel) => (rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '');
+
+// The test files listed for `rel`, from the repo root: its own suite if it has one, else its folder's.
+export function suiteListed(rel, { suites = SUITES, suiteFor = SUITE_FOR } = {}) {
+  if (Object.hasOwn(suiteFor, rel)) return [...suiteFor[rel]]; // a file's own suite beats its folder's
+  const dir = dirOf(rel);
+  return (suites[dir] || []).map((f) => (dir ? `${dir}/${f}` : f));
+}
+
+export const suiteOf = (rel, { root = REPO, suites = SUITES, suiteFor = SUITE_FOR } = {}) =>
+  suiteListed(rel, { suites, suiteFor }).filter((f) => existsSync(join(root, f)));
+
+// Where `from` sits in `src`, or why it cannot be used: it must occur exactly once. A run and --add both use this.
+export function findOnce(src, from) {
+  if (typeof from !== 'string' || from === '') return { status: 'NO_MATCH', detail: 'the pattern is empty' };
+  const i = src.indexOf(from);
+  if (i < 0) return { status: 'NO_MATCH', detail: 'pattern not found' };
+  if (src.indexOf(from, i + 1) >= 0) return { status: 'AMBIGUOUS', detail: 'pattern occurs more than once' };
+  return { i };
+}
+
+// A mutation checked against the tree before anything is copied: its file, its one match and its suite.
+export function prepare(m, { root = REPO, suites = SUITES, suiteFor = SUITE_FOR, read = (p) => readFileSync(p, 'utf8') } = {}) {
   const [name, file, from, to] = m;
   const rel = relPath(file);
   const p = join(root, rel);
   if (!existsSync(p)) return { name, status: 'NO_MATCH', detail: `${rel} does not exist` };
-  const src = readFileSync(p, 'utf8');
-  const i = src.indexOf(from);
-  if (i < 0) return { name, status: 'NO_MATCH', detail: `pattern not found in ${rel}` };
-  if (src.indexOf(from, i + 1) >= 0) return { name, status: 'AMBIGUOUS', detail: `pattern occurs more than once in ${rel}` };
-  writeFileSync(p, src.slice(0, i) + to + src.slice(i + from.length));
-  const dir = dirname(rel).split(sep).join('/');
-  const testFiles = (SUITES[dir] || []).map((f) => join(root, dir, f)).filter((f) => existsSync(f));
+  const at = findOnce(read(p), from);
+  if (at.status) return { name, status: at.status, detail: `${at.detail} in ${rel}` };
+  const suite = suiteOf(rel, { root, suites, suiteFor });
   // A guard with no suite to judge it cannot be said to bite. Fail closed rather than report it killed.
-  if (!testFiles.length) return { name, status: 'NO_SUITE', detail: `no test file exists for ${dir}` };
+  if (!suite.length) return { name, status: 'NO_SUITE', detail: `no test file exists for ${rel}` };
+  return { name, rel, from, to, suite };
+}
+
+// What one suite run means. Only an exit of 1 with a failed test in the TAP summary is a kill.
+export function classify({ code, signal, timedOut, overflow, stdout } = {}) {
+  if (timedOut) return 'TIMEOUT'; // past its deadline, whatever killed it
+  if (signal || overflow) return 'CRASHED'; // stopped from outside, or more output than the buffer holds
+  if (code === 0) return 'SURVIVED'; // green with the guard gone
+  if (code === 1 && FAILED_TEST.test(String(stdout ?? ''))) return 'KILLED'; // a test went red
+  return 'CRASHED';
+}
+
+// Why an unmutated suite run is not green, or null when it is: exit 0, at least one pass and no failure.
+export function baselineProblem(r) {
+  const out = String(r?.stdout ?? '');
+  const pass = Number((/^# pass (\d+)/m.exec(out) || [])[1] ?? NaN);
+  const fail = Number((/^# fail (\d+)/m.exec(out) || [])[1] ?? NaN);
+  const stopped = !r || r.signal || r.timedOut || r.overflow;
+  if (!stopped && r.code === 0 && pass >= 1 && fail === 0) return null; // the one green baseline
+  return `${r?.detail ? `${r.detail}; ` : ''}exit ${r?.code ?? 'none'}${r?.signal ? `, signal ${r.signal}` : ''}${r?.timedOut ? ', past its deadline' : ''}${r?.overflow ? ', output over the buffer' : ''}, # pass ${pass}, # fail ${fail}`;
+}
+
+const stop = (child) => { try { process.kill(-child.pid, 'SIGKILL'); } catch { try { child.kill('SIGKILL'); } catch { /* gone */ } } };
+const stopAll = () => { for (const child of LIVE) stop(child); };
+
+// Run node with `args` in its own process group, so a deadline or an overflow stops its children too.
+export function spawnNode(args, { cwd, timeoutMs = DEFAULT_TIMEOUT_MS, maxBuffer = MAX_BUFFER } = {}) {
+  return new Promise((done) => {
+    const env = { ...process.env };
+    delete env.NODE_TEST_CONTEXT; // set under node --test, where a nested runner prints no TAP and exits 0
+    let child;
+    let timer;
+    let settled = false;
+    let timedOut = false;
+    let overflow = false;
+    let size = 0;
+    let stderr = '';
+    const out = [];
+    const finish = (r) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (child) LIVE.delete(child);
+      done({ timedOut, overflow, stdout: Buffer.concat(out).toString('utf8'), stderr, ...r });
+    };
+    try {
+      child = spawn(process.execPath, args, { cwd, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (err) {
+      finish({ code: null, signal: null, detail: `could not start node: ${err.message}` });
+      return;
+    }
+    LIVE.add(child);
+    timer = setTimeout(() => {
+      timedOut = true; // the deadline passed
+      stop(child);
+    }, timeoutMs);
+    child.stdout.on('data', (b) => {
+      size += b.length;
+      if (size > maxBuffer) {
+        overflow = true; // the output ran past the buffer
+        stop(child);
+      } else out.push(b);
+    });
+    child.stderr.on('data', (b) => { if (stderr.length < 65_536) stderr += b; });
+    child.on('error', (err) => finish({ code: null, signal: null, detail: `node could not run: ${err.message}` }));
+    child.on('close', (code, signal) => finish({ code, signal }));
+  });
+}
+
+export function copyRepo(root, work) {
+  cpSync(root, work, { recursive: true, filter: (src) => { const r = relative(root, src); return !SKIP.some((s) => r === s || r.startsWith(s + sep)); } });
+}
+
+// One suite run in a fresh throwaway copy: unmutated when `m` is null (the baseline), else with `m` applied.
+async function runSuite(root, suite, m, { spawn: run, copy, timeoutMs, maxBuffer }) {
+  const work = mkdtempSync(join(tmpdir(), 'mutate-'));
   try {
-    execFileSync(process.execPath, ['--test', ...testFiles], { stdio: 'pipe', cwd: root });
-    return { name, status: 'SURVIVED', detail: 'the suite stayed green with this guard removed' };
-  } catch {
-    return { name, status: 'KILLED' };
+    copy(root, work);
+    if (m) {
+      const p = join(work, m.rel);
+      const src = readFileSync(p, 'utf8');
+      const at = findOnce(src, m.from);
+      if (at.status) return { code: null, signal: null, detail: `${at.detail} in the copy of ${m.rel}` };
+      writeFileSync(p, src.slice(0, at.i) + m.to + src.slice(at.i + m.from.length));
+    }
+    return await run(['--test', '--test-reporter=tap', ...suite.map((f) => join(work, f))], { cwd: work, timeoutMs, maxBuffer });
+  } finally {
+    rmSync(work, { recursive: true, force: true });
   }
 }
 
-export function run({ only } = {}) {
-  const results = [];
-  const chosen = only ? MUTATIONS.filter((m) => relPath(m[1]).includes(only)) : MUTATIONS;
-  for (const m of chosen) {
-    const work = mkdtempSync(join(tmpdir(), 'mutate-'));
-    try {
-      cpSync(REPO, work, { recursive: true, filter: (src) => !SKIP.some((s) => relative(REPO, src) === s || relative(REPO, src).startsWith(s + sep)) });
-      results.push(runOne(m, work));
-    } finally {
-      rmSync(work, { recursive: true, force: true });
+// At most `jobs` workers at once. Each result is stored at its item's own position, so the output order never
+// depends on which finished first, and a worker that throws fills its own slot with CRASHED.
+export async function runPool(items, jobs, worker, crashed = (item, err) => ({ status: 'CRASHED', detail: `the worker threw: ${err?.message ?? err}` })) {
+  const results = new Array(items.length);
+  let next = 0;
+  const lane = async () => {
+    while (next < items.length) {
+      const i = next++;
+      try {
+        results[i] = await worker(items[i], i);
+      } catch (err) {
+        results[i] = crashed(items[i], err);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(jobs, items.length)) }, lane));
+  return results;
+}
+
+// The positions in `results` that hold no result. A loop, not filter or forEach, which skip an empty slot.
+export function missingSlots(results, n) {
+  const out = [];
+  for (let i = 0; i < n; i++) if (!results?.[i] || typeof results[i].status !== 'string') out.push(i);
+  return out;
+}
+
+function describe(name, status, r, { timeoutMs, maxBuffer }) {
+  if (status === 'KILLED') return { name, status };
+  if (status === 'SURVIVED') return { name, status, detail: 'the suite stayed green with this guard removed' };
+  if (status === 'TIMEOUT') return { name, status, detail: `the suite ran past its ${timeoutMs} ms deadline` };
+  const last = `${r?.stderr ?? ''}\n${r?.stdout ?? ''}`.split('\n').map((l) => l.trim()).filter(Boolean).pop() ?? '';
+  const why = `${r?.detail ?? `exit ${r?.code ?? 'none'}`}${r?.signal ? `, signal ${r.signal}` : ''}${r?.overflow ? `, output past ${maxBuffer} bytes` : ''}`;
+  return { name, status, detail: last ? `${why}: ${last.slice(0, 200)}` : why };
+}
+
+// Run `list` with a pool of `jobs`: each involved suite once unmutated first, then each mutation in its own copy.
+export async function runAll(list, opts = {}) {
+  const { root = REPO, jobs = DEFAULT_JOBS, timeoutMs = DEFAULT_TIMEOUT_MS, maxBuffer = MAX_BUFFER, suites = SUITES, suiteFor = SUITE_FOR, spawn: run = spawnNode, copy = copyRepo, pool = runPool } = opts;
+  const deps = { spawn: run, copy, timeoutMs, maxBuffer };
+  const texts = new Map();
+  const read = (p) => { if (!texts.has(p)) texts.set(p, readFileSync(p, 'utf8')); return texts.get(p); };
+  const prepared = list.map((m) => prepare(m, { root, suites, suiteFor, read }));
+  const keys = [...new Set(prepared.filter((p) => !p.status).map((p) => p.suite.join('\n')))];
+  const base = await pool(keys, jobs, (key) => runSuite(root, key.split('\n'), null, deps));
+  const red = new Map();
+  keys.forEach((key, i) => {
+    const why = baselineProblem(base[i]);
+    if (why) red.set(key, why); // the suite was not green before any mutation
+  });
+  const results = await pool(prepared, jobs, async (p) => {
+    if (p.status) return p;
+    const key = p.suite.join('\n');
+    if (red.has(key)) return { name: p.name, status: 'BASELINE_RED', detail: `its suite (${p.suite.length} test file${p.suite.length === 1 ? '' : 's'} in ${[...new Set(p.suite.map(dirOf))].join(', ')}) is not green before any mutation: ${red.get(key)}` };
+    const r = await runSuite(root, p.suite, p, deps);
+    return describe(p.name, classify(r), r, deps);
+  }, (p, err) => ({ name: p.name, status: 'CRASHED', detail: `the run threw: ${err?.message ?? err}` }));
+  return { results, missing: missingSlots(results, list.length), baselines: keys.map((key) => ({ suite: key.split('\n'), problem: red.get(key) ?? null })) };
+}
+
+// The printed report and the exit code. Counted against `n`, the number chosen, never the number that came back.
+export function summarise(results, n, { verbose = false, since, notRun = 0 } = {}) {
+  const lines = [];
+  let killed = 0;
+  let bad = 0;
+  for (let i = 0; i < n; i++) {
+    const r = results?.[i];
+    if (!r || typeof r.status !== 'string') {
+      bad++; // a result that never came back is a failed run, never a shorter one
+      lines.push(`MISSING: result ${i + 1} of ${n} never came back`);
+      continue;
+    }
+    if (r.status === 'KILLED') killed++;
+    else bad++; // only KILLED counts
+    if (verbose || r.status !== 'KILLED') lines.push(`${r.status}: ${r.name}${r.detail ? ` — ${r.detail}` : ''}`);
+  }
+  if (since !== undefined) {
+    if (n === 0) return { lines: [...lines, `killed 0 of 0 selected since ${since}: nothing to judge`], code: 0 };
+    lines.push(`killed ${killed} of ${n} selected since ${since}, ${notRun} not run${bad ? `, ${bad} not killed` : ' (every selected guard bites)'}`);
+    return { lines, code: bad ? 1 : 0 };
+  }
+  if (n === 0) {
+    lines.push('killed 0 of 0 mutations: nothing ran, so nothing is proven');
+    return { lines, code: 1 }; // an empty run is never "every guard bites"
+  }
+  lines.push(`killed ${killed} of ${n} mutations${bad ? `, ${bad} not killed` : ' (every guard bites)'}`);
+  return { lines, code: bad ? 1 : 0 };
+}
+
+const VALUED = new Set(['--only', '--jobs', '--timeout-ms', '--since', '--add', '--group']);
+
+// The command line, read strictly: an unknown argument, a bad number or a lone --group is an error, never a default.
+export function parseCli(argv) {
+  const o = { list: false, verbose: false, only: undefined, jobs: DEFAULT_JOBS, timeoutMs: DEFAULT_TIMEOUT_MS, since: undefined, add: undefined, group: undefined, errors: [] };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--list') o.list = true;
+    else if (a === '--verbose') o.verbose = true;
+    else if (VALUED.has(a)) {
+      const v = argv[++i];
+      if (v === undefined || v.startsWith('--')) o.errors.push(`${a} needs a value`);
+      else if (a === '--only') {
+        const terms = v.split(',').map((t) => t.trim()).filter(Boolean);
+        if (!terms.length) o.errors.push(`--only ${JSON.stringify(v)} names no term`); // "--only ," is not "everything"
+        else o.only = [...(o.only ?? []), ...terms];
+      } else if (a === '--jobs') {
+        if (!/^\d+$/.test(v) || Number(v) < 1 || Number(v) > 16) o.errors.push(`--jobs must be a whole number from 1 to 16, not ${JSON.stringify(v)}`);
+        else o.jobs = Number(v);
+      } else if (a === '--timeout-ms') {
+        if (!/^\d+$/.test(v) || Number(v) < 1) o.errors.push(`--timeout-ms must be a whole number of milliseconds, not ${JSON.stringify(v)}`);
+        else o.timeoutMs = Number(v);
+      } else if (a === '--since') o.since = v;
+      else if (a === '--add') o.add = v;
+      else o.group = v;
+    } else o.errors.push(`unknown argument ${JSON.stringify(a)}`); // a typo is refused, not ignored
+  }
+  if (o.add !== undefined && o.group === undefined) o.errors.push('--add needs --group "<one line>"');
+  if (o.group !== undefined && o.add === undefined) o.errors.push('--group goes with --add');
+  if (o.add !== undefined && (o.only || o.since !== undefined || o.list)) o.errors.push('--add runs its own batch only; drop --only, --since and --list');
+  return o;
+}
+
+// The mutations whose file path contains any term, in list order, and the terms that select nothing at all.
+export function selectOnly(list, terms) {
+  const hit = (m, t) => relPath(m[1]).includes(t);
+  const unmatched = terms.filter((t) => !list.some((m) => hit(m, t))); // each term must select something
+  const chosen = list.filter((m) => terms.some((t) => hit(m, t)));
+  return { chosen, unmatched };
+}
+
+export function gitRun(args, { cwd = REPO, env = process.env } = {}) {
+  try {
+    return { code: 0, stdout: execFileSync('git', args, { cwd, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: MAX_BUFFER, timeout: 60_000 }) };
+  } catch (err) {
+    return { code: typeof err.status === 'number' ? err.status : null, stdout: String(err.stdout ?? ''), stderr: String(err.stderr ?? err.message ?? err) };
+  }
+}
+
+const nul = (s) => String(s ?? '').split('\0').filter(Boolean);
+
+// The files changed since `rev`: tracked changes against the working tree, plus untracked files. Any git failure
+// is an error, never an empty list: "git failed" must not read as "nothing changed".
+export function changedSince(rev, { git = gitRun, root = REPO } = {}) {
+  if (typeof rev !== 'string' || !rev.trim() || rev.startsWith('-')) return { error: `--since needs a revision, not ${JSON.stringify(rev)}` }; // never an option to git
+  const v = git(['rev-parse', '--verify', '--quiet', `${rev}^{commit}`], { cwd: root });
+  const sha = String(v?.stdout ?? '').trim();
+  const verified = v?.code === 0 && /^[0-9a-f]{40}([0-9a-f]{24})?$/.test(sha);
+  if (!verified) return { error: `${rev} does not verify as a commit in this repository` };
+  const diff = git(['diff', '--no-color', '--no-ext-diff', '--name-only', '-z', '--no-renames', sha, '--'], { cwd: root });
+  if (diff?.code !== 0) return { error: `git diff against ${rev} failed (exit ${diff?.code}), so what changed is unknown` };
+  const extra = git(['ls-files', '-z', '--others', '--exclude-standard'], { cwd: root });
+  if (extra?.code !== 0) return { error: `git ls-files failed (exit ${extra?.code}), so the untracked files are unknown` };
+  const all = [...new Set([...nul(diff.stdout), ...nul(extra.stdout)])];
+  return { sha, files: all.filter((f) => !f.startsWith('.claude/worktrees/')).sort() }; // another worktree is another checkout
+}
+
+const SCRIPT = /\.(m?js|cjs)$/;
+const IMPORT = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(['"])(\.\.?\/[^'"]+)\1/g;
+
+// The relative imports of every script in `folders`, followed into any file they reach (a helper outside the suite
+// folders included). Bare and node: imports are not followed.
+export function importGraph(root, folders) {
+  const graph = new Map();
+  const visit = (rel) => {
+    if (graph.has(rel)) return;
+    const deps = new Set();
+    graph.set(rel, deps);
+    let src = '';
+    try { src = readFileSync(join(root, rel), 'utf8'); } catch { return; }
+    for (const m of src.matchAll(IMPORT)) {
+      const target = posix.normalize(posix.join(dirOf(rel) || '.', m[2].split(/[?#]/)[0]));
+      if (target.startsWith('../')) continue;
+      deps.add(target);
+      if (SCRIPT.test(target)) visit(target); // followed through files no suite owns
+    }
+  };
+  for (const folder of folders) {
+    let names = [];
+    try { names = readdirSync(join(root, folder)).sort(); } catch { continue; }
+    for (const name of names) if (SCRIPT.test(name)) visit(folder ? `${folder}/${name}` : name);
+  }
+  return graph;
+}
+
+// `start` and everything it imports, however deep.
+export function closure(graph, start) {
+  const seen = new Set([start]);
+  const stack = [start];
+  while (stack.length) {
+    for (const d of graph.get(stack.pop()) ?? []) {
+      if (seen.has(d)) continue;
+      seen.add(d);
+      stack.push(d); // and what that imports
     }
   }
-  return results;
+  return seen;
+}
+
+// A -U0 diff of mutate.mjs read against the file as it is now: the lines added inside the MUTATIONS array, and
+// whether any hunk falls outside it (then mutate.mjs's own code changed, and its own guards must run).
+export function selfChanges(diff, src) {
+  const lines = String(src).split('\n');
+  const open = lines.indexOf('export const MUTATIONS = [') + 1;
+  const close = lines.findIndex((l, i) => i >= open && l === '];') + 1;
+  const added = [];
+  let outside = !(open > 0 && close > open);
+  let hunks = 0;
+  let next = 0;
+  for (const line of String(diff).split('\n')) {
+    const h = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
+    if (h) {
+      hunks++;
+      const c = Number(h[1]);
+      const d = h[2] === undefined ? 1 : Number(h[2]);
+      const inside = d === 0 ? c >= open && c < close : c > open && c + d - 1 < close;
+      if (!inside) outside = true; // this hunk changed code, not a line of the list
+      next = c;
+    } else if (hunks && line.startsWith('+')) {
+      if (next > open && next < close) added.push(line.slice(1)); // a line of the list, by its own line number
+      next++;
+    }
+  }
+  return { added, outside, hunks };
+}
+
+// A name as it can be spelled in this file: raw, inside a JSON string, or inside a single-quoted string.
+const spellings = (name) => [name, JSON.stringify(name).slice(1, -1), name.split('\\').join('\\\\').split("'").join("\\'")];
+
+export const suiteFolders = (suites = SUITES, suiteFor = SUITE_FOR) =>
+  [...new Set([...Object.keys(suites), ...Object.keys(suiteFor).map(dirOf), ...Object.values(suiteFor).flat().map(dirOf)])].sort();
+
+// Which mutations a change can reach. A mutation of file F (folder D) is selected when anything F or its suite's
+// tests import, however deep, changed (F and the tests themselves included); a non-.mjs file under D's top-level
+// folder changed; a file READS lists for D changed; or, for mutate.mjs itself, its line changed (by name) or a hunk
+// fell outside MUTATIONS (its own guards). `unguarded` lists changed scripts in a suite folder no mutation names.
+export function selectSince(list, files, opts = {}) {
+  const { root = REPO, suites = SUITES, suiteFor = SUITE_FOR, reads = READS, self = SELF_REL, selfDiff = '', selfSrc = '' } = opts;
+  const changed = new Set(files);
+  const selfChanged = changed.delete(self); // mutate.mjs is judged by its diff, not as one changed file
+  const folders = suiteFolders(suites, suiteFor);
+  const graph = opts.graph ?? importGraph(root, folders);
+  const own = selfChanged ? selfChanges(selfDiff, selfSrc) : { added: [], outside: false, hunks: 0 };
+  const unknown = selfChanged && own.hunks === 0; // mutate.mjs changed but no hunk says how: run everything
+  const byLine = new Set();
+  for (const line of own.added) {
+    const t = line.trim();
+    if (!t || t.startsWith('//') || t === '...[' || t === '[') continue;
+    let hit = list.flatMap((m, i) => (spellings(m[0]).some((s) => t.includes(s)) ? [i] : []));
+    if (!hit.length) hit = list.flatMap((m, i) => (t.includes(m[1]) ? [i] : [])); // a group's path line
+    if (!hit.length) hit = list.map((_, i) => i); // an added line that names nothing: every mutation
+    for (const i of hit) byLine.add(i);
+  }
+  const readChanged = (f) => (f.endsWith('/') ? [...changed].some((c) => c.startsWith(f)) : changed.has(f)); // a folder entry covers what is under it
+  const reached = new Map();
+  const reach = (start) => { if (!reached.has(start)) reached.set(start, closure(graph, start)); return reached.get(start); };
+  const touches = (rel) => {
+    if (rel === self && own.outside) return true;
+    const tests = suiteListed(rel, { suites, suiteFor });
+    for (const start of [rel, ...tests]) for (const f of reach(start)) if (changed.has(f)) return true;
+    const top = rel.split('/')[0];
+    for (const c of changed) if (!c.endsWith('.mjs') && c.startsWith(`${top}/`)) return true; // a data file nearby
+    return (reads[dirOf(rel)] ?? []).some(readChanged);
+  };
+  const selected = list.filter((m, i) => unknown || byLine.has(i) || touches(relPath(m[1])));
+  const named = new Set(list.map((m) => relPath(m[1])));
+  const unguarded = [...changed].filter((f) => SCRIPT.test(f) && !/\.test\.m?js$/.test(f) && folders.includes(dirOf(f)) && !named.has(f) && existsSync(join(root, f))).sort();
+  return { selected, unguarded };
+}
+
+// Why a batch for --add cannot go in, one reason per line; empty when it can.
+export function validateLines(batch, opts = {}) {
+  const { mutations = MUTATIONS, root = REPO, group, suites = SUITES, suiteFor = SUITE_FOR, target = SELF_REL, targetSrc } = opts;
+  const problems = [];
+  if (typeof group !== 'string' || !group.trim()) problems.push('--group must name the batch in one line');
+  else if (/[\r\n\u2028\u2029]/.test(group)) problems.push('--group holds a line break; it must be one line');
+  if (!Array.isArray(batch) || !batch.length) {
+    problems.push('the batch must be a JSON array of [name, path, from, to] lines, at least one');
+    return problems;
+  }
+  const taken = new Set(mutations.map((m) => m[0]));
+  const ins = typeof targetSrc === 'string' ? insertLines(targetSrc, batch, String(group ?? '')) : null;
+  if (ins?.error) problems.push(ins.error);
+  batch.forEach((line, k) => {
+    if (!Array.isArray(line) || line.length !== 4 || !line.every((x) => typeof x === 'string')) {
+      problems.push(`line ${k + 1}: must be [name, path, from, to], four strings`);
+      return;
+    }
+    const [name, path, from, to] = line;
+    const tag = `line ${k + 1} (${JSON.stringify(name)})`;
+    if (!name.trim()) problems.push(`${tag}: the name is empty`);
+    if (from === '') problems.push(`${tag}: from is empty`);
+    if (from === to) problems.push(`${tag}: from and to are the same, so no guard is removed`);
+    if (taken.has(name)) problems.push(`${tag}: the name is taken`);
+    taken.add(name); // a second line of the batch may not reuse it either
+    if (isAbsolute(path) || /^[A-Za-z]:/.test(path)) {
+      problems.push(`${tag}: the path is absolute; give it from the repo root`);
+      return;
+    }
+    if (path.includes('..')) {
+      problems.push(`${tag}: the path contains ".."`);
+      return;
+    }
+    const rel = relPath(path);
+    const p = join(root, rel);
+    if (!existsSync(p) || !statSync(p).isFile()) {
+      problems.push(`${tag}: ${rel} does not exist`);
+      return;
+    }
+    if (!suiteOf(rel, { root, suites, suiteFor }).length) problems.push(`${tag}: ${rel} has no suite to judge it`);
+    if (from === '') return;
+    const found = findOnce(readFileSync(p, 'utf8'), from);
+    if (found.status) problems.push(`${tag}: from ${found.status === 'NO_MATCH' ? 'is not found' : 'occurs more than once'} in ${rel}`);
+    else if (rel === target && ins?.text && findOnce(ins.text, from).status) problems.push(`${tag}: from would also match its own line once written into ${rel}`);
+  });
+  return problems;
+}
+
+// The text of `src` with the batch written as one group just before the one line "];" that closes MUTATIONS.
+export function insertLines(src, batch, group) {
+  const lines = String(src).split('\n');
+  const open = lines.indexOf('export const MUTATIONS = [');
+  const closes = lines.flatMap((l, i) => (l === '];' ? [i] : []));
+  if (open < 0 || lines.lastIndexOf('export const MUTATIONS = [') !== open || closes.length !== 1 || closes[0] < open) {
+    return { error: 'MUTATIONS must open once and close with the one line "];" in the file, so where to write is unknown' };
+  }
+  const at = lines.slice(0, closes[0]).join('\n').length + 1;
+  const block = `${[`  // ${group} (added by mutate --add)`, ...batch.map((l) => `  ${JSON.stringify(l)},`)].join('\n')}\n`;
+  return { text: src.slice(0, at) + block + src.slice(at) };
+}
+
+function writeAtomic(file, text) {
+  const tmp = join(dirname(file), `.${basename(file)}.${process.pid}.${Date.now()}.tmp`);
+  writeFileSync(tmp, text);
+  renameSync(tmp, file);
+}
+
+const loadList = async (file) => (await import(`${pathToFileURL(file).href}?add=${Date.now()}-${process.hrtime.bigint()}`)).MUTATIONS;
+
+// --add: refuse the whole batch on any bad line; run it; write it only if every line is KILLED; then re-import the
+// file and put the old bytes back unless its list now ends with the batch.
+export async function addLines(batch, opts = {}) {
+  const { group, root = REPO, target = join(root, SELF_REL), mutations = MUTATIONS, suites = SUITES, suiteFor = SUITE_FOR, load = loadList } = opts;
+  const run = opts.run ?? ((lines) => runAll(lines, { root, suites, suiteFor, jobs: opts.jobs, timeoutMs: opts.timeoutMs }));
+  const before = readFileSync(target, 'utf8');
+  const problems = validateLines(batch, { mutations, root, group, suites, suiteFor, target: posixRel(relative(root, target)), targetSrc: before });
+  if (problems.length) return { ok: false, problems };
+  const { results = [] } = (await run(batch)) ?? {};
+  const notKilled = [];
+  for (let k = 0; k < batch.length; k++) {
+    const r = results[k];
+    if (r?.status !== 'KILLED') notKilled.push(`line ${k + 1} (${JSON.stringify(batch[k][0])}) was not killed: ${r?.status ?? 'MISSING'}${r?.detail ? ` — ${r.detail}` : ''}`);
+  }
+  if (notKilled.length) return { ok: false, problems: notKilled }; // nothing is written unless every line bites
+  const ins = insertLines(before, batch, group);
+  if (ins.error) return { ok: false, problems: [ins.error] };
+  writeAtomic(target, ins.text);
+  let list = null;
+  try { list = await load(target); } catch { list = null; }
+  const tail = Array.isArray(list) ? list.slice(-batch.length) : null;
+  if (JSON.stringify(tail) !== JSON.stringify(batch)) {
+    writeAtomic(target, before); // the old bytes go back
+    return { ok: false, problems: ['the written file did not re-import with the batch at the end of MUTATIONS, so the old bytes are back'] };
+  }
+  return { ok: true, problems: [] };
+}
+
+// The command. Returns the exit code; `print` receives each line of the report.
+export async function main(argv, deps = {}) {
+  const { mutations = MUTATIONS, root = REPO, suites = SUITES, suiteFor = SUITE_FOR, reads = READS, git = gitRun, run = runAll, add = addLines, print = (s) => console.log(s), readText = (f) => readFileSync(f, 'utf8') } = deps;
+  const o = parseCli(argv);
+  if (o.errors.length) {
+    for (const e of o.errors) print(`refused: ${e}`);
+    return 1;
+  }
+  if (o.add !== undefined) {
+    let batch;
+    try { batch = JSON.parse(readText(o.add)); } catch (err) { print(`refused: ${o.add} is not readable JSON (${err.message})`); return 1; }
+    const r = await add(batch, { group: o.group, root, mutations, jobs: o.jobs, timeoutMs: o.timeoutMs });
+    for (const p of r.problems) print(`refused: ${p}`);
+    print(r.ok ? `added ${batch.length} mutation${batch.length === 1 ? '' : 's'} under "${o.group}", every one killed` : 'added nothing');
+    return r.ok ? 0 : 1;
+  }
+  let chosen = mutations;
+  if (o.only) {
+    const sel = selectOnly(mutations, o.only);
+    if (sel.unmatched.length) {
+      for (const t of sel.unmatched) print(`refused: --only ${JSON.stringify(t)} selects no mutation (a term matches part of a file path)`);
+      return 1;
+    }
+    chosen = sel.chosen;
+  }
+  let notRun = 0;
+  if (o.since !== undefined) {
+    const ch = changedSince(o.since, { git, root });
+    if (ch.error) {
+      print(`refused: ${ch.error}`);
+      return 1;
+    }
+    let selfDiff = '';
+    if (ch.files.includes(SELF_REL)) {
+      const d = git(['diff', '--no-color', '--no-ext-diff', '-U0', '--no-renames', ch.sha, '--', SELF_REL], { cwd: root });
+      if (d?.code !== 0) {
+        print(`refused: git diff of ${SELF_REL} failed (exit ${d?.code}), so which of its lines changed is unknown`);
+        return 1;
+      }
+      selfDiff = d.stdout;
+    }
+    const selfPath = join(root, SELF_REL);
+    const sel = selectSince(mutations, ch.files, { root, suites, suiteFor, reads, selfDiff, selfSrc: existsSync(selfPath) ? readFileSync(selfPath, 'utf8') : '' });
+    for (const f of sel.unguarded) print(`UNGUARDED: ${f} changed and no mutation names it`);
+    const keep = new Set(sel.selected);
+    chosen = chosen.filter((m) => keep.has(m));
+    notRun = mutations.length - chosen.length;
+  }
+  if (o.list) {
+    for (const [name, file] of chosen) print(`- ${name} (${relPath(file)})`);
+    print(`\n${chosen.length} mutations.`);
+    return 0;
+  }
+  const { results } = chosen.length ? await run(chosen, { root, suites, suiteFor, jobs: o.jobs, timeoutMs: o.timeoutMs }) : { results: [] };
+  const s = summarise(results, chosen.length, { verbose: o.verbose, since: o.since, notRun });
+  for (const line of s.lines) print(line);
+  return s.code;
 }
 
 const isMain = (() => { try { return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href; } catch { return false; } })();
 if (isMain) {
-  if (process.argv.includes('--list')) {
-    for (const [name, file] of MUTATIONS) console.log(`- ${name} (${relPath(file)})`);
-    console.log(`\n${MUTATIONS.length} mutations.`);
-  } else {
-    const oi = process.argv.indexOf('--only');
-    const results = run({ only: oi >= 0 ? process.argv[oi + 1] : undefined });
-    const killed = results.filter((r) => r.status === 'KILLED');
-    const bad = results.filter((r) => r.status !== 'KILLED');
-    for (const r of bad) console.log(`${r.status}: ${r.name} — ${r.detail}`);
-    console.log(`killed ${killed.length} of ${results.length} mutations${bad.length ? `, ${bad.length} not killed` : ' (every guard bites)'}`);
-    process.exitCode = bad.length ? 1 : 0;
-  }
+  for (const sig of ['SIGINT', 'SIGTERM']) process.once(sig, () => { stopAll(); process.exit(130); });
+  main(process.argv.slice(2)).then(
+    (code) => { process.exitCode = code; },
+    (err) => { stopAll(); console.error(`mutate.mjs crashed: ${err?.stack ?? err}`); process.exitCode = 1; },
+  );
 }
