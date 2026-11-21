@@ -22,8 +22,17 @@ export const meta = {
 //   targets   [{ key, files, test, note }]: key names the finding, files are the only files its fixer may change (no
 //             file in two targets), test is the target's own test file
 //
+// Returns { premise, results, refutedAtPremise, stopped, planMode }. Each result is { key, status, rounds, spent }, plus
+// planMode: true when plan mode stopped it. status is VERIFIED, RETURNED_TO_LEAD, BLOCKED, FIX_DIED, VERIFIER_DIED,
+// ERROR or PREMISE_UNKNOWN; rounds holds every round run, each { fix, verify, checks }, even when a later call threw.
+//
 // Every agent's label comes from its target's key and round only, so a resumed run replays from the journal. Unknown
 // is never a pass: a dead agent, a missing verdict or a malformed report stops a target short of VERIFIED.
+//
+// Plan mode reaches every running agent at once, and an agent that obeys it changes nothing. So a fixer or verifier
+// that reports plan mode leaves its target BLOCKED, back to the lead at once, and from then on no target starts
+// another agent. A round stopped by plan mode is never a spent round: each result's `spent` counts only the others.
+// Re-run fix-verify fresh once plan mode is off, because a resume would replay the blocked answers from the journal.
 
 const MAX_ROUNDS = 2
 const MUTATE = 'galxe-desk/scripts/mutate.mjs'
@@ -116,6 +125,7 @@ const FIX = {
     branch: { type: 'string' },
     head: { type: 'string' },
     blocked: { type: 'string' },
+    planMode: { type: 'boolean' },
   },
   required: ['changed', 'redTests', 'mutations', 'refuted', 'branch', 'head'],
 }
@@ -126,6 +136,7 @@ const VERIFY = {
     problems: { type: 'array', items: { type: 'string' } },
     evidence: { type: 'string' },
     corpusProposals: { type: 'array', items: { type: 'string' } },
+    planMode: { type: 'boolean' },
   },
   required: ['holds', 'problems', 'evidence', 'corpusProposals'],
 }
@@ -156,6 +167,7 @@ function premisePrompt() {
 function fixPrompt(t, round, prevHead, prev) {
   const scratch = SB + '/fix/' + t.key + '/r' + round
   return 'You are the fixer for target "' + t.key + '", round ' + round + ' of at most ' + MAX_ROUNDS + ', on the repository ' + REPO + '. You work in your own git worktree (your working directory), never in ' + REPO + ' itself: run git there, without -C. ' + DATA + RULES +
+    'If your session says plan mode is on, change nothing and return at once with planMode true and blocked saying so (that round is not spent). ' +
     'First run `git merge-base --is-ancestor ' + BASE + ' HEAD`; if it fails, change nothing and return blocked with what you saw. ' +
     (prevHead ? 'Then run `git merge --ff-only ' + prevHead + '` so you start from round ' + (round - 1) + '\'s work; if it fails, change nothing and return blocked. ' : '') +
     'Edit ONLY your own files: ' + t.files.join(', ') + '. Never edit ' + MUTATE + ' (mutation lines are returned as data; the lead adds them), and never touch another repository. ' +
@@ -171,11 +183,12 @@ function verifyPrompt(t, round, fix) {
   const dir = SB + '/verify/' + t.key + '/r' + round
   const corpus = SB + '/corpus-proposals/' + t.key + '/'
   return 'READ-ONLY verifier for target "' + t.key + '", round ' + round + '. Edit nothing in ' + REPO + ' and run no git command that changes state there; scratch only under ' + dir + '/ and ' + corpus + '. ' + DATA +
+    'If your session says plan mode is on, run nothing that writes and return at once with planMode true and holds false: a check you could not run is never a pass, and that round is not spent. ' +
     'Make two copies: `mkdir -p ' + dir + '/head ' + dir + '/base && git -C ' + REPO + ' archive ' + fix.head + ' | tar -x -C ' + dir + '/head && git -C ' + REPO + ' archive ' + BASE + ' | tar -x -C ' + dir + '/base`. ' +
     'Show each of these yourself, with every command and its output in evidence: ' +
     '(1) the finding\'s reproduction shows the defect in base and not in head (if the fixer refuted the finding instead, show the defect is absent in base too); ' +
     '(2) `npm test` is green in head; ' +
-    '(3) the owner-data corpus test (the test under scripts/ that loads scripts/corpus/; a missing one is a problem) passes in head, and so do at least 3 owner-shaped inputs of your own, chosen to exercise this fix the way the owner\'s real files would (invented clothing-shop files: a stock CSV, a size chart, a page written for the owner; email only at example.com, no names, handles or phone numbers), each saved under ' + corpus + ' and listed by path in corpusProposals; ' +
+    '(3) the owner-data corpus test (the test under scripts/ that loads scripts/corpus/; a missing one is a problem) passes in head, and so do at least 3 owner-shaped inputs of your own, chosen to exercise this fix the way the owner\'s real files would (invented clothing-shop files: a stock CSV, a size chart, a page written for the owner; email only at example.com, no names, handles or phone numbers), each saved as its own file directly in ' + corpus + ' (a plain file name of letters, digits, dots, dashes or underscores, no subfolder; names that differ only in case are one file) and listed by its full path in corpusProposals;' +
     '(4) every mutation line the fixer returned has its `from` exactly once in its file in head, and applying the swap in a further copy turns ' + t.test + ' red; ' +
     '(5) `git -C ' + REPO + ' diff --name-only ' + BASE + ' ' + fix.head + '` lists only these files: ' + t.files.join(', ') + '. ' +
     'holds=true only if all five hold; list every problem, each with its command and output, in problems.\n\n' +
@@ -207,11 +220,30 @@ function fixProblems(fix, t) {
   return p
 }
 
-/** What the script can see wrong in a verifier's report: its own owner-shaped inputs must exist, at least three. */
+const PLAIN_NAME = /^[A-Za-z0-9._-]+$/
+
+/**
+ * The files a verifier saved as its own owner-shaped inputs, as a set of names. A proposal counts only if it is text
+ * and is one plain file name directly in the target's own proposals folder: no subfolder, no '.' or '..', no doubled
+ * or trailing slash. Names are case folded, as overlaps() does, so one file spelt three ways counts once.
+ */
+function proposalFiles(v, t) {
+  const dir = SB + '/corpus-proposals/' + t.key + '/'
+  const names = new Set()
+  for (const x of Array.isArray(v.corpusProposals) ? v.corpusProposals : []) {
+    if (!isText(x) || !x.startsWith(dir)) continue
+    const name = x.slice(dir.length)
+    if (!PLAIN_NAME.test(name) || name === '.' || name === '..') continue
+    const key = low(name)
+    names.add(key)
+  }
+  return names
+}
+
+/** What the script can see wrong in a verifier's report: its own owner-shaped inputs must exist, at least three files. */
 function verifyProblems(v, t) {
   const dir = SB + '/corpus-proposals/' + t.key + '/'
-  const saved = Array.isArray(v.corpusProposals) ? v.corpusProposals.filter((x) => isText(x) && x.startsWith(dir) && x.length > dir.length && !x.split('/').includes('..')) : []
-  return new Set(saved).size < 3 ? ['fewer than 3 owner-shaped inputs saved under ' + dir] : []
+  return proposalFiles(v, t).size < 3 ? ['fewer than 3 owner-shaped inputs saved as distinct files directly in ' + dir] : []
 }
 
 /** VERIFIED only when the verifier said holds, listed no problem, and the script saw none either. */
@@ -219,41 +251,71 @@ const passed = (v, checks) => v !== null && v.holds === true && Array.isArray(v.
 
 // --------------------------------------------------------------------------------------------------------- rounds
 
+// Each target's rounds, kept outside runTarget: an agent call that throws (a spent budget) makes the pipeline drop the
+// whole target to null, and its ERROR result then reads the rounds already run back from here, so none is lost.
+const ROUNDS = new Map()
+
+// The label of the first agent that reported plan mode, or null. Once set, no target starts another agent.
+let planModeFrom = null
+
+/**
+ * An agent that says plan mode is on: a planMode that is anything but absent or false (an unknown one is read as plan
+ * mode, never as a pass), or a blocked reason that names it.
+ */
+const saysPlanMode = (r) => (r.planMode !== undefined && r.planMode !== false) || /plan[ -]mode/i.test(String(r.blocked ?? ''))
+
+/** BLOCKED by plan mode: back to the lead at once, and the round it stopped is marked, so it is never a spent round. */
+function planModeStop(t, rounds, entry, label) {
+  if (entry) entry.planMode = true
+  if (planModeFrom === null) planModeFrom = label
+  return { key: t.key, status: 'BLOCKED', planMode: true, rounds }
+}
+
 async function runTarget(t) {
   const rounds = []
+  ROUNDS.set(t.key, rounds)
   let prevHead = null
   let prev = null
   for (let round = 1; round <= MAX_ROUNDS; round++) {
+    if (planModeFrom !== null) return planModeStop(t, rounds, null, null)
+    // The round is on record before its fixer starts, and filled in as each call returns.
+    const entry = { fix: null, verify: null, checks: [] }
+    rounds.push(entry)
     const fix = await agent(fixPrompt(t, round, prevHead, prev), { label: 'fix:' + t.key + ':r' + round, phase: 'Fix', schema: FIX, isolation: 'worktree' })
     if (fix === null || typeof fix !== 'object') {
-      rounds.push({ fix: null, verify: null, checks: [] })
       return { key: t.key, status: 'FIX_DIED', rounds }
     }
+    entry.fix = fix
+    if (saysPlanMode(fix)) return planModeStop(t, rounds, entry, 'fix:' + t.key + ':r' + round)
     if (fix.blocked != null && fix.blocked !== '') {
-      rounds.push({ fix, verify: null, checks: [] })
       return { key: t.key, status: 'BLOCKED', rounds }
     }
     const checks = fixProblems(fix, t)
+    entry.checks = checks
     let verify = null
     if (SHA.test(String(fix.head))) {
+      if (planModeFrom !== null) return planModeStop(t, rounds, entry, null)
       verify = await agent(verifyPrompt(t, round, fix), { label: 'verify:' + t.key + ':r' + round, phase: 'Verify', schema: VERIFY })
       if (verify === null || typeof verify !== 'object') {
-        rounds.push({ fix, verify: null, checks })
         return { key: t.key, status: 'VERIFIER_DIED', rounds }
       }
+      entry.verify = verify
+      if (saysPlanMode(verify)) return planModeStop(t, rounds, entry, 'verify:' + t.key + ':r' + round)
       checks.push(...verifyProblems(verify, t))
     }
-    rounds.push({ fix, verify, checks })
     if (passed(verify, checks)) return { key: t.key, status: 'VERIFIED', rounds }
     prevHead = SHA.test(String(fix.head)) ? fix.head : null
-    prev = rounds[rounds.length - 1]
+    prev = entry
   }
   return { key: t.key, status: 'RETURNED_TO_LEAD', rounds }
 }
 
+/** The rounds that count against the cap of MAX_ROUNDS: every one except a round stopped by plan mode. */
+const spentRounds = (rounds) => rounds.filter((x) => x.planMode !== true).length
+
 function stop(premise, reason) {
   log('fix-verify stopped before any fixer: ' + reason)
-  return { premise, results: [], refutedAtPremise: [], stopped: reason }
+  return { premise, results: [], refutedAtPremise: [], stopped: reason, planMode: false }
 }
 
 // ----------------------------------------------------------------------------------------------------------- run
@@ -280,7 +342,8 @@ if (outcome.size) log('the premise gave no single verdict, so not fixed (re-run 
 
 phase('Fix')
 const fixed = await pipeline(holding, (t) => runTarget(t))
-holding.forEach((t, i) => outcome.set(t.key, fixed[i] || { key: t.key, status: 'ERROR', rounds: [] }))
-const results = TARGETS.filter((t) => outcome.has(t.key)).map((t) => outcome.get(t.key))
-for (const r of results) log(r.key + ': ' + r.status + ' after ' + r.rounds.length + ' round(s)')
-return { premise, results, refutedAtPremise, stopped: null }
+holding.forEach((t, i) => outcome.set(t.key, fixed[i] || { key: t.key, status: 'ERROR', rounds: ROUNDS.get(t.key) || [] }))
+if (planModeFrom !== null) log('plan mode was reported by ' + planModeFrom + ', so no target started another agent after it: re-run fix-verify fresh once plan mode is off (a resume would replay the blocked answers)')
+const results = TARGETS.filter((t) => outcome.has(t.key)).map((t) => ({ ...outcome.get(t.key), spent: spentRounds(outcome.get(t.key).rounds) }))
+for (const r of results) log(r.key + ': ' + r.status + (r.planMode ? ' (plan mode)' : '') + ' after ' + r.spent + ' spent round(s) of ' + MAX_ROUNDS)
+return { premise, results, refutedAtPremise, stopped: null, planMode: planModeFrom !== null }
