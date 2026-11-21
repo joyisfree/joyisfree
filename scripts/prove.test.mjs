@@ -1469,12 +1469,83 @@ test('loadCorpus refuses a mobile written with dots and an Australian 1300 or 18
 
 test('loadCorpus refuses a North American number with its leading 1, a 00 international number and a number in French pairs (round-2 checker, 21 Nov 2026)', () => {
   // NANP's 555-0100 to 0199, ACMA's 0491 570 and, recalled rather than checked here, ARCEP's 06 39 98: set aside for fiction.
-  for (const phone of ['1-800-555-0199', '1-201-555-0123', '1 (201) 555-0123', '1.201.555.0123', '00 61 491 570 156', '00 61 2 5550 1234', '00-44-20-7946-0958', '06 39 98 12 34', '06.39.98.12.34']) {
+  // 00-61-2-5550-1234 is dashed, so only the 00 rule reads its one-digit area code: the rule for 61 without its + takes
+  // spaces alone, and would catch the spaced form by itself.
+  for (const phone of ['1-800-555-0199', '1-201-555-0123', '1 (201) 555-0123', '1.201.555.0123', '00 61 491 570 156', '00 61 2 5550 1234', '00-61-2-5550-1234', '00-44-20-7946-0958', '06 39 98 12 34', '06.39.98.12.34']) {
     assert.throws(() => loadCorpus(corpusDir({ ...GOOD, 'contacts.txt': `Call ${phone} after 9.\n` }), { floor: 1 }), /contacts\.txt:1: a phone number/, phone);
   }
   // Their near shapes that are not phones: a UPC with leading zeros, a padded order id, a date, a time, a size run.
   // A run of two-digit codes that strictly rises counts sizes or colourways, so it is not read as French pairs.
   for (const ok of ['UPC 0012345678905', 'Order 0012345678', '2026-11-01', '01-11-2026 10:02', '00 15 30', 'sizes 8 10 12 14 16', 'qty 1 2 3 4', 'sizes 06 08 10 12 14', 'colourways 01 02 03 04 05']) assert.equal(linePrivacy(ok), null, ok);
+});
+
+test('loadCorpus refuses a North American number with one separator and a number with its country code but no + (corpus fixer, 21 Nov 2026)', () => {
+  // NANP's 555-0100 to 0199, ACMA's 0491 570 and (02) 5550, Ofcom's 07700 900 and 020 7946 0: set aside for fiction.
+  // New Zealand sets none aside, so its cases carry ACMA's nine digits, which no New Zealand number beginning 4 holds.
+  for (const phone of ['(201) 5550123', '(201)5550123', '201 5550123', '201-5550123', '201.5550123', '1 (201) 5550123', '1 201 5550123', '1-201-5550123', '61 491 570 156', '61 2 5550 1234', '44 7700 900123', '44 7700 900 123', '44 20 7946 0958', '64 491 570 156', '64 4 9157 0156']) {
+    assert.throws(() => loadCorpus(corpusDir({ ...GOOD, 'contacts.txt': `Call ${phone} after 9.\n` }), { floor: 1 }), /contacts\.txt:1: a phone number/, phone);
+  }
+  // Their near shapes, which the corpus holds: size runs (UK, EU, and children's in centimetres), quantities and
+  // quantity runs, prices, dates, times, order ids (one whose area code or exchange begins 0 or 1 is not North
+  // American), EAN and UPC codes as printed under a barcode, Unix times, SKUs and lot numbers, and the ATO's example ABN.
+  for (const ok of [
+    'sizes 6 8 10 12 14 16 18', '8 10 12 14 16', 'EU 44 46 48 50 52 54', '92 98 104 110 116 122 128', 'qty 44 120', '61 units, 120 in stock', 'S 44 M 61 L 64',
+    'MOQ 44 100 250 500', 'MOQ 61 100 250 500', 'MOQ 64 100 250 500', '$44.00 $61.50 $64.95', '44.00 61.50 64.95', '2026-11-01', '01-11-2026',
+    '2026-11-01 10:02:11 +1100', '10:00-16:00', '16:45', 'Order #1001', 'Order 100234', 'Order 100-1234567', 'Order #250 1234567', 'Order 111-2223334-4445556',
+    'EAN 9300601234567', 'EAN 9 300601 234567', 'UPC 0 12345 67890 5', 'UPC 036000291452', '1800000000', '"expires": 1800000000,', 'JIF-HH-BLK-M',
+    'JIF-44-100-2000', 'SKU 61-1001-2002', 'Lot 44-1000-2000', 'ABN 51 824 753 556',
+  ]) assert.equal(linePrivacy(ok), null, ok);
+  // An ABN is eleven digits as 2 3 3 3, so one that begins 61 or 64 can have a phone's shape, as can a run of
+  // quantities; README.md's rules say so, and clean/ uses the ATO's example ABN. This one fails the ABN check, so it is
+  // nobody's.
+  for (const alarm of ['ABN 61 491 570 156', 'MOQ 61 200 400 600']) assert.equal(linePrivacy(alarm), 'a phone number', alarm);
+});
+
+// The phone shapes the loader passes by choice, each named in README.md's 'Not caught, by choice' list and in the
+// header of corpus.mjs, with what in realistic data shares its shape. Each is asserted still passed, as caught.mjs's
+// KNOWN_MISSES are, so a change that catches one turns a test red: then move it to the refused cases above and take
+// it off both lists. Every number is from a range set aside for fiction, bar 13 14 15, a size run.
+const PHONE_KNOWN_MISSES = [
+  { text: '13 14 15', why: 'the six-digit Australian 13 number: a US size run has its shape' },
+  { text: '0061491570156', why: 'a 00 international number run together: a UPC with leading zeros has its shape' },
+  { text: '2015550123', why: 'a North American number run together: a Unix time has its shape' },
+  { text: '12015550123', why: 'the same with its leading 1: an order id has its shape' },
+  { text: '61491570156', why: 'a country code and number run together, as a spreadsheet leaves a +61 number: a barcode has its shape' },
+  { text: '1 2015550123', why: 'run together after its leading 1: a count and then an id has its shape' },
+  { text: '61 491570156', why: 'run together after its country code: a count and then an id has its shape' },
+  { text: '5550 1234', why: 'an eight-digit local number with no area code: two codes side by side have its shape' },
+  { text: '7946 0958', why: 'the same in London' },
+  { text: '555-0123', why: 'a seven-digit North American local number: a numbered SKU has its shape' },
+  { text: '61-491-570-156', why: 'a country code and no + written with dashes: a SKU or a lot number has its shape' },
+  { text: '61.491.570.156', why: 'a country code and no + written with dots: an IP address has its shape' },
+  { text: '33 7700 900123', why: 'a country code other than 1, 44, 61 or 64 without its +' },
+];
+
+/** Whether `doc` holds `text` with no digit either side of it, so 61491570156 is not found inside 0061491570156. */
+const names = (doc, text) => {
+  for (let i = doc.indexOf(text); i >= 0; i = doc.indexOf(text, i + 1)) {
+    if (!/\d/.test(doc[i - 1] ?? '') && !/\d/.test(doc[i + text.length] ?? '')) return true;
+  }
+  return false;
+};
+
+test('every PHONE_KNOWN_MISSES shape is still passed and is named in README.md and in corpus.mjs: when the loader catches one, move it to the refused cases', () => {
+  assert.ok(PHONE_KNOWN_MISSES.length >= 13);
+  assert.equal(new Set(PHONE_KNOWN_MISSES.map((m) => m.text)).size, PHONE_KNOWN_MISSES.length, 'each known miss is its own shape');
+  const readme = readFileSync(join(HERE, 'corpus', 'README.md'), 'utf8');
+  const list = readme.slice(readme.indexOf('Not caught, by choice'), readme.indexOf('- `caught.mjs`'));
+  const source = readFileSync(join(HERE, 'corpus', 'corpus.mjs'), 'utf8');
+  const header = source.slice(source.indexOf('Not caught, by choice'), source.indexOf('const PHONES'));
+  assert.ok(list.length > 0 && header.length > 0, "README.md and corpus.mjs each hold a 'Not caught, by choice' list");
+  for (const { text, why } of PHONE_KNOWN_MISSES) {
+    assert.equal(linePrivacy(`Call ${text} after 9.`), null, `caught now: ${text} (${why}), so move it to the refused cases`);
+    assert.ok(why, text);
+    assert.ok(names(list, text), `README.md's 'Not caught, by choice' list names ${text}`);
+    assert.ok(names(header, text), `corpus.mjs's 'Not caught, by choice' list names ${text}`);
+  }
+  const all = PHONE_KNOWN_MISSES.map((m) => `Call ${m.text} after 9.`).join('\n');
+  assert.equal(loadCorpus(corpusDir({ 'contacts.txt': `${all}\n` }), { floor: 1 }).length, 1, 'a file of them all loads');
+  assert.ok(names('x 0061491570156', '0061491570156') && !names('x 0061491570156', '61491570156'), 'names() needs no digit either side');
 });
 
 test('the privacy rules pass the shapes the corpus holds: reserved emails, dates, time zones, prices, SKUs, order numbers and sizes', () => {

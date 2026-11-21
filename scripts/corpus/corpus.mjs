@@ -25,17 +25,37 @@ const PROFILE_URL = /\b(?:instagram|twitter|x|tiktok|facebook|threads|youtube|li
 // Phone numbers, each with the count of digits it must hold: international (+61 412 345 678, +44 20 7946 0958); with a
 // trunk 0, spaced, dashed, dotted or run together (0412 345 678, 0412.345.678, (02) 9876 5432, 020 7946 0958,
 // 0412345678); an Australian 1300 or 1800 number (1300 975 707), its separators required so a Unix time (1800000000)
-// is not one; the North American shape, with or without its leading 1 ((555) 123-4567, 555-123-4567, 1-800-555-0199);
-// a 00 international number with its separators (00 61 491 570 156); and a number in French pairs (06 39 98 12 34).
-// A date (2026-11-01, 01-11-2026), a time zone (+1100), a price (178.00) and a SKU such as JIF-HH-BLK-M are none of
-// these. Not caught, and written down in README.md: the six-digit Australian 13 number (13, then two pairs of digits),
-// whose shape a US size run (13 14 15) shares; and a 00 international number run together (0061491570156), whose shape
-// a UPC with leading zeros shares.
+// is not one; the North American shape with a separator after its area code and its exchange ((201) 555-0123,
+// 201-555-0123) or, when its area code and exchange each begin 2 to 9 as North America's always do, after its area
+// code alone ((201) 5550123, 201 5550123), so an order id such as 100-1234567 is not one, either with or without a
+// leading 1 and a separator after it (1-800-555-0199, 1 201 5550123); a number with the country code of the UK,
+// Australia or New Zealand but no +, spaced, holding that country's count of digits after it: ten after 44
+// (44 7700 900123), nine after 61 beginning 2 to 8 (61 491 570 156), eight to ten after 64 beginning 2 to 9; a 00
+// international number with its separators (00 61 491 570 156); and a number in French pairs (06 39 98 12 34). A date
+// (2026-11-01, 01-11-2026), a time zone (+1100), a price (178.00), a size run (44 46 48 50 52) and a SKU such as
+// JIF-HH-BLK-M or 61-1001-2002 are none of these. An ABN or a run of quantities that begins 61 or 64 can read as a
+// number with its country code (61 200 400 600), and is refused, so clean/ uses the ATO's example ABN (51 824 753 556).
+//
+// Not caught, by choice, and written down in README.md; prove.test.mjs's PHONE_KNOWN_MISSES asserts each still passes:
+// - the six-digit Australian 13 number (13, then two pairs of digits), whose shape a US size run (13 14 15) shares;
+// - a 00 international number run together (0061491570156), whose shape a UPC with leading zeros shares;
+// - a number run together: North American (2015550123, 12015550123), or with a country code and no + (61491570156,
+//   what a spreadsheet leaves of +61 491 570 156), whose shape a Unix time, an order id or a barcode shares;
+// - a number run together after its leading 1 or its country code (1 2015550123, 61 491570156), whose shape a count
+//   and then an id shares;
+// - a local number with no area code (5550 1234, 7946 0958, 555-0123), whose shape two codes side by side share;
+// - a country code and no + written with dashes or dots (61-491-570-156, 61.491.570.156), whose shape a SKU, a lot
+//   number or an IP address shares;
+// - a country code other than 1, 44, 61 or 64 written without its + (33 7700 900123).
 const PHONES = [
   { re: /(?<![\w+])\+\d[\d ().-]{6,}\d/g, min: 8, max: 15 },
   { re: /(?<![\w.+-])(?:\(0[1-9]\d{0,3}\)|0[1-9]\d{0,3})(?:[ .-]?\d{3,4}){1,3}(?![\w-]|\.\d)/g, min: 9, max: 11 },
   { re: /(?<![\w.+-])1[38]00[ .-]\d{3}[ .-]\d{3}(?![\w-]|\.\d)/g, min: 10, max: 10 },
   { re: /(?<![\w.+-])(?:1[ .-])?(?:\(\d{3}\) ?|\d{3}[ .-])\d{3}[ .-]\d{4}(?![\w-]|\.\d)/g, min: 10, max: 11 },
+  { re: /(?<![\w.+-])(?:1[ .-])?(?:\([2-9]\d{2}\) ?|[2-9]\d{2}[ .-])[2-9]\d{6}(?![\w-]|\.\d)/g, min: 10, max: 11 },
+  { re: /(?<![\w.+-])44 [1-9]\d{0,3}(?: \d{3,6}){1,3}(?![\w-]|\.\d)/g, min: 12, max: 12 },
+  { re: /(?<![\w.+-])61 [2-8]\d{0,3}(?: \d{3,6}){1,3}(?![\w-]|\.\d)/g, min: 11, max: 11 },
+  { re: /(?<![\w.+-])64 [2-9]\d{0,3}(?: \d{3,6}){1,3}(?![\w-]|\.\d)/g, min: 10, max: 12 },
   { re: /(?<![\w.+-])00[ .-][1-9]\d{0,2}(?:[ .-]\d{1,4}){2,5}(?![\w-]|\.\d)/g, min: 10, max: 17 },
   { re: /(?<![\w.+-])0[1-9](?:[ .-]\d{2}){4}(?![\w-]|\.\d)/g, min: 10, max: 10, run: true },
 ];
