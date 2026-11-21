@@ -1,0 +1,11 @@
+Packing list
+- table
+- mirror
+- racks
+- hangers
+- steamer
+- tape
+- ribbon
+- tissue
+- bags
+- float

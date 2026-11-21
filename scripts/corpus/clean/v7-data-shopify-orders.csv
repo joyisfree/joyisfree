@@ -1,0 +1,5 @@
+Name,Email,Financial Status,Paid at,Fulfillment Status,Currency,Subtotal,Shipping,Total,Created at,Lineitem quantity,Lineitem name,Lineitem price,Lineitem sku
+#1001,amy@example.com,paid,2026-11-01 10:02:11 +1100,fulfilled,AUD,178.00,12.00,190.00,2026-11-01 10:01:58 +1100,2,Harbour Hoodie - Black / M,89.00,JIF-HH-BLK-M
+#1001,amy@example.com,,,,,,,,2026-11-01 10:01:58 +1100,1,Ocean Tote - Sand,25.00,JIF-OT-SND
+#1002,ben@example.com,paid,2026-11-01 11:40:03 +1100,unfulfilled,AUD,45.00,12.00,57.00,2026-11-01 11:39:50 +1100,1,Forest Tee - Olive / L,45.00,JIF-FT-OLV-L
+#1003,cas@example.com,refunded,2026-11-02 09:15:44 +1100,fulfilled,AUD,240.00,0.00,240.00,2026-11-02 09:15:30 +1100,1,Stone Jacket - Cream / S,240.00,JIF-SJ-CRM-S
