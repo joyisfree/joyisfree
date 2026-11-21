@@ -1,15 +1,20 @@
 #!/usr/bin/env node
 // The destructive-command guard: a PreToolUse hook on every Bash call (.claude/settings.json). It reads the command
 // the way the shell will and blocks the few commands that lose work for good: a force, mirror or delete push in any
-// spelling, a hard reset, git clean -f, a history rewrite, a forced checkout or switch, an expired reflog, a pruned
-// object store, gh repo sync --force, a git config write or GIT_CONFIG* variable that could turn a push into a mirror
-// push, and a recursive rm (or find -delete, or xargs rm) of anything not strictly beneath /tmp or the temp folder.
+// spelling, a hard reset, git clean -f, a history rewrite, a forced checkout or switch, a checkout of the whole tree or
+// a whole folder (., .., a path ending in /, a :(magic) pathspec such as :/ or :(top), a glob, or a pathspec it cannot
+// read), a restore of one to the worktree (--source included), git stash clear, an expired reflog, a pruned object
+// store, gh repo sync --force, a git config write or GIT_CONFIG* variable that could turn a push into a mirror push,
+// and a recursive rm (or find -delete, or xargs rm) of anything not strictly beneath /tmp or the temp folder.
 // Unknown is never a pass: a path, a flag or a command name the guard cannot read is refused with the reason, and so
 // is a command it cannot tokenise or cannot read within its deadline. A program the guard does not know (flock, watch,
 // su -c, npm exec and the rest) has each later word naming git, rm, find, a shell or a wrapper judged as the command
 // it may run. It allows what the work needs: push -u, heredoc commits whose message mentions a force push,
-// pull --rebase, merge --ff-only, cherry-pick, worktrees, git archive | tar, and rm -rf of a literal path inside a
-// scratchpad.
+// pull --rebase and the rebase --continue or --skip that finishes one, merge --ff-only, cherry-pick, worktrees,
+// git archive | tar, rm -rf of a literal path inside a scratchpad, and an OS package manager (apt-get, brew, pip and
+// the rest), which reads its arguments as package names. It allows on purpose a checkout or restore of named files
+// (git checkout -- notes.md, git restore notes.md), git restore --staged . (the index only) and git stash drop (one
+// entry, whose sha it prints, so it can be brought back until gc).
 //
 //   echo '{"tool_name":"Bash","tool_input":{"command":"git push -f"},"cwd":"/repo"}' | node .claude/hooks/guard.mjs
 //   # exit 0 allows; exit 2 blocks, with the reason on stderr, which Claude Code hands back to Claude
@@ -19,8 +24,11 @@
 // reach, and so is git config that runs commands (an alias in a config file is caught only because an unknown git
 // subcommand is refused). Git's command-valued variables and options are out of its reach too: GIT_EDITOR,
 // GIT_SSH_COMMAND and the like, git -c core.pager, submodule foreach, bisect run, --upload-pack, archive --exec,
-// grep -O and difftool -x. Each of these classes, and node -e, python -c and script files, is written down with a
-// realistic example the guard still allows in KNOWN_MISSES in guard.test.mjs, so a later fix knows which case to move.
+// grep -O and difftool -x. So are the places where bash runs a command from text the guard reads as data: $((cmd) ),
+// which it reads as arithmetic, ${x@P}, an alias defined then used, and an arithmetic subscript; and so are sudo -s,
+// sudo -i or su reading a script on stdin, rg --pre, and a folder named without a trailing /, which reads as a file.
+// Each of these classes, and node -e, python -c and script files, is written down with a realistic example the guard
+// still allows in KNOWN_MISSES in guard.test.mjs, so a later fix knows which case to move.
 
 import { readFileSync, realpathSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
@@ -495,22 +503,27 @@ function assignment(w) {
   return Boolean(m) && (!w.dyn || w.dynAt >= m[0].length);
 }
 
-/** A shell's own options: whether -c is among them, where its first operand is, and whether an option is unknown. */
+/**
+ * A shell's own options: whether -c is among them, whether -s is (the script comes from stdin and the operands are its
+ * positional parameters), where its first operand is, and whether an option is built at runtime.
+ */
 function shellArgs(ws, j) {
   let c = false;
+  let s = false;
   for (; j < ws.length; j++) {
     const v = ws[j].w;
-    if (ws[j].dyn) return { c, at: j, dyn: true };
-    if (v === '--' || v === '-') return { c, at: j + 1, dyn: false };
+    if (ws[j].dyn) return { c, s, at: j, dyn: true };
+    if (v === '--' || v === '-') return { c, s, at: j + 1, dyn: false };
     if (!/^[-+]./.test(v)) break;
     if (v.startsWith('--')) {
       if (v === '--rcfile' || v === '--init-file') j++;
       continue;
     }
     if (v.includes('c')) c = true;
+    if (v.includes('s')) s = true;
     if (/[oO]/.test(v)) j++;
   }
-  return { c, at: j, dyn: false };
+  return { c, s, at: j, dyn: false };
 }
 
 /**
@@ -698,8 +711,9 @@ const WRAPPERS = {
 
 // The programs the guard has its own rules for, which read their arguments themselves.
 const KNOWN = new Set(['git', 'rm', 'find', 'cd', 'pushd', 'popd', 'source', '.', ...SHELLS]);
-// Programs that only read their arguments as data, which the backstop below leaves alone.
-const DATA = new Set(['echo', 'printf', 'grep', 'egrep', 'fgrep', 'rg', 'cat', 'ls', 'head', 'tail', 'wc', 'man', 'which', 'type', 'test', '[', 'true', 'false', ':']);
+// Programs that only read their arguments as data, which the backstop below leaves alone. An OS package manager reads
+// them as package names: apt-get install -y git curl installs git and curl, it does not run git curl.
+const DATA = new Set(['echo', 'printf', 'grep', 'egrep', 'fgrep', 'rg', 'cat', 'ls', 'head', 'tail', 'wc', 'man', 'which', 'type', 'test', '[', 'true', 'false', ':', 'apt-get', 'apt', 'brew', 'dnf', 'yum', 'apk', 'pacman', 'pip', 'pip3']);
 // A later word of an unknown program that names one of these is judged as the command the program may run…
 const RUNS = new Set(['git', 'rm', 'find', ...SHELLS, ...Object.keys(WRAPPERS)]);
 // …and a literal argument whose first word is one of these is read as a script.
@@ -863,12 +877,15 @@ function cd(args, I) {
   return { S: I.map((c) => (d.w.startsWith('/') ? resolvePath(d.w) : c === null ? null : resolvePath(c, d.w))), F: I };
 }
 
-/** A shell with no -c and no script file reads its commands from stdin: a heredoc or here-string is read as a script. */
+/**
+ * A shell with no -c and no script file reads its commands from stdin, and so does one with -s, whose operands are its
+ * positional parameters: a heredoc or here-string is read as a script, and a pipe or other input is refused.
+ */
 function shell(name, args, stdin, I, ctx, piped) {
   const r = shellArgs(args, 0);
   if (r.dyn) deny(`${name} with an argument built at runtime, so the guard cannot tell what it runs`);
   if (stdin && stdin.procsub) deny(`${name} reads its input from a <( ), which the guard cannot read`);
-  if (r.c || r.at < args.length) return; // the -c script was read with the words; a script file is out of reach
+  if (r.c || (r.at < args.length && !r.s)) return; // the -c script was read with the words; a script file is out of reach
   if (stdin && stdin.text !== undefined) {
     if (!stdin.quoted && /[$`]/.test(stdin.text)) deny(`${name} reads a heredoc script built at runtime (quote the delimiter: <<'EOF')`);
     return script(name, stdin.text, I, ctx);
@@ -979,6 +996,18 @@ function opts(args, shortVal = '', longVal = []) {
 const PUSH_DANGER = ['force', 'force-with-lease', 'force-if-includes', 'mirror', 'delete', 'prune'];
 const operandOf = (it) => it.kind === 'pos' || it.kind === 'dynpos';
 
+// A pathspec that reaches the whole tree or a whole folder: an empty one, ., .., a path ending in /, . or .., a
+// :(magic) one such as :/, :(top) or :!x, or a glob git expands itself (* ? [), quoted or not. A branch or tag name
+// can be none of these. An operand built at runtime may be any of them, so it counts as one too.
+const WHOLE_TREE = /^$|(^|\/)\.\.?$|\/$|^:|[*?[]/;
+const wholeTree = (it) => operandOf(it) && (it.kind === 'dynpos' || WHOLE_TREE.test(it.a.w));
+// --pathspec-from-file (or a prefix of it) reads the pathspecs from a file, or from stdin, which the guard cannot see
+const fromFile = (it) => it.kind === 'long' && 'pathspec-from-file'.startsWith(it.name);
+const DISCARD = 'a pathspec for the whole tree or a whole folder throws away its uncommitted changes for good, as a hard reset does; name the files';
+const UNSEEN_PATHS = 'pathspecs read from a file the guard cannot see, which could be the whole tree; name the files';
+// --continue and --skip finish a rebase that stopped on a conflict, such as an allowed git pull --rebase
+const REBASE_FINISH = new Set(['--continue', '--skip']);
+
 // git config: the keys a write may set (who commits, how paths print, which folders git trusts), and its options.
 const CONFIG_KEYS = new Set(['user.name', 'user.email', 'core.quotepath', 'safe.directory']);
 const CONFIG_WHOLE = ['rename-section', 'remove-section', 'edit'];
@@ -1024,7 +1053,8 @@ const RULES = {
     if (!dry) deny('git clean without -n: only the dry run is allowed, since clean.requireForce may be off');
   },
   rebase(args) {
-    if (!(args.length === 1 && !args[0].dyn && args[0].w === '--abort')) deny('git rebase rewrites history; only git rebase --abort is allowed');
+    if (args.length === 1 && !args[0].dyn && REBASE_FINISH.has(args[0].w)) return;
+    if (!(args.length === 1 && !args[0].dyn && args[0].w === '--abort')) deny('git rebase rewrites history; only git rebase --abort, --continue or --skip, alone, is allowed');
   },
   commit(args) {
     const values = ['message', 'file', 'reuse-message', 'reedit-message', 'author', 'date', 'template', 'cleanup', 'trailer', 'fixup', 'squash', 'pathspec-from-file'];
@@ -1046,7 +1076,29 @@ const RULES = {
       if (it.kind === 'short' && it.ch === 'B') deny('git checkout -B resets a branch that may hold work (git branch -f by another name)');
       if (it.kind === 'short' && it.ch === 'f') deny('git checkout -f throws away uncommitted changes');
       if (it.kind === 'long' && 'force'.startsWith(it.name)) deny('git checkout --force throws away uncommitted changes');
+      // with a pathspec, checkout overwrites the files it reaches from the index or a tree-ish, with no -f needed
+      if (wholeTree(it)) deny(`git checkout ${it.a.raw}: ${DISCARD}`);
+      if (fromFile(it)) deny(`git checkout ${it.a.raw}: ${UNSEEN_PATHS}`);
     }
+  },
+  restore(args) {
+    let staged = false;
+    let worktree = false;
+    let reach = null; // the first pathspec that reaches the whole tree, or that the guard cannot read
+    for (const it of opts(args, 's', ['source', 'conflict', 'pathspec-from-file'])) {
+      if (it.kind === 'dyn') deny(`git restore ${it.a.raw}: an argument built at runtime, which could be --worktree or the whole tree`);
+      // only --staged spelt out counts: an abbreviation of it is read as the default, the worktree
+      if ((it.kind === 'short' && it.ch === 'S') || (it.kind === 'long' && it.name === 'staged')) staged = true;
+      if ((it.kind === 'short' && it.ch === 'W') || (it.kind === 'long' && 'worktree'.startsWith(it.name))) worktree = true;
+      if (!reach && (wholeTree(it) || fromFile(it))) reach = it;
+    }
+    // restore writes the worktree by default, and with --staged only when --worktree is given as well
+    if (reach && (worktree || !staged)) deny(`git restore ${reach.a.raw}: ${fromFile(reach) ? UNSEEN_PATHS : DISCARD}`);
+  },
+  stash(args) {
+    const verb = args[0];
+    if (verb && verb.dyn) deny(`git stash ${verb.raw}: a subcommand built at runtime, which could be clear`);
+    if (verb && verb.w === 'clear') deny('git stash clear drops every stash entry at once and prints no sha to bring one back (git stash drop drops one)');
   },
   switch(args) {
     for (const it of opts(args, 'cC', ['create', 'force-create', 'orphan', 'conflict'])) {
