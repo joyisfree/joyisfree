@@ -1,4 +1,16 @@
 {
+  "permissions": {
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -f*)",
+      "Bash(git filter-branch*)"
+    ]
+  },
+  "worktree": {
+    "baseRef": "head"
+  },
   "hooks": {
     "SessionStart": [
       {
@@ -7,6 +19,18 @@
           {
             "type": "command",
             "command": "[ \"${CLAUDE_CODE_REMOTE:-}\" = \"true\" ] && [ -f \"$CLAUDE_PROJECT_DIR/claude-setup/skills/joy-boot/scripts/boot.mjs\" ] && node \"$CLAUDE_PROJECT_DIR/claude-setup/skills/joy-boot/scripts/boot.mjs\" 2>/dev/null || true",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.mjs\" || exit 2",
             "timeout": 5
           }
         ]

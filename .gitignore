@@ -15,6 +15,9 @@ galxe-desk/rulebook/pages/
 .DS_Store
 tmp/
 
+# Claude Code's worktrees for parallel builders: each is its own checkout of a branch, never part of this one
+.claude/worktrees/
+
 # The agency pilot's live rules and ledger hold customer-derived data (hashed, but pseudonymous, not anonymous).
 # Only the code and the templates are committed.
 agency/pilot/
