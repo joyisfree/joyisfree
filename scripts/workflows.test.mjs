@@ -230,7 +230,7 @@ test('fix-verify: a clean run verifies each target in one round, with labels fro
   assert.ok(f.includes('git merge-base --is-ancestor ' + BASE + ' HEAD'));
   assert.ok(f.includes('Never edit galxe-desk/scripts/mutate.mjs'));
   assert.ok(f.includes('never push'));
-  assert.ok(!f.includes('git merge --ff-only'));
+  assert.ok(!f.includes('git switch -c'));
   assert.ok(f.includes('keep the cap'));
 });
 
@@ -253,7 +253,10 @@ test('fix-verify: a verifier that fails twice sends the target back to the lead 
   assert.deepEqual(r.rounds.map((x) => x.verify.holds), [false, false]);
   // Round 2 starts from round 1's head and is handed round 1's problems.
   const second = byLabel(calls, 'fix:ab-test:r2')[0].prompt;
-  assert.ok(second.includes('git merge --ff-only ' + headOf('ab-test', 1)));
+  // A branch of its own at round 1's head, whatever commit its worktree was cut from: the lead may have committed to
+  // the shared branch meanwhile, and a fast-forward from there fails (fix-verify's first live run, 21 Nov 2026).
+  assert.ok(second.includes('git switch -c fix-verify/ab-test/r2-' + headOf('ab-test', 1).slice(0, 12) + ' ' + headOf('ab-test', 1)));
+  assert.ok(!second.includes('git merge --ff-only'));
   assert.ok(second.includes('the reproduction is still red at head'));
   assert.ok(second.includes('round 2 of at most 2'));
 });
@@ -356,7 +359,7 @@ test('fix-verify: a head that is not a full sha gets no verifier, and round 2 st
   assert.equal(statusOf(value, 'orders'), 'VERIFIED');
   assert.deepEqual(labels(byLabel(calls, 'verify:orders')), ['verify:orders:r2']);
   const second = byLabel(calls, 'fix:orders:r2')[0].prompt;
-  assert.ok(!second.includes('git merge --ff-only'));
+  assert.ok(!second.includes('git switch -c'));
   assert.ok(second.includes('no full 40-character head sha'));
   assert.ok(!calls.some((c) => c.prompt.includes('archive HEAD; rm')));
 });

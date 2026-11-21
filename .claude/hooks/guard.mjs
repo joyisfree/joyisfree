@@ -11,8 +11,9 @@
 // su -c, npm exec and the rest) has each later word naming git, rm, find, a shell or a wrapper judged as the command
 // it may run. It allows what the work needs: push -u, heredoc commits whose message mentions a force push,
 // pull --rebase and the rebase --continue or --skip that finishes one, merge --ff-only, cherry-pick, worktrees,
-// git archive | tar, rm -rf of a literal path inside a scratchpad, and an OS package manager (apt-get, brew, pip and
-// the rest), which reads its arguments as package names. It allows on purpose a checkout or restore of named files
+// git archive | tar, rm -rf of a literal path inside a scratchpad, and an OS package manager's install, remove or
+// upgrade (apt-get, brew, pip and the rest), which reads its arguments as package names; any other subcommand of one
+// (brew bundle exec) is judged like a program the guard does not know. It allows on purpose a checkout or restore of named files
 // (git checkout -- notes.md, git restore notes.md), git restore --staged . (the index only) and git stash drop (one
 // entry, whose sha it prints, so it can be brought back until gc).
 //
@@ -711,9 +712,20 @@ const WRAPPERS = {
 
 // The programs the guard has its own rules for, which read their arguments themselves.
 const KNOWN = new Set(['git', 'rm', 'find', 'cd', 'pushd', 'popd', 'source', '.', ...SHELLS]);
-// Programs that only read their arguments as data, which the backstop below leaves alone. An OS package manager reads
-// them as package names: apt-get install -y git curl installs git and curl, it does not run git curl.
-const DATA = new Set(['echo', 'printf', 'grep', 'egrep', 'fgrep', 'rg', 'cat', 'ls', 'head', 'tail', 'wc', 'man', 'which', 'type', 'test', '[', 'true', 'false', ':', 'apt-get', 'apt', 'brew', 'dnf', 'yum', 'apk', 'pacman', 'pip', 'pip3']);
+// Programs that only read their arguments as data, which the backstop below leaves alone.
+const DATA = new Set(['echo', 'printf', 'grep', 'egrep', 'fgrep', 'rg', 'cat', 'ls', 'head', 'tail', 'wc', 'man', 'which', 'type', 'test', '[', 'true', 'false', ':']);
+// An OS package manager reads the words after an install-type subcommand as package names: apt-get install -y git curl
+// installs git and curl, it does not run git curl. Any other subcommand may run what follows it (brew bundle exec -- …),
+// so it gets the backstop like any program the guard does not know. pacman names its subcommand as a flag (-S, -R, -Q).
+const INSTALLS = ['install', 'uninstall', 'reinstall', 'remove', 'purge', 'erase', 'autoremove', 'update', 'upgrade', 'info', 'show', 'search', 'list', 'freeze', 'download', 'add', 'del'];
+const PACKAGES = new Set(['apt-get', 'apt', 'brew', 'dnf', 'yum', 'apk', 'pip', 'pip3']);
+const installs = (name, args) => {
+  if (name === 'pacman') return !!args[0] && !args[0].dyn && /^-[SRQ][A-Za-z]*$/.test(args[0].w);
+  if (!PACKAGES.has(name)) return false;
+  const sub = args.find((a) => a.dyn || !a.w.startsWith('-'));
+  return !!sub && !sub.dyn && INSTALLS.includes(sub.w);
+};
+const dataOnly = (name, args) => DATA.has(name) || installs(name, args);
 // A later word of an unknown program that names one of these is judged as the command the program may run…
 const RUNS = new Set(['git', 'rm', 'find', ...SHELLS, ...Object.keys(WRAPPERS)]);
 // …and a literal argument whose first word is one of these is read as a script.
@@ -828,7 +840,7 @@ function judge(ws, I, ctx, piped, stdin, inner) {
   else if (direct && (name === 'cd' || name === 'pushd')) r = cd(args, I);
   else if (direct && name === 'popd') r = { S: [null], F: I };
   else if (name === 'gh') gh(args);
-  if (!inner && !KNOWN.has(name) && !DATA.has(name)) backstop(name, args, ctx, piped, stdin);
+  if (!inner && !KNOWN.has(name) && !dataOnly(name, args)) backstop(name, args, ctx, piped, stdin);
   // `! cmd` succeeds where cmd fails
   return neg ? { S: r.F, F: r.S, name } : { ...r, name };
 }
@@ -1277,7 +1289,7 @@ function find(args, I, ctx) {
     if (!inner.length) continue;
     const name = judge(inner, v.endsWith('dir') ? [null] : I, ctx, false).name;
     // rm deletes what find found, and so does a program the guard does not know that runs rm with it (flock … rm)
-    if (name === 'rm' || (!KNOWN.has(name) && !DATA.has(name) && inner.some((w) => !w.dyn && named(w.w) === 'rm'))) deletes = true;
+    if (name === 'rm' || (!KNOWN.has(name) && !dataOnly(name, inner.slice(1)) && inner.some((w) => !w.dyn && named(w.w) === 'rm'))) deletes = true;
   }
   if (deletes) for (const s of starts.length ? starts : [DOT]) operand(s, I, ctx, 'find that deletes, from');
 }

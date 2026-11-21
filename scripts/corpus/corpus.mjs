@@ -46,7 +46,10 @@ const PROFILE_URL = /\b(?:instagram|twitter|x|tiktok|facebook|threads|youtube|li
 // - a local number with no area code (5550 1234, 7946 0958, 555-0123), whose shape two codes side by side share;
 // - a country code and no + written with dashes or dots (61-491-570-156, 61.491.570.156), whose shape a SKU, a lot
 //   number or an IP address shares;
-// - a country code other than 1, 44, 61 or 64 written without its + (33 7700 900123).
+// - a country code other than 1, 44, 61 or 64 written without its + (33 7700 900123);
+// - rarer spellings, left out to keep the patterns narrow: a leading 1 run into a bracketed area code (1(201) 555-0123),
+//   a UK number keeping its trunk 0 in brackets with no + (44 (0)20 7946 0958, 44 (0) 20 7946 0958), and a country code
+//   with no + and the rest in pairs (44 7700 90 01 23).
 const PHONES = [
   { re: /(?<![\w+])\+\d[\d ().-]{6,}\d/g, min: 8, max: 15 },
   { re: /(?<![\w.+-])(?:\(0[1-9]\d{0,3}\)|0[1-9]\d{0,3})(?:[ .-]?\d{3,4}){1,3}(?![\w-]|\.\d)/g, min: 9, max: 11 },

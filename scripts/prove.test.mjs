@@ -1498,7 +1498,7 @@ test('loadCorpus refuses a North American number with one separator and a number
   // An ABN is eleven digits as 2 3 3 3, so one that begins 61 or 64 can have a phone's shape, as can a run of
   // quantities; README.md's rules say so, and clean/ uses the ATO's example ABN. This one fails the ABN check, so it is
   // nobody's.
-  for (const alarm of ['ABN 61 491 570 156', 'MOQ 61 200 400 600']) assert.equal(linePrivacy(alarm), 'a phone number', alarm);
+  for (const alarm of ['ABN 61 491 570 156', 'MOQ 61 200 400 600', 'PO 250 3456789', 'Order 300-4001234']) assert.equal(linePrivacy(alarm), 'a phone number', alarm);
 });
 
 // The phone shapes the loader passes by choice, each named in README.md's 'Not caught, by choice' list and in the
@@ -1519,6 +1519,10 @@ const PHONE_KNOWN_MISSES = [
   { text: '61-491-570-156', why: 'a country code and no + written with dashes: a SKU or a lot number has its shape' },
   { text: '61.491.570.156', why: 'a country code and no + written with dots: an IP address has its shape' },
   { text: '33 7700 900123', why: 'a country code other than 1, 44, 61 or 64 without its +' },
+  { text: '1(201) 555-0123', why: 'a leading 1 run into a bracketed area code: a rare spelling, left out to keep the patterns narrow' },
+  { text: '44 (0)20 7946 0958', why: 'a UK number keeping its trunk 0 in brackets, with no +' },
+  { text: '44 (0) 20 7946 0958', why: 'the same with a space after the brackets' },
+  { text: '44 7700 90 01 23', why: 'a country code and no + with the rest in pairs' },
 ];
 
 /** Whether `doc` holds `text` with no digit either side of it, so 61491570156 is not found inside 0061491570156. */

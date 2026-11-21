@@ -169,12 +169,12 @@ function fixPrompt(t, round, prevHead, prev) {
   return 'You are the fixer for target "' + t.key + '", round ' + round + ' of at most ' + MAX_ROUNDS + ', on the repository ' + REPO + '. You work in your own git worktree (your working directory), never in ' + REPO + ' itself: run git there, without -C. ' + DATA + RULES +
     'If your session says plan mode is on, change nothing and return at once with planMode true and blocked saying so (that round is not spent). ' +
     'First run `git merge-base --is-ancestor ' + BASE + ' HEAD`; if it fails, change nothing and return blocked with what you saw. ' +
-    (prevHead ? 'Then run `git merge --ff-only ' + prevHead + '` so you start from round ' + (round - 1) + '\'s work; if it fails, change nothing and return blocked. ' : '') +
+    (prevHead ? 'Then run `git switch -c fix-verify/' + t.key + '/r' + round + '-' + prevHead.slice(0, 12) + ' ' + prevHead + '` so you start from round ' + (round - 1) + '\'s work on a branch of your own, whatever commit your worktree was cut from (the shared branch may have moved since round 1); if it fails, change nothing and return blocked. ' : '') +
     'Edit ONLY your own files: ' + t.files.join(', ') + '. Never edit ' + MUTATE + ' (mutation lines are returned as data; the lead adds them), and never touch another repository. ' +
     'Red first: write the test, show it red against the code before your fix (in a scratch copy under ' + scratch + '/, never by leaving a real file broken), then make it green. Run `node --test ' + t.test + '` and `npm test` until both are green. ' +
     'In mutations return one [name, repo-relative path, from, to] per guard you added: `from` occurs exactly once in that file at your head, from differs from to, the name is unique and not already in ' + MUTATE + ', and each one turns ' + t.test + ' red; check every one in ' + scratch + '/mut/ by applying the exact swap and running the test. ' +
     'If the finding does not hold, change nothing for it and put it in refuted with the command and output that show it. ' +
-    'Commit everything on your worktree\'s branch with a plain message; never push, rebase, amend or force anything. Return the branch name and the full 40-character head sha. If you cannot go on, return blocked with the reason.\n\n' +
+    'Commit everything on the branch you are on with a plain message; never push, rebase, amend or force anything. Return the branch name and the full 40-character head sha. If you cannot go on, return blocked with the reason.\n\n' +
     targetText(t) +
     (prev ? '\n\nROUND ' + (round - 1) + ' WAS NOT VERIFIED. Fix every problem below, then return the whole fix again.\nPROBLEMS: ' + clip([...prev.checks, ...(prev.verify && Array.isArray(prev.verify.problems) ? prev.verify.problems : [])], 4000) + '\nVERIFIER EVIDENCE: ' + clip(prev.verify && prev.verify.evidence, 3000) : '')
 }

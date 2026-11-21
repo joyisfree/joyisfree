@@ -41,7 +41,10 @@ owner's data before it meets a verifier.
   - a local number with no area code (5550 1234, 7946 0958, 555-0123): two codes side by side have its shape;
   - a country code and no `+` written with dashes or dots (61-491-570-156, 61.491.570.156): a SKU, a lot number or
     an IP address has its shape;
-  - a country code other than 1, 44, 61 or 64 written without its `+` (33 7700 900123).
+  - a country code other than 1, 44, 61 or 64 written without its `+` (33 7700 900123);
+  - rarer spellings, left out to keep the patterns narrow: a leading 1 run into a bracketed area code
+    (1(201) 555-0123), a UK number keeping its trunk 0 in brackets with no `+` (44 (0)20 7946 0958,
+    44 (0) 20 7946 0958), and a country code with no `+` and the rest in pairs (44 7700 90 01 23).
 - `caught.mjs`: what the scanners must catch, built at runtime from pieces so no secret-shaped text sits in the
   repository: a 12-word seed in each spelling prove catches (one line, numbered, one word to a line, a comma list),
   an X session cookie, one case for every shape on prove's `SECRET_SHAPES` list, and a terminal step on a page Leif
@@ -56,6 +59,8 @@ owner's data before it meets a verifier.
   subdomain of them). No person's name, handle, phone number or address. This repository is public.
 - An ABN, where a file needs one, is the ATO's published example, 51 824 753 556: one that begins 61 or 64 can read
   as a phone number with its country code, as can a run of quantities (61 200 400 600), and the loader refuses it.
+  So does an order, PO or lot number written as 3 then 7 digits, each part beginning 2 to 9 (PO 250 3456789,
+  Order 300-4001234), which has the North American shape: write such a number another way (PO 2503456789).
 - Text formats only: .csv, .tsv, .md, .txt, .json, in UTF-8.
 - A file that must be caught (a seed, a cookie, a command) never sits here as a file: it is a recipe in `caught.mjs`,
   so the repository never holds secret-shaped text.
