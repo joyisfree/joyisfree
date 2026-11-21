@@ -1,18 +1,26 @@
 #!/usr/bin/env node
 // The destructive-command guard: a PreToolUse hook on every Bash call (.claude/settings.json). It reads the command
 // the way the shell will and blocks the few commands that lose work for good: a force, mirror or delete push in any
-// spelling, a hard reset, git clean -f, a history rewrite, and a recursive rm (or find -delete, or xargs rm) of
-// anything not strictly beneath /tmp or the temp folder. Unknown is never a pass: a path, a flag or a command name the
-// guard cannot read is refused with the reason, and so is a command it cannot tokenise. It allows what the work
-// needs: push -u, heredoc commits whose message mentions a force push, pull --rebase, merge --ff-only, cherry-pick,
-// worktrees, git archive | tar, and rm -rf of a literal path inside a scratchpad.
+// spelling, a hard reset, git clean -f, a history rewrite, a forced checkout or switch, an expired reflog, a pruned
+// object store, gh repo sync --force, a git config write or GIT_CONFIG* variable that could turn a push into a mirror
+// push, and a recursive rm (or find -delete, or xargs rm) of anything not strictly beneath /tmp or the temp folder.
+// Unknown is never a pass: a path, a flag or a command name the guard cannot read is refused with the reason, and so
+// is a command it cannot tokenise or cannot read within its deadline. A program the guard does not know (flock, watch,
+// su -c, npm exec and the rest) has each later word naming git, rm, find, a shell or a wrapper judged as the command
+// it may run. It allows what the work needs: push -u, heredoc commits whose message mentions a force push,
+// pull --rebase, merge --ff-only, cherry-pick, worktrees, git archive | tar, and rm -rf of a literal path inside a
+// scratchpad.
 //
 //   echo '{"tool_name":"Bash","tool_input":{"command":"git push -f"},"cwd":"/repo"}' | node .claude/hooks/guard.mjs
 //   # exit 0 allows; exit 2 blocks, with the reason on stderr, which Claude Code hands back to Claude
 //
-// The settings run it as `node … || exit 2`, so a crash blocks too. It is a seat belt, not a sandbox: a program that
-// deletes through its own code (node -e, python -c, a script file) is out of its reach, and so is git config that
-// runs commands (an alias in a config file is caught only because an unknown git subcommand is refused).
+// The settings run it as `node … || exit 2` with onFailure "block", so a crash or a timeout blocks too. It is a seat
+// belt, not a sandbox: a program that deletes through its own code (node -e, python -c, a script file) is out of its
+// reach, and so is git config that runs commands (an alias in a config file is caught only because an unknown git
+// subcommand is refused). Git's command-valued variables and options are out of its reach too: GIT_EDITOR,
+// GIT_SSH_COMMAND and the like, git -c core.pager, submodule foreach, bisect run, --upload-pack, archive --exec,
+// grep -O and difftool -x. Each of these classes, and node -e, python -c and script files, is written down with a
+// realistic example the guard still allows in KNOWN_MISSES in guard.test.mjs, so a later fix knows which case to move.
 
 import { readFileSync, realpathSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
@@ -26,6 +34,13 @@ const deny = (why) => {
   throw new Denied(why);
 };
 
+// How long decide() may spend on one command: past it the command is refused, well inside the hook's own timeout.
+const DEADLINE_MS = 1500;
+let deadline = Infinity;
+const late = () => {
+  if (Date.now() > deadline) deny('the command is too long for the guard to read in time');
+};
+
 // ------------------------------------------------------------------------------------------------------ the tokeniser
 
 const SEPARATORS = ' \t\n;&|()<>';
@@ -34,6 +49,8 @@ const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'mksh', 'ash', 'fish
 const RESERVED = new Set(['!', '{', '}', 'if', 'then', 'else', 'elif', 'fi', 'do', 'done', 'while', 'until', 'esac']);
 
 const blank = () => ({ w: '', dyn: false, dynAt: -1, splits: false, quoted: false, raw: '' });
+/** A word that is exactly this reserved word: unquoted, and known before the shell runs. */
+const bare = (w, v) => !w.dyn && !w.quoted && w.w === v;
 
 /** Part of the word from here on is only known when the shell runs; `splits` when it is unquoted, so it can split. */
 function mark(w, splits) {
@@ -50,13 +67,21 @@ function mark(w, splits) {
  * of it is only known when the shell runs (an expansion, a substitution, a glob, a brace or a ~), `dynAt` is where that
  * part starts in `w`, and `splits` says it is unquoted, so it can become several words. The commands inside a $( ), a
  * backtick, a <( ), a `bash -c` or `sh -c` script and an eval are read too, and come first as a ( ) group. Heredoc
- * bodies are data (a shell that reads one as its script gets it as `stdin` on its first word). Redirections are
- * dropped, after their targets are read for substitutions. Throws when the command is unbalanced.
+ * bodies are data (a shell that reads one as its script gets it as `stdin` on its first word), and so are a case's
+ * patterns. Redirections are dropped, after their targets are read for substitutions. Throws when the command is
+ * unbalanced.
  */
 export function words(cmd) {
   if (typeof cmd !== 'string') throw new Error('the command is not text');
   return seq({ s: cmd, i: 0 }, false);
 }
+
+// (( and $[ are arithmetic, where << is a shift and not a heredoc. The guard does not read arithmetic, so it refuses
+// a command that holds either together with a <<.
+const pair = (p, k) => {
+  p[k] = true;
+  if (p.arith && p.shift) throw new Error('arithmetic with << is not read');
+};
 
 function seq(p, sub) {
   const s = p.s;
@@ -64,47 +89,90 @@ function seq(p, sub) {
   let start = 0; // where the simple command being read begins in `out`: a substitution's group goes in before it
   let depth = 0;
   let pending = [];
-  let cmd = { words: [], herestring: null };
-  const group = (toks) => {
-    out.splice(start, 0, { op: '(' }, ...toks, { op: ')' });
+  const fresh = () => ({ words: [], herestring: null, procIn: false, lead: true, caseAt: -1 });
+  let cmd = fresh();
+  // the case statements open here: 'pattern' while an arm's patterns are read, up to its ), 'body' for its commands
+  const cases = [];
+  const group = (toks, reads) => {
+    out.splice(start, 0, reads ? { op: '(', reads } : { op: '(' }, ...toks, { op: ')' });
     start += toks.length + 2;
   };
   const close = () => {
-    if (cmd.herestring && cmd.words.length) cmd.words[0].stdin = { word: cmd.herestring };
+    if (cmd.words.length) {
+      if (cmd.procIn) cmd.words[0].procIn = true;
+      if (cmd.herestring) cmd.words[0].stdin = { word: cmd.herestring };
+    }
     scripts(cmd.words, group);
   };
   const op = (o) => {
     close();
     out.push({ op: o });
     start = out.length;
-    cmd = { words: [], herestring: null };
+    cmd = fresh();
+  };
+  const push = (w) => {
+    // `case WORD in`: the case word comes first in its command, after reserved words only
+    if (cmd.lead && bare(w, 'case')) cmd.caseAt = cmd.words.length;
+    out.push(w);
+    cmd.words.push(w);
+    cmd.lead = cmd.lead && !w.dyn && RESERVED.has(w.w);
   };
   const target = () => {
     while (s[p.i] === ' ' || s[p.i] === '\t') p.i++;
+    // < <(cmd): the redirection reads a process substitution, and its command runs
+    if ((s[p.i] === '<' || s[p.i] === '>') && s[p.i + 1] === '(') return procsub(p, group);
     if (p.i >= s.length || SEPARATORS.includes(s[p.i])) throw new Error('a redirection with nothing to redirect to');
     return word(p, group);
   };
+  const newline = () => {
+    if (pending.length) heredocs(p, pending, group);
+    pending = [];
+  };
   for (;;) {
+    late();
     if (p.i >= s.length) {
       if (sub) throw new Error('a $( or <( with no )');
       if (depth) throw new Error('a ( with no )');
+      if (cases.length) throw new Error('a case with no esac');
       if (pending.length) throw new Error(`the heredoc ${pending[0].delim} never ends`);
       close();
       return out;
     }
     const c = s[p.i];
     const n = s[p.i + 1];
+    if (cases[cases.length - 1] === 'pattern' && c !== '#') {
+      // a case arm's patterns, up to the ) that starts its commands: words, not commands, but a substitution runs
+      if (c === ' ' || c === '\t' || c === '|' || c === '(') p.i++;
+      else if (c === '\\' && n === '\n') p.i += 2;
+      else if (c === '\n') {
+        p.i++;
+        newline();
+      } else if (c === ')') {
+        p.i++;
+        cases[cases.length - 1] = 'body';
+      } else if (SEPARATORS.includes(c)) throw new Error(`a ${c} in a case pattern`);
+      else {
+        const w = word(p, group);
+        if (bare(w, 'esac')) {
+          cases.pop();
+          push(w);
+        }
+      }
+      continue;
+    }
     if (c === ' ' || c === '\t') p.i++;
     else if (c === '\\' && n === '\n') p.i += 2;
     else if (c === '#') while (p.i < s.length && s[p.i] !== '\n') p.i++;
     else if (c === '\n') {
       p.i++;
       op('\n');
-      if (pending.length) heredocs(p, pending, group);
-      pending = [];
+      newline();
     } else if (c === ';') {
+      // ;; ;& and ;;& end a case arm: its next patterns follow
+      const arm = n === ';' || n === '&';
       p.i += n === ';' ? (s[p.i + 2] === '&' ? 3 : 2) : n === '&' ? 2 : 1;
       op(';');
+      if (arm && cases[cases.length - 1] === 'body') cases[cases.length - 1] = 'pattern';
     } else if (c === '&' && n === '&') {
       p.i += 2;
       op('&&');
@@ -121,6 +189,7 @@ function seq(p, sub) {
       p.i += n === '&' ? 2 : 1;
       op('|');
     } else if (c === '(') {
+      if (n === '(') pair(p, 'arith');
       p.i++;
       op('(');
       depth++;
@@ -130,15 +199,14 @@ function seq(p, sub) {
       depth--;
     } else if (c === ')' && sub) {
       p.i++;
+      if (cases.length) throw new Error('a case with no esac before the )');
       if (pending.length) throw new Error(`the heredoc ${pending[0].delim} never ends`);
       close();
       return out;
     } else if (c === ')') throw new Error('a ) with no (');
-    else if ((c === '<' || c === '>') && n === '(') {
-      const w = procsub(p, group);
-      out.push(w);
-      cmd.words.push(w);
-    } else if (c === '<' && n === '<') {
+    else if ((c === '<' || c === '>') && n === '(') push(procsub(p, group));
+    else if (c === '<' && n === '<') {
+      pair(p, 'shift');
       p.i += 2;
       if (s[p.i] === '<') {
         p.i++;
@@ -152,13 +220,19 @@ function seq(p, sub) {
     } else if (c === '<' || c === '>') {
       p.i++;
       if (s[p.i] === '>' || s[p.i] === '&' || s[p.i] === '|') p.i++;
-      target();
+      // a < from a <( ) is input the guard cannot read
+      if (target().proc && c === '<') cmd.procIn = true;
     } else {
       const w = word(p, group);
-      // 2>&1: digits written against a redirection are its file descriptor, not a word
-      if (!/^\d+$/.test(w.raw) || (s[p.i] !== '<' && s[p.i] !== '>')) {
-        out.push(w);
-        cmd.words.push(w);
+      // 2>&1 and {fd}>file: the word written against a redirection names its file descriptor; it is not a word
+      if (/^(\d+|\{[A-Za-z_]\w*\})$/.test(w.raw) && (s[p.i] === '<' || s[p.i] === '>')) continue;
+      // esac at the start of a command ends the case whose commands are being read
+      if (cmd.lead && bare(w, 'esac') && cases[cases.length - 1] === 'body') cases.pop();
+      push(w);
+      if (cmd.caseAt >= 0 && cmd.words.length === cmd.caseAt + 3) {
+        if (!bare(w, 'in')) throw new Error('a case with no in');
+        op(';');
+        cases.push('pattern');
       }
     }
   }
@@ -186,18 +260,33 @@ function heredocs(p, list, group) {
   }
 }
 
-const later = (s, i, ch) => {
-  for (let k = i + 1; k < s.length && !SEPARATORS.includes(s[k]); k++) if (s[k] === ch) return true;
-  return false;
+/** Where the next separator, ], }, comma and .. are from each place in the text, so a run of [ or { is read once. */
+function marks(p) {
+  if (p.marks) return p.marks;
+  const s = p.s;
+  const n = s.length;
+  const m = { sep: new Int32Array(n + 2), close: new Int32Array(n + 2), brace: new Int32Array(n + 2), comma: new Int32Array(n + 2), dots: new Int32Array(n + 2) };
+  for (const a of Object.values(m)) a.fill(n, n);
+  for (let k = n - 1; k >= 0; k--) {
+    m.sep[k] = SEPARATORS.includes(s[k]) ? k : m.sep[k + 1];
+    m.close[k] = s[k] === ']' ? k : m.close[k + 1];
+    m.brace[k] = s[k] === '}' ? k : m.brace[k + 1];
+    m.comma[k] = s[k] === ',' ? k : m.comma[k + 1];
+    m.dots[k] = s[k] === '.' && s[k + 1] === '.' ? k : m.dots[k + 1];
+  }
+  p.marks = m;
+  return m;
+}
+// [ starts a glob when a ] follows it in the same word
+const later = (p, i) => {
+  const m = marks(p);
+  return m.close[i + 1] < m.sep[i + 1];
 };
 // {a,b} and {1..3} expand; {} and {x} stay as they are
-const braces = (s, i) => {
-  let list = false;
-  for (let k = i + 1; k < s.length && !SEPARATORS.includes(s[k]); k++) {
-    if (s[k] === '}') return list;
-    if (s[k] === ',' || (s[k] === '.' && s[k + 1] === '.')) list = true;
-  }
-  return false;
+const braces = (p, i) => {
+  const m = marks(p);
+  const b = m.brace[i + 1];
+  return b < m.sep[i + 1] && (m.comma[i + 1] < b || m.dots[i + 1] < b);
 };
 
 function word(p, group) {
@@ -205,6 +294,7 @@ function word(p, group) {
   const begin = p.i;
   const w = blank();
   while (p.i < s.length && !SEPARATORS.includes(s[p.i])) {
+    late();
     const c = s[p.i];
     if (c === '\\') {
       if (p.i + 1 >= s.length) throw new Error('a \\ with nothing after it');
@@ -227,8 +317,8 @@ function word(p, group) {
     else if (c === '$') dollar(p, w, group, true);
     else if (c === '`') backtick(p, w, group, true, false);
     else {
-      const glob = c === '*' || c === '?' || (c === '[' && later(s, p.i, ']'));
-      if (glob || (c === '{' && braces(s, p.i)) || (c === '~' && p.i === begin)) mark(w, true);
+      const glob = c === '*' || c === '?' || (c === '[' && later(p, p.i));
+      if (glob || (c === '{' && braces(p, p.i)) || (c === '~' && p.i === begin)) mark(w, true);
       w.w += c;
       p.i++;
     }
@@ -273,6 +363,8 @@ function dollar(p, w, group, unquoted) {
   const s = p.s;
   const at = p.i;
   const n = s[p.i + 1];
+  // $[ … ] is the old spelling of $(( … )), but it is read as a lone $ followed by words
+  if (n === '[') pair(p, 'arith');
   if (n === '(' && s[p.i + 2] === '(') arith(p, group);
   else if (n === '(') {
     p.i += 2;
@@ -388,11 +480,13 @@ function procsub(p, group) {
   const at = p.i;
   p.i += 2;
   const inner = seq(p, true);
-  group(inner);
+  // a >( ) reads what its command writes into it, the way a pipe does
+  group(inner, p.s[at] === '>');
   const w = blank();
   mark(w, false);
   w.w = p.s.slice(at, p.i);
   w.raw = w.w;
+  w.proc = true;
   return w;
 }
 
@@ -437,11 +531,14 @@ function scripts(ws, group) {
   if (k < ws.length && !ws[k].dyn && (ws[k].w === 'command' || ws[k].w === 'builtin')) k++;
   const name = k < ws.length && !ws[k].dyn ? ws[k].w : '';
   if (name === 'eval') {
-    const rest = ws.slice(k + 1);
+    let rest = ws.slice(k + 1);
+    // eval -- runs the words after the --
+    if (rest[0] && !rest[0].dyn && rest[0].w === '--') rest = rest.slice(1);
     if (rest.some((w) => w.dyn)) throw new Error('eval of text built at runtime');
     group(words(rest.map((w) => w.w).join(' ')));
   }
-  const action = ws[k + 1];
+  // trap -- ACTION SIGNAL: the action comes after the --
+  const action = ws[k + 1] && !ws[k + 1].dyn && ws[k + 1].w === '--' ? ws[k + 2] : ws[k + 1];
   if (name === 'trap' && action && !/^-[lp]$/.test(action.w)) {
     if (action.dyn) throw new Error('trap of a command built at runtime');
     group(words(action.w));
@@ -452,8 +549,13 @@ function scripts(ws, group) {
 
 // The shell's grammar, read for what each command runs and from which folder. A folder is tracked as the set of
 // places the shell can be in: `cd /x && rm -rf y` removes /x/y, but `cd /x; rm -rf y` may remove ./y (the cd can
-// fail), so after a ; both count. A subshell's cd stays inside it; null is a folder the guard cannot follow.
-const union = (...sets) => [...new Set(sets.flat())];
+// fail), so after a ; both count. A subshell's cd stays inside it; null is a folder the guard cannot follow, and past
+// 16 places the guard stops following: the set becomes [null], so a relative path is unknown and it costs nothing.
+const FOLDERS = 16;
+const union = (...sets) => {
+  const u = [...new Set(sets.flat())];
+  return u.length > FOLDERS ? [null] : u;
+};
 const LOOPS = new Set(['for', 'while', 'until', 'select', 'function']);
 const hasLoops = (toks) =>
   toks.some((t, k) => (!t.op && !t.dyn && LOOPS.has(t.w)) || (t.op === '(' && toks[k + 1] && toks[k + 1].op === ')'));
@@ -467,19 +569,27 @@ function run(toks, I, ctx) {
 
 function list(t, i, I, ctx) {
   let cur = I;
+  // the last and-or list's folders on success (S) and on failure (F): an if's condition, when a then follows it
+  let S = I;
+  let F = I;
+  const ifs = [];
   for (;;) {
+    late();
     while (i < t.length && (t[i].op === ';' || t[i].op === '\n' || t[i].op === '&')) i++;
-    if (i >= t.length || t[i].op === ')') return { i, out: cur };
+    if (i >= t.length || t[i].op === ')') {
+      if (ifs.length) throw new Error('an if with no fi');
+      return { i, out: cur };
+    }
     const from = i;
-    let r = pipeline(t, i, cur, ctx);
-    let S = r.S;
-    let F = r.F;
+    let r = pipeline(t, i, branch(t, i, cur, S, F, ifs), ctx);
+    S = r.S;
+    F = r.F;
     i = r.i;
     while (i < t.length && (t[i].op === '&&' || t[i].op === '||')) {
       const and = t[i].op === '&&';
       i++;
       while (i < t.length && t[i].op === '\n') i++;
-      r = pipeline(t, i, and ? S : F, ctx);
+      r = pipeline(t, i, branch(t, i, and ? S : F, S, F, ifs), ctx);
       if (and) {
         S = r.S;
         F = union(F, r.F);
@@ -492,6 +602,46 @@ function list(t, i, I, ctx) {
     cur = union(S, F);
     if (i === from) throw new Error('the guard could not read past a separator');
   }
+}
+
+/**
+ * if, then, elif, else and fi at the start of a command: `then` starts where its condition succeeded (S), `elif` and
+ * `else` where it failed (F), and after `fi` the shell can be where it entered the if, where any branch left it, or,
+ * with no else, where the last condition failed. Returns the folders the command starts from.
+ */
+function branch(t, i, cur, S, F, ifs) {
+  // a command's substitutions come first, as ( ) groups; its reserved words follow them
+  while (t[i] && t[i].op === '(') {
+    let d = 0;
+    do {
+      if (t[i].op === '(') d++;
+      else if (t[i].op === ')') d--;
+      i++;
+    } while (t[i] && d);
+  }
+  for (; t[i] && !t[i].op && !t[i].dyn && RESERVED.has(t[i].w); i++) {
+    const v = t[i].w;
+    const top = ifs[ifs.length - 1];
+    if (v === 'if') ifs.push({ entry: cur, ends: [], S: null, F: null, otherwise: false });
+    if (v !== 'then' && v !== 'elif' && v !== 'else' && v !== 'fi') continue;
+    if (!top) throw new Error(`${v} with no if before it`);
+    if (v === 'then') {
+      top.S = S;
+      top.F = F;
+      cur = S;
+      continue;
+    }
+    if (!top.S) throw new Error(`${v} with no then before it`);
+    top.ends.push(cur);
+    if (v === 'fi') {
+      ifs.pop();
+      cur = union(top.entry, ...top.ends, top.otherwise ? [] : top.F);
+    } else {
+      cur = top.F;
+      if (v === 'else') top.otherwise = true;
+    }
+  }
+  return cur;
 }
 
 function pipeline(t, i, I, ctx) {
@@ -508,16 +658,18 @@ function pipeline(t, i, I, ctx) {
 }
 
 function command(t, i, I, ctx, piped) {
-  // a subshell's cd stays inside it, so what follows starts from I again; in a pipeline it reads the pipe throughout
+  // a subshell's cd stays inside it, so what follows starts from I again; in a pipeline it reads the pipe throughout,
+  // and so does a >( ), which reads what its command writes into it
   while (t[i] && t[i].op === '(') {
-    i = list(t, i + 1, I, piped ? { ...ctx, piped: true } : ctx).i;
+    i = list(t, i + 1, I, piped || t[i].reads ? { ...ctx, piped: true } : ctx).i;
     if (!t[i] || t[i].op !== ')') throw new Error('a ( with no )');
     i++;
   }
   const ws = [];
   while (i < t.length && !t[i].op) ws.push(t[i++]);
   if (!ws.length) return { S: I, F: I, i };
-  const r = judge(ws, I, ctx, piped);
+  // a < from a <( ) is input the guard cannot read, and it wins over a heredoc or a here-string
+  const r = judge(ws, I, ctx, piped, ws[0].procIn ? { procsub: true } : ws[0].stdin);
   return { S: r.S, F: r.F, i };
 }
 
@@ -543,6 +695,16 @@ const WRAPPERS = {
   builtin: { direct: true },
   time: { direct: true },
 };
+
+// The programs the guard has its own rules for, which read their arguments themselves.
+const KNOWN = new Set(['git', 'rm', 'find', 'cd', 'pushd', 'popd', 'source', '.', ...SHELLS]);
+// Programs that only read their arguments as data, which the backstop below leaves alone.
+const DATA = new Set(['echo', 'printf', 'grep', 'egrep', 'fgrep', 'rg', 'cat', 'ls', 'head', 'tail', 'wc', 'man', 'which', 'type', 'test', '[', 'true', 'false', ':']);
+// A later word of an unknown program that names one of these is judged as the command the program may run…
+const RUNS = new Set(['git', 'rm', 'find', ...SHELLS, ...Object.keys(WRAPPERS)]);
+// …and a literal argument whose first word is one of these is read as a script.
+const STARTS = new Set([...RUNS, 'cd', 'pushd']);
+const CANDIDATES = 16;
 
 function wrapper(name, spec, ws, j, st) {
   let skip = spec.skip || 0;
@@ -599,17 +761,27 @@ function commandName(w) {
 const UNSEEN = { w: '', dyn: true, dynAt: 0, splits: true, quoted: false, raw: '<what xargs reads>' };
 // The head of a for, select or case runs nothing itself; its body starts after the next separator.
 const NOOPS = new Set(['for', 'select', 'case']);
+// A GIT_CONFIG* variable sets git config the guard cannot see for every git after it: a mirror push, a hook, an alias.
+const GIT_CONFIG_SET = /^GIT_CONFIG\w*(\[[^\]]*\])?\+?=/;
 
-/** One simple command. Returns where the shell can be after it succeeds (S) and after it fails (F), and its name. */
-function judge(ws, I, ctx, piped) {
+/**
+ * One simple command. Returns where the shell can be after it succeeds (S) and after it fails (F), and its name.
+ * `stdin` is what it reads when that is known (a heredoc, a here-string or a <( )); `inner` is set when the backstop
+ * judges a command an unknown program may run, whose later words the backstop is already judging.
+ */
+function judge(ws, I, ctx, piped, stdin, inner) {
+  late();
+  for (const w of ws) if (GIT_CONFIG_SET.test(w.dyn ? w.w.slice(0, w.dynAt) : w.w)) deny(`${w.raw}: a GIT_CONFIG* variable sets git config the guard cannot see, such as a mirror push`);
   const st = { chdir: false, tail: false };
   let direct = true;
+  let neg = false;
   let k = 0;
   for (;;) {
     while (k < ws.length && assignment(ws[k])) k++;
     if (k >= ws.length) return { S: I, F: I, name: '' };
     const head = commandName(ws[k]);
     if (RESERVED.has(head)) {
+      if (head === '!') neg = !neg;
       k++;
       continue;
     }
@@ -633,13 +805,54 @@ function judge(ws, I, ctx, piped) {
   const args = ws.slice(k + 1);
   if (st.tail) args.push(UNSEEN);
   const at = st.chdir ? [null] : I;
+  let r = { S: I, F: I };
   if (name === 'git') git(args);
   else if (name === 'rm') rm(args, at, ctx);
   else if (name === 'find') find(args, at, ctx);
-  else if (SHELLS.has(name)) shell(name, args, ws[0].stdin, at, ctx, piped);
-  else if (direct && (name === 'cd' || name === 'pushd')) return { ...cd(args, I), name };
-  else if (direct && name === 'popd') return { S: [null], F: I, name };
-  return { S: I, F: I, name };
+  else if (SHELLS.has(name)) shell(name, args, stdin, at, ctx, piped);
+  else if (name === 'source' || name === '.') source(name, args, stdin);
+  else if (direct && (name === 'cd' || name === 'pushd')) r = cd(args, I);
+  else if (direct && name === 'popd') r = { S: [null], F: I };
+  else if (name === 'gh') gh(args);
+  if (!inner && !KNOWN.has(name) && !DATA.has(name)) backstop(name, args, ctx, piped, stdin);
+  // `! cmd` succeeds where cmd fails
+  return neg ? { S: r.F, F: r.S, name } : { ...r, name };
+}
+
+/** The first word of a text after its NAME=value assignments, split on whitespace only. */
+function firstWord(text) {
+  let i = 0;
+  for (;;) {
+    while (i < text.length && /\s/.test(text[i])) i++;
+    let e = i;
+    while (e < text.length && !/\s/.test(text[e])) e++;
+    const t = text.slice(i, e);
+    if (!/^[A-Za-z_]\w*=/.test(t)) return t;
+    i = e;
+  }
+}
+// a program by its name, or by an absolute path to it
+const named = (v) => (v.startsWith('/') ? basename(v) : v);
+
+/**
+ * The backstop for a program the guard does not know, which may run the command it is given: flock, ionice, taskset,
+ * strace, watch, npm exec, ssh, su -c, script -c and the rest. Each later literal word naming a program in RUNS is
+ * judged as the command from that word on, and a literal argument whose first word is in STARTS (`su -c 'rm -rf x'`)
+ * is read as a script, both in a folder the guard cannot follow and with the program's own input. Past 16 of them in
+ * one command the guard refuses rather than judge them all.
+ */
+function backstop(name, args, ctx, piped, stdin) {
+  let n = 0;
+  for (let j = 0; j < args.length; j++) {
+    const a = args[j];
+    if (a.dyn) continue;
+    const spaced = /\s/.test(a.w);
+    const runs = !spaced && RUNS.has(named(a.w));
+    if (!runs && !(spaced && STARTS.has(named(firstWord(a.w))))) continue;
+    if (++n > CANDIDATES) deny(`${name}: more than ${CANDIDATES} words that name a command it may run, too many to judge`);
+    if (runs) judge(args.slice(j), [null], ctx, piped, stdin, true);
+    else script(name, a.w, [null], ctx);
+  }
 }
 
 function cd(args, I) {
@@ -654,6 +867,7 @@ function cd(args, I) {
 function shell(name, args, stdin, I, ctx, piped) {
   const r = shellArgs(args, 0);
   if (r.dyn) deny(`${name} with an argument built at runtime, so the guard cannot tell what it runs`);
+  if (stdin && stdin.procsub) deny(`${name} reads its input from a <( ), which the guard cannot read`);
   if (r.c || r.at < args.length) return; // the -c script was read with the words; a script file is out of reach
   if (stdin && stdin.text !== undefined) {
     if (!stdin.quoted && /[$`]/.test(stdin.text)) deny(`${name} reads a heredoc script built at runtime (quote the delimiter: <<'EOF')`);
@@ -674,6 +888,27 @@ function script(name, text, I, ctx) {
     deny(`${name} reads a script the guard cannot read (${e.message})`);
   }
   run(toks, I, ctx);
+}
+
+// The names under which `source` or `.` reads its script from stdin.
+const STDIN = new Set(['-', '/dev/stdin', '/dev/fd/0', '/proc/self/fd/0']);
+
+/** source or . runs a script in this shell: one from a <( ) or from stdin is beyond what the guard reads, so it is refused. */
+function source(name, args, stdin) {
+  if (stdin && stdin.procsub) deny(`${name} with its input from a <( ), which the guard cannot read`);
+  const a = args[0] && !args[0].dyn && args[0].w === '--' ? args[1] : args[0];
+  if (!a) return;
+  if (a.proc) deny(`${name} ${a.raw}: a script from a process substitution, which the guard cannot read`);
+  if (!a.dyn && STDIN.has(a.w.startsWith('/') ? resolvePath(a.w) : a.w)) deny(`${name} ${a.raw}: a script read from stdin, which the guard does not read`);
+}
+
+/** gh repo sync --force resets the branch to its source, throwing away the branch's own commits. */
+function gh(args) {
+  if (!(args.length >= 2 && !args[0].dyn && !args[1].dyn && args[0].w === 'repo' && args[1].w === 'sync')) return;
+  for (const a of args.slice(2)) {
+    if (a.dyn) deny(`gh repo sync ${a.raw}: an argument built at runtime, which could be --force`);
+    if (a.w === '--force' || a.w.startsWith('--force=')) deny("gh repo sync --force throws away the branch's own commits");
+  }
 }
 
 // ------------------------------------------------------------------------------------------------------------- git
@@ -744,6 +979,16 @@ function opts(args, shortVal = '', longVal = []) {
 const PUSH_DANGER = ['force', 'force-with-lease', 'force-if-includes', 'mirror', 'delete', 'prune'];
 const operandOf = (it) => it.kind === 'pos' || it.kind === 'dynpos';
 
+// git config: the keys a write may set (who commits, how paths print, which folders git trusts), and its options.
+const CONFIG_KEYS = new Set(['user.name', 'user.email', 'core.quotepath', 'safe.directory']);
+const CONFIG_WHOLE = ['rename-section', 'remove-section', 'edit'];
+const CONFIG_WRITE = ['add', 'replace-all', 'unset', 'unset-all'];
+const CONFIG_READ = ['get', 'get-all', 'get-regexp', 'get-urlmatch', 'get-color', 'get-colorbool', 'list'];
+const CONFIG_FLAGS = ['global', 'system', 'local', 'worktree', 'file', 'blob', 'type', 'no-type', 'bool', 'int', 'bool-or-int', 'bool-or-str', 'path', 'expiry-date', 'null', 'name-only', 'show-origin', 'show-scope', 'show-names', 'includes', 'no-includes', 'default', 'fixed-value', 'comment', 'value', 'all', 'regexp', 'url', 'append'];
+const CONFIG_SHORT = { e: 'edit', l: 'list', f: 'file', z: 'null' };
+// git 2.46 and later: git config get, list, set, unset, rename-section, remove-section and edit
+const CONFIG_VERBS = new Map([['get', 'read'], ['list', 'read'], ['set', 'write'], ['unset', 'write'], ['rename-section', 'whole'], ['remove-section', 'whole'], ['edit', 'whole']]);
+
 const RULES = {
   push(args, config) {
     for (const c of config) {
@@ -794,6 +1039,72 @@ const RULES = {
       if (it.kind === 'short' && 'fMC'.includes(it.ch)) deny(`git branch -${it.ch} moves or overwrites a branch by force`);
       if (it.kind === 'long' && 'force'.startsWith(it.name)) deny('git branch --force moves a branch by force');
     }
+  },
+  checkout(args) {
+    for (const it of opts(args, 'bB', ['orphan', 'conflict', 'pathspec-from-file'])) {
+      if (it.kind === 'dyn') deny(`git checkout ${it.a.raw}: an argument built at runtime, which could be -f or -B`);
+      if (it.kind === 'short' && it.ch === 'B') deny('git checkout -B resets a branch that may hold work (git branch -f by another name)');
+      if (it.kind === 'short' && it.ch === 'f') deny('git checkout -f throws away uncommitted changes');
+      if (it.kind === 'long' && 'force'.startsWith(it.name)) deny('git checkout --force throws away uncommitted changes');
+    }
+  },
+  switch(args) {
+    for (const it of opts(args, 'cC', ['create', 'force-create', 'orphan', 'conflict'])) {
+      if (it.kind === 'dyn') deny(`git switch ${it.a.raw}: an argument built at runtime, which could be -f or -C`);
+      if (it.kind === 'short' && it.ch === 'C') deny('git switch -C resets a branch that may hold work (git branch -f by another name)');
+      if (it.kind === 'short' && it.ch === 'f') deny('git switch -f throws away uncommitted changes');
+      // --force is a prefix of --force-create, so one rule refuses both
+      if (it.kind === 'long' && 'force-create'.startsWith(it.name)) deny(`git switch --${it.name} throws away uncommitted changes or resets a branch by force`);
+      if (it.kind === 'long' && 'discard-changes'.startsWith(it.name)) deny('git switch --discard-changes throws away uncommitted changes');
+    }
+  },
+  reflog(args) {
+    const sub = args[0];
+    if (sub && sub.dyn) deny(`git reflog ${sub.raw}: a subcommand built at runtime, which could be expire or delete`);
+    if (sub && sub.w === 'expire') deny('git reflog expire drops the record that lets lost commits be found again');
+    if (sub && sub.w === 'delete') deny('git reflog delete drops the record that lets lost commits be found again');
+  },
+  gc(args) {
+    for (const it of opts(args)) {
+      if (it.kind === 'dyn') deny(`git gc ${it.a.raw}: an argument built at runtime, which could be --prune=now`);
+      if (it.kind === 'long' && 'prune'.startsWith(it.name)) deny('git gc --prune deletes unreachable objects, which may be the only copy of lost work');
+    }
+  },
+  prune(args) {
+    for (const it of opts(args, '', ['expire'])) {
+      if (it.kind === 'dyn') deny(`git prune ${it.a.raw}: an argument built at runtime`);
+      if ((it.kind === 'short' && it.ch === 'n') || (it.kind === 'long' && 'dry-run'.startsWith(it.name))) return;
+    }
+    deny('git prune deletes unreachable objects for good; only git prune -n is allowed');
+  },
+  config(args) {
+    let write = false;
+    let read = false;
+    let whole = false; // a write of a whole section or of the file: there is no one key to check
+    const ops = [];
+    for (const it of opts(args, 'f', ['file', 'blob', 'type', 'default', 'comment', 'value', 'url'])) {
+      if (it.kind === 'dyn') deny(`git config ${it.a.raw}: an argument built at runtime, which could make it a write`);
+      if (operandOf(it)) {
+        ops.push(it);
+        continue;
+      }
+      const name = it.kind === 'long' ? it.name : CONFIG_SHORT[it.ch] || `-${it.ch}`;
+      if (CONFIG_WHOLE.some((o) => o.startsWith(name))) whole = write = true;
+      else if (CONFIG_WRITE.some((o) => o.startsWith(name))) write = true;
+      else if (CONFIG_READ.some((o) => o.startsWith(name))) read = true;
+      else if (!CONFIG_FLAGS.some((o) => o.startsWith(name))) deny(`git config ${it.a.raw}: an option the guard does not know`);
+    }
+    let key = ops[0];
+    const verb = !write && !read && key && key.kind === 'pos' ? CONFIG_VERBS.get(key.a.w) : undefined;
+    if (verb) {
+      key = ops[1];
+      if (verb === 'read') return;
+      write = true;
+      if (verb === 'whole') whole = true;
+    } else if (!read && ops.length >= 2) write = true;
+    if (!write) return;
+    if (whole) deny('git config: a whole-section or whole-file write can set any config, a mirror push or a hook among them');
+    if (!key || key.kind !== 'pos' || !CONFIG_KEYS.has(key.a.w.toLowerCase())) deny(`git config ${key ? key.a.raw : ''}: a write outside user.name, user.email, core.quotepath and safe.directory can turn a push into a mirror push or run a command`);
   },
   worktree(args) {
     if (!args.length || args[0].w !== 'remove' || args[0].dyn) {
@@ -911,7 +1222,10 @@ function find(args, I, ctx) {
     if (!EXEC.has(v)) continue;
     const inner = [];
     for (m++; m < args.length && args[m].w !== ';' && args[m].w !== '+'; m++) if (args[m].w !== '{}') inner.push(args[m]);
-    if (inner.length && judge(inner, v.endsWith('dir') ? [null] : I, ctx, false).name === 'rm') deletes = true;
+    if (!inner.length) continue;
+    const name = judge(inner, v.endsWith('dir') ? [null] : I, ctx, false).name;
+    // rm deletes what find found, and so does a program the guard does not know that runs rm with it (flock … rm)
+    if (name === 'rm' || (!KNOWN.has(name) && !DATA.has(name) && inner.some((w) => !w.dyn && named(w.w) === 'rm'))) deletes = true;
   }
   if (deletes) for (const s of starts.length ? starts : [DOT]) operand(s, I, ctx, 'find that deletes, from');
 }
@@ -936,9 +1250,11 @@ function context(input, opts) {
 
 /**
  * The hook's verdict on one tool call: { allow: true } or { allow: false, why }. Only Bash calls are judged; one with
- * no command, or a command the guard cannot read, is refused. `opts.tmpdir` stands in for os.tmpdir() in tests.
+ * no command, or a command the guard cannot read, is refused, and so is one it cannot read within its deadline.
+ * `opts.tmpdir` stands in for os.tmpdir() in tests, and `opts.deadlineMs` for the 1500 ms the guard allows itself.
  */
 export function decide(input, opts = {}) {
+  deadline = Date.now() + (typeof opts.deadlineMs === 'number' ? opts.deadlineMs : DEADLINE_MS);
   try {
     if (!input || typeof input !== 'object') return no('the hook input is not a JSON object');
     if (typeof input.tool_name !== 'string') return no('the hook input names no tool');
@@ -956,6 +1272,8 @@ export function decide(input, opts = {}) {
     return { allow: true };
   } catch (e) {
     return no(e instanceof Denied ? e.message : `the guard failed (${e && e.message}), so it refuses rather than guess`);
+  } finally {
+    deadline = Infinity;
   }
 }
 
