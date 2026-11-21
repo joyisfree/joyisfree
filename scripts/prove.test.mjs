@@ -1460,10 +1460,20 @@ test('loadCorpus fails closed: a missing folder, a count below the floor, a bad 
   assert.ok(quiet.includes('a.csv:1') && !quiet.includes('studio.test') && !quiet.includes('570 006'), `the reason names where, never the text: ${quiet}`);
 });
 
+test('loadCorpus refuses a mobile written with dots and an Australian 1300 or 1800 number (round-2 verifier, 21 Nov 2026)', () => {
+  // ACMA's 0491 570 range and its 1300 975 707 to 711 and 1800 975 707 to 711, set aside for fiction.
+  for (const phone of ['0491.570.006', '(02) 5550.1234', '1300 975 707', '1300-975-708', '1800 975 711', '1800.975.709']) {
+    assert.throws(() => loadCorpus(corpusDir({ ...GOOD, 'contacts.txt': `Call ${phone} after 9.\n` }), { floor: 1 }), /contacts\.txt:1: a phone number/, phone);
+  }
+});
+
 test('the privacy rules pass the shapes the corpus holds: reserved emails, dates, time zones, prices, SKUs, order numbers and sizes', () => {
-  for (const ok of ['#1001,amy@example.com,paid,2026-11-01 10:02:11 +1100,fulfilled,AUD,178.00,12.00,190.00', 'cas@example.net and dee@example.invalid', 'JIF-HH-BLK-M', 'sizes 8 10 12 14 16', '01-11-2026 10:02', 'Order 100234', '10:00-16:00', '$0.50 $12.50', '2 @ $40', 'EAN 9300601234567']) {
+  for (const ok of ['#1001,amy@example.com,paid,2026-11-01 10:02:11 +1100,fulfilled,AUD,178.00,12.00,190.00', 'cas@example.net and dee@example.invalid', 'JIF-HH-BLK-M', 'sizes 8 10 12 14 16', '01-11-2026 10:02', 'Order 100234', '10:00-16:00', '$0.50 $12.50', '2 @ $40', 'EAN 9300601234567', '01.11.2026', 'v0.12.345']) {
     assert.equal(linePrivacy(ok), null, ok);
   }
+  // A 1300 or 1800 number needs its separators, so a Unix time in 2027 is not one; and the six-digit 13 number is a
+  // recorded gap (README.md), because a US size run has its shape.
+  for (const ok of ['"expires": 1800000000,', 'stamp 1300000000', 'US 13 14 15']) assert.equal(linePrivacy(ok), null, ok);
 });
 
 /** Whether the scanners catch a caught.mjs case: secretHits reports its kind, or terminalSteps flags its page. */
@@ -1480,12 +1490,18 @@ test('every caught.mjs positive is caught: each seed spelling, the cookies, ever
 });
 
 test('every KNOWN_MISSES case is still missed, alone in its file: when a scanner change catches one, move it to positives()', () => {
-  assert.ok(KNOWN_MISSES.length >= 6);
+  assert.ok(KNOWN_MISSES.length >= 8);
   for (const m of KNOWN_MISSES) {
     assert.deepEqual(secretHits(linesOf(m.file, m.text)), [], m.name);
     assert.ok(m.why, m.name);
   }
-  for (const m of KNOWN_MISSES.filter((x) => x.name.startsWith('a seed as comma-separated'))) assert.ok(secretKinds(m.text.split(',').join(' ')).includes('bip39-seed'), `${m.name} is a seed once the commas go`);
+  assert.equal(new Set(KNOWN_MISSES.map((m) => m.name)).size, KNOWN_MISSES.length, 'each known miss has its own name');
+  const commaSeparated = KNOWN_MISSES.filter((x) => x.name.startsWith('a seed as comma-separated'));
+  assert.ok(commaSeparated.some((m) => m.text.includes('\n')), 'the pairs over two lines are written down');
+  for (const m of commaSeparated) assert.ok(secretKinds(m.text.split(',').join(' ')).includes('bip39-seed'), `${m.name} is a seed once the commas go`);
+  const and = KNOWN_MISSES.find((x) => x.name === 'a seed as a comma list that ends with "and"');
+  assert.ok(and && and.text.split(', ').length === 11, 'eleven words joined by commas, the last two by "and"');
+  assert.ok(secretKinds(and.text.split(' and ').join(', ')).includes('bip39-seed'), 'a seed once the "and" is a comma');
   const zero = mnemonic(Buffer.alloc(16, 0));
   assert.deepEqual(zero, [...Array(11).fill(BIP39_WORDS[0]), BIP39_WORDS[3]], 'the published vector from all-zero entropy');
   const sevens = mnemonic(Buffer.alloc(16, 0x7f));
