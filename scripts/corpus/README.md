@@ -18,9 +18,11 @@ owner's data before it meets a verifier.
   `.tsv`, `.md`, `.txt` or `.json`, a binary file (a NUL byte), a file that is not UTF-8, an email address outside
   the reserved domains, a social handle (an `@name`, or a profile address such as `instagram.com/name`), or a phone
   number (international with a `+`; national with a trunk 0, spaced, dashed, dotted or run together; an Australian
-  1300 or 1800 number written with its separators; or the North American shape). Not caught, by choice: the six-digit
-  Australian 13 number (13, then two pairs of digits), because a US size run (13 14 15) has the same shape, so that
-  one is kept out by hand under the rules below. `CORPUS_FLOOR` is the number of files in `clean/`, and a test holds it
+  1300 or 1800 number written with its separators; the North American shape, with or without its leading 1; a `00`
+  international number written with its separators; or a number in French pairs, unless the pairs strictly rise, as a
+  size or colourway run does). Not caught, by choice: the six-digit Australian 13 number (13, then two pairs of
+  digits), because a US size run (13 14 15) has the same shape; and a `00` international number run together, because
+  a UPC with leading zeros has the same shape. Those two are kept out by hand under the rules below. `CORPUS_FLOOR` is the number of files in `clean/`, and a test holds it
   there, so a file that goes missing fails the corpus.
 - `caught.mjs`: what the scanners must catch, built at runtime from pieces so no secret-shaped text sits in the
   repository: a 12-word seed in each spelling prove catches (one line, numbered, one word to a line, a comma list),

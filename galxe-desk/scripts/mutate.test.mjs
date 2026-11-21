@@ -741,7 +741,11 @@ test("a file's own suite beats its folder's, and a listed suite not yet written 
     '.claude/workflows/fix-verify.js': ['scripts/workflows.test.mjs'],
     '.claude/workflows/review-3x.js': ['scripts/workflows.test.mjs'],
     'scripts/corpus/corpus.mjs': ['scripts/prove.test.mjs'],
+    '.claude/settings.json': ['.claude/hooks/guard.test.mjs'],
+    '.gitignore': ['.claude/hooks/guard.test.mjs'],
   });
+  assert.equal(relPath('.gitignore'), '.gitignore', 'a dotfile is a root file, not a desk script');
+  assert.equal(relPath('rank.mjs'), 'galxe-desk/scripts/rank.mjs');
   assert.ok(!SUITES['galxe-desk/scripts'].includes('mutate.test.mjs'), 'the desk suite never pays for this file');
 });
 

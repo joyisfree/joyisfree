@@ -25,15 +25,23 @@ const PROFILE_URL = /\b(?:instagram|twitter|x|tiktok|facebook|threads|youtube|li
 // Phone numbers, each with the count of digits it must hold: international (+61 412 345 678, +44 20 7946 0958); with a
 // trunk 0, spaced, dashed, dotted or run together (0412 345 678, 0412.345.678, (02) 9876 5432, 020 7946 0958,
 // 0412345678); an Australian 1300 or 1800 number (1300 975 707), its separators required so a Unix time (1800000000)
-// is not one; and the North American shape ((555) 123-4567, 555-123-4567). A date (2026-11-01, 01-11-2026), a time zone
-// (+1100), a price (178.00) and a SKU such as JIF-HH-BLK-M are none of these. Not caught, and written down in README.md:
-// the six-digit Australian 13 number (13, then two pairs of digits), whose shape a US size run (13 14 15) shares.
+// is not one; the North American shape, with or without its leading 1 ((555) 123-4567, 555-123-4567, 1-800-555-0199);
+// a 00 international number with its separators (00 61 491 570 156); and a number in French pairs (06 39 98 12 34).
+// A date (2026-11-01, 01-11-2026), a time zone (+1100), a price (178.00) and a SKU such as JIF-HH-BLK-M are none of
+// these. Not caught, and written down in README.md: the six-digit Australian 13 number (13, then two pairs of digits),
+// whose shape a US size run (13 14 15) shares; and a 00 international number run together (0061491570156), whose shape
+// a UPC with leading zeros shares.
 const PHONES = [
   { re: /(?<![\w+])\+\d[\d ().-]{6,}\d/g, min: 8, max: 15 },
   { re: /(?<![\w.+-])(?:\(0[1-9]\d{0,3}\)|0[1-9]\d{0,3})(?:[ .-]?\d{3,4}){1,3}(?![\w-]|\.\d)/g, min: 9, max: 11 },
   { re: /(?<![\w.+-])1[38]00[ .-]\d{3}[ .-]\d{3}(?![\w-]|\.\d)/g, min: 10, max: 10 },
-  { re: /(?<![\w.+-])(?:\(\d{3}\) ?|\d{3}[ .-])\d{3}[ .-]\d{4}(?![\w-]|\.\d)/g, min: 10, max: 10 },
+  { re: /(?<![\w.+-])(?:1[ .-])?(?:\(\d{3}\) ?|\d{3}[ .-])\d{3}[ .-]\d{4}(?![\w-]|\.\d)/g, min: 10, max: 11 },
+  { re: /(?<![\w.+-])00[ .-][1-9]\d{0,2}(?:[ .-]\d{1,4}){2,5}(?![\w-]|\.\d)/g, min: 10, max: 17 },
+  { re: /(?<![\w.+-])0[1-9](?:[ .-]\d{2}){4}(?![\w-]|\.\d)/g, min: 10, max: 10, run: true },
 ];
+
+// Five two-digit groups that strictly rise (01 02 03 04 05, 06 08 10 12 14) count sizes or codes; a phone's do not.
+const rising = (s) => { const g = s.split(/[ .-]/).map(Number); return g.every((n, i) => i === 0 || n > g[i - 1]); };
 
 const digits = (s) => s.split('').filter((c) => c >= '0' && c <= '9').length;
 const trimDots = (s) => { let d = s; while (d.endsWith('.')) d = d.slice(0, -1); return d; };
@@ -49,10 +57,10 @@ export function linePrivacy(line) {
     } else if (HANDLE.test(after)) return 'a social handle';
   }
   if (PROFILE_URL.test(s)) return 'a social handle (a profile address)';
-  for (const { re, min, max } of PHONES) {
+  for (const { re, min, max, run } of PHONES) {
     for (const m of s.matchAll(re)) {
       const n = digits(m[0]);
-      if (n >= min && n <= max) return 'a phone number';
+      if (n >= min && n <= max && !(run && rising(m[0]))) return 'a phone number';
     }
   }
   return null;

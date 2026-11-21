@@ -391,6 +391,8 @@ const KNOWN_MISSES = [
   ['node -e and python3 -c', [`node -e "require('fs').rmSync('/work/repo', { recursive: true, force: true })"`, `python3 -c "import shutil; shutil.rmtree('/work/repo')"`]],
   // known miss: out of the seat belt's reach (plan 19.2)
   ['a script file run by path', ['./scripts/wipe.sh', 'bash scripts/wipe.sh', 'node scripts/wipe.mjs']],
+  // known miss: out of the seat belt's reach (plan 19.2); the round-2 checker's, 21 Nov 2026
+  ['a script read through a stdin file, a pipe into xargs, a file written then run, or a scheduler', ["sh /dev/stdin <<< 'git push -f'", "bash /dev/fd/0 <<< 'rm -rf /work/repo'", "at now <<< 'rm -rf /work/repo'", 'cat x | xargs -I{} sh -c {}', "tee x <<< 'rm -rf /work/repo' ; sh x"]],
 ];
 for (const [name, cmds] of KNOWN_MISSES) test(`known miss, still allowed: ${name}`, () => cmds.forEach((c) => allows(c)));
 

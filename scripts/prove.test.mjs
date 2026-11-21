@@ -1467,6 +1467,16 @@ test('loadCorpus refuses a mobile written with dots and an Australian 1300 or 18
   }
 });
 
+test('loadCorpus refuses a North American number with its leading 1, a 00 international number and a number in French pairs (round-2 checker, 21 Nov 2026)', () => {
+  // NANP's 555-0100 to 0199, ACMA's 0491 570 and, recalled rather than checked here, ARCEP's 06 39 98: set aside for fiction.
+  for (const phone of ['1-800-555-0199', '1-201-555-0123', '1 (201) 555-0123', '1.201.555.0123', '00 61 491 570 156', '00 61 2 5550 1234', '00-44-20-7946-0958', '06 39 98 12 34', '06.39.98.12.34']) {
+    assert.throws(() => loadCorpus(corpusDir({ ...GOOD, 'contacts.txt': `Call ${phone} after 9.\n` }), { floor: 1 }), /contacts\.txt:1: a phone number/, phone);
+  }
+  // Their near shapes that are not phones: a UPC with leading zeros, a padded order id, a date, a time, a size run.
+  // A run of two-digit codes that strictly rises counts sizes or colourways, so it is not read as French pairs.
+  for (const ok of ['UPC 0012345678905', 'Order 0012345678', '2026-11-01', '01-11-2026 10:02', '00 15 30', 'sizes 8 10 12 14 16', 'qty 1 2 3 4', 'sizes 06 08 10 12 14', 'colourways 01 02 03 04 05']) assert.equal(linePrivacy(ok), null, ok);
+});
+
 test('the privacy rules pass the shapes the corpus holds: reserved emails, dates, time zones, prices, SKUs, order numbers and sizes', () => {
   for (const ok of ['#1001,amy@example.com,paid,2026-11-01 10:02:11 +1100,fulfilled,AUD,178.00,12.00,190.00', 'cas@example.net and dee@example.invalid', 'JIF-HH-BLK-M', 'sizes 8 10 12 14 16', '01-11-2026 10:02', 'Order 100234', '10:00-16:00', '$0.50 $12.50', '2 @ $40', 'EAN 9300601234567', '01.11.2026', 'v0.12.345']) {
     assert.equal(linePrivacy(ok), null, ok);
