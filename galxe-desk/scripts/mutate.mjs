@@ -35,7 +35,7 @@ import { cpSync, mkdtempSync, readFileSync, writeFileSync, renameSync, rmSync, e
 import { tmpdir, availableParallelism } from 'node:os';
 import { join, dirname, basename, resolve, relative, sep, isAbsolute, posix } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
@@ -1141,6 +1141,15 @@ export const MUTATIONS = [
   ["corpus: a rising run of two-digit codes is not a phone number","scripts/corpus/corpus.mjs"," && !(run && rising(m[0]))",""],
   ["corpus: only pairs that rise are a run","scripts/corpus/corpus.mjs","return g.every((n, i) => i === 0 || n > g[i - 1]);","return true;"],
   ["relPath: a dotfile such as .gitignore is a root file","galxe-desk/scripts/mutate.mjs","file.includes('/') || file.startsWith('.') ? file : `galxe-desk/scripts/${file}`);\n","file.includes('/') ? file : `galxe-desk/scripts/${file}`);\n"],
+  // galxe-desk/scripts/mutate.mjs — a mutation that breaks its file's syntax is UNPARSEABLE, never a kill (review-3x, 21 Nov 2026) (added by mutate --add)
+  ["a mutated file that no longer parses is UNPARSEABLE, never a kill","galxe-desk/scripts/mutate.mjs","  if (unparseable) return 'UNPARSEABLE'; // the mutated file no longer parses, so a red suite says nothing of the guard\n","  if (false) return 'UNPARSEABLE'; // the mutated file no longer parses, so a red suite says nothing of the guard\n"],
+  ["a mutation that breaks its file's syntax is never run as a kill","galxe-desk/scripts/mutate.mjs","      if (broke) return { code: null, signal: null, unparseable: broke, detail: broke }; // never run as a kill\n","      if (false) return { code: null, signal: null, unparseable: broke, detail: broke }; // never run as a kill\n"],
+  ["a JSON file is checked to still parse","galxe-desk/scripts/mutate.mjs","  if (rel.endsWith('.json')) { try { JSON.parse(text); return ['JSON']; } catch { return []; } }\n","  if (rel.endsWith('.json')) return null;\n"],
+  ["a module is checked to still parse","galxe-desk/scripts/mutate.mjs","  if (spawnSync(process.execPath, ['--check', path], { stdio: 'ignore', timeout: 20000 }).status === 0) ok.push('a module');\n",""],
+  ["a workflow body is checked to still parse","galxe-desk/scripts/mutate.mjs","  try { new AsyncFunction(asBody(text)); ok.push('a workflow body'); } catch { /* not a function body */ }\n",""],
+  ["a workflow body is read with its export words dropped","galxe-desk/scripts/mutate.mjs","const asBody = (text) => text.split('\\n').map((l) => (l.startsWith('export ') ? l.slice('export '.length) : l)).join('\\n');\n","const asBody = (text) => text;\n"],
+  ["a reading the original had and the mutation lost is a break","galxe-desk/scripts/mutate.mjs","  const lost = was.filter((w) => !now.includes(w));\n","  const lost = [];\n"],
+  ["the original is read before the mutation is written","galxe-desk/scripts/mutate.mjs","  if (!PARSED.has(key)) PARSED.set(key, readings(rel, before, path));\n","  if (!PARSED.has(key)) PARSED.set(key, readings(rel, write(), path));\n"],
 ];
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -1190,7 +1199,8 @@ export function prepare(m, { root = REPO, suites = SUITES, suiteFor = SUITE_FOR,
 }
 
 // What one suite run means. Only an exit of 1 with a failed test in the TAP summary is a kill.
-export function classify({ code, signal, timedOut, overflow, stdout } = {}) {
+export function classify({ code, signal, timedOut, overflow, stdout, unparseable } = {}) {
+  if (unparseable) return 'UNPARSEABLE'; // the mutated file no longer parses, so a red suite says nothing of the guard
   if (timedOut) return 'TIMEOUT'; // past its deadline, whatever killed it
   if (signal || overflow) return 'CRASHED'; // stopped from outside, or more output than the buffer holds
   if (code === 0) return 'SURVIVED'; // green with the guard gone
@@ -1260,6 +1270,38 @@ export function copyRepo(root, work) {
 }
 
 // One suite run in a fresh throwaway copy: unmutated when `m` is null (the baseline), else with `m` applied.
+// Whether a file parses, in each way it can be read: as JSON; as a module (node --check, which reads syntax and runs
+// nothing); as the body of an async function with its `export ` words dropped, which is how a saved workflow is
+// loaded. A mutated file must still parse in every way its original did; otherwise its suite going red proves only
+// that the file broke, and the guard would read as biting with no test behind it (review-3x, 21 Nov 2026).
+const AsyncFunction = (async () => {}).constructor;
+const PARSED = new Map(); // the original's verdicts, by file and the hash of its text
+const asBody = (text) => text.split('\n').map((l) => (l.startsWith('export ') ? l.slice('export '.length) : l)).join('\n');
+const readings = (rel, text, path) => {
+  if (rel.endsWith('.json')) { try { JSON.parse(text); return ['JSON']; } catch { return []; } }
+  if (!/\.(m|c)?js$/.test(rel)) return null; // not code: nothing to parse
+  const ok = [];
+  if (spawnSync(process.execPath, ['--check', path], { stdio: 'ignore', timeout: 20000 }).status === 0) ok.push('a module');
+  try { new AsyncFunction(asBody(text)); ok.push('a workflow body'); } catch { /* not a function body */ }
+  return ok;
+};
+
+/**
+ * Why `rel` no longer parses the way its original did, or null. `path` holds the original when this is called and the
+ * mutated text once `write` has run, so both are read in the same place (a .js file is a module or not by the
+ * package.json beside it). The original's readings are kept by its hash, so each file is checked once per run.
+ */
+export function parseBreak(rel, before, path, write) {
+  const key = `${rel}\0${createHash('sha256').update(before).digest('hex')}`;
+  if (!PARSED.has(key)) PARSED.set(key, readings(rel, before, path));
+  const after = write();
+  const was = PARSED.get(key);
+  if (!was || !was.length) return null; // not code, or a file no reading parses: nothing to compare
+  const now = readings(rel, after, path) ?? [];
+  const lost = was.filter((w) => !now.includes(w));
+  return lost.length ? `the mutated ${rel} no longer parses as ${lost.join(' or ')}, so its suite going red says nothing of the guard` : null;
+}
+
 async function runSuite(root, suite, m, { spawn: run, copy, timeoutMs, maxBuffer }) {
   const work = mkdtempSync(join(tmpdir(), 'mutate-'));
   try {
@@ -1269,7 +1311,9 @@ async function runSuite(root, suite, m, { spawn: run, copy, timeoutMs, maxBuffer
       const src = readFileSync(p, 'utf8');
       const at = findOnce(src, m.from);
       if (at.status) return { code: null, signal: null, detail: `${at.detail} in the copy of ${m.rel}` };
-      writeFileSync(p, src.slice(0, at.i) + m.to + src.slice(at.i + m.from.length));
+      const mutated = src.slice(0, at.i) + m.to + src.slice(at.i + m.from.length);
+      const broke = parseBreak(m.rel, src, p, () => { writeFileSync(p, mutated); return mutated; });
+      if (broke) return { code: null, signal: null, unparseable: broke, detail: broke }; // never run as a kill
     }
     return await run(['--test', '--test-reporter=tap', ...suite.map((f) => join(work, f))], { cwd: work, timeoutMs, maxBuffer });
   } finally {

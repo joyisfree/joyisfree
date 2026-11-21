@@ -250,6 +250,27 @@ test('a suite run speaks TAP even when this file itself runs under node --test',
   assert.deepEqual(missing, []);
 });
 
+test('a mutation that stops its file from parsing is UNPARSEABLE, never a kill: a module, a JSON file and a workflow body (review-3x, 21 Nov 2026)', { timeout: 60000 }, async () => {
+  const root = fixture();
+  write(root, 'pkg/scripts/conf.json', '{ "limit": 3 }\n');
+  // A workflow script is a function body, not a module: `export const meta`, top-level await and a top-level return.
+  write(root, 'pkg/scripts/wf.js', "export const meta = { name: 'w' }\nconst x = await Promise.resolve(1)\nreturn { x }\n");
+  const list = [
+    ['a module that no longer parses', 'pkg/scripts/a.mjs', "if (x < 0) return 'refused';", "if (x < 0 return 'refused';"],
+    ['a JSON file that no longer parses', 'pkg/scripts/conf.json', '"limit": 3', '"limit": 3,'],
+    ['a workflow body that no longer parses', 'pkg/scripts/wf.js', 'return { x }', 'return { x'],
+    ['a workflow body that still parses', 'pkg/scripts/wf.js', 'return { x }', 'return { y: x }'],
+    ['a module that still parses', 'pkg/scripts/a.mjs', "if (x < 0) return 'refused';", "if (false) return 'refused';"],
+  ];
+  const { results } = await runAll(list, { root, suites: SUITES_FX, suiteFor: {}, jobs: 2 });
+  assert.deepEqual(results.map((r) => r.status), ['UNPARSEABLE', 'UNPARSEABLE', 'UNPARSEABLE', 'SURVIVED', 'KILLED']);
+  assert.match(results[0].detail, /pkg\/scripts\/a\.mjs no longer parses/);
+  const { lines, code } = summarise(results, list.length);
+  assert.equal(code, 1, 'an unparseable line is not a guard that bites');
+  assert.match(lines.at(-1), /killed 1 of 5 mutations, 4 not killed/);
+  assert.equal(classify({ code: 1, stdout: '# fail 1', unparseable: 'it no longer parses' }), 'UNPARSEABLE');
+});
+
 // ---- --jobs and the pool -----------------------------------------------------------------------------------
 
 test('--jobs is a whole number from 1 to 16, and defaults to four or the CPUs if fewer', () => {
