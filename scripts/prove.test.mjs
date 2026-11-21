@@ -6,16 +6,19 @@ import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { devNull, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  BIP39_WORDS, CHECKS, KNOWN_FAKES, LEIF_PAGES, SECRET_SHAPES, SEED_REPEATS, SEED_WORDS,
-  bip39Intact, countOf, dayNumber, decisions, decodeText, facts, firstInstruction, historyLines, leifPages, lineCount,
-  markOf, runChecks, secretHits, secretKinds, secrets, seedEnds, seedLike, state, studio, studioVerdict, sydneyDay, terminalSteps,
-  treeLines, withoutKnownFakes,
+  BIP39_WORDS, CHECKS, KNOWN_FAKES, LEIF_PAGES, MODES, SECRET_SHAPES, SEED_REPEATS, SEED_WORDS,
+  bip39Intact, context, countOf, dayNumber, decisions, decodeText, facts, fastBase, fastMutations, fastVerdict, firstInstruction,
+  historyLines, leifPages, lineCount, markOf, mutations, mutationsVerdict, prove, proveArgs, runChecks, secretHits, secretKinds,
+  secrets, seedEnds, seedLike, seedParts, state, studio, studioVerdict, sydneyDay, terminalSteps, treeLines, withoutKnownFakes,
 } from './prove.mjs';
+import { MUTATIONS } from '../galxe-desk/scripts/mutate.mjs';
+import { CLEAN_DIR, CORPUS_FLOOR, linePrivacy, loadCorpus } from './corpus/corpus.mjs';
+import { KNOWN_FALSE_ALARMS, KNOWN_MISSES, mnemonic, positives } from './corpus/caught.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const made = [];
@@ -1240,4 +1243,261 @@ test('prove runs every check, and all but the rulebook are required', () => {
     ['tests', true], ['mutations', true], ['secrets', true], ['privacy', true], ['studio', true],
     ['decisions', true], ['state', true], ['leif-pages', true], ['facts', true], ['rulebook', false],
   ]);
+});
+
+test('no list of checks, or an empty one, is refused: no check run is never "every required check holds"', () => {
+  assert.throws(() => runChecks({}, []), /no checks to run/);
+  assert.throws(() => runChecks({}, undefined), /no checks to run/);
+});
+
+// ------------------------------------------------------------------------------------------------- the mutations row
+
+const FULL_OK = (n) => `KILLED: one\nkilled ${n} of ${n} mutations (every guard bites)\n`;
+
+test('mutations: a full run passes only when it killed N of N, N being the length of MUTATIONS, and names both numbers when not (B3, 21 Nov 2026)', () => {
+  const ok = mutationsVerdict({ code: 0, stdout: FULL_OK(600) }, 600);
+  assert.equal(ok.status, 'PASS', ok.detail);
+  assert.equal(ok.detail, 'killed 600 of 600 mutations (every guard bites)');
+  const short = mutationsVerdict({ code: 0, stdout: FULL_OK(598) }, 600);
+  assert.equal(short.status, 'FAIL', 'a list that skipped two lines');
+  assert.match(short.detail, /killed 598 of 598, but MUTATIONS lists 600/);
+  assert.equal(mutationsVerdict({ code: 0, stdout: FULL_OK(600) }, 601).status, 'FAIL');
+  const odd = mutationsVerdict({ code: 0, stdout: 'all good\n' }, 600);
+  assert.equal(odd.status, 'FAIL');
+  assert.match(odd.detail, /last line is not "killed N of N mutations/);
+  const red = mutationsVerdict({ code: 1, stdout: FULL_OK(600) }, 600);
+  assert.equal(red.status, 'FAIL', 'a non-zero exit is never a pass, whatever the last line says');
+  assert.match(red.detail, /exited 1/);
+  assert.match(mutationsVerdict({ code: 1, stdout: 'SURVIVED: x\nkilled 599 of 600 mutations, 1 not killed\n' }, 600).detail, /599 of 600 mutations, 1 not killed/);
+  assert.match(mutationsVerdict({ code: null, stdout: '' }, 600).detail, /exited without a code/);
+});
+
+test('mutations: the check runs mutate.mjs once with no argument and counts against the context, which counts MUTATIONS itself', () => {
+  const calls = [];
+  const r = mutations({ root: '/r', mutationCount: 3, node: (args) => { calls.push(args); return { code: 0, stdout: FULL_OK(3) }; } });
+  assert.equal(r.status, 'PASS', r.detail);
+  assert.deepEqual(calls, [[join('/r', 'galxe-desk/scripts/mutate.mjs')]]);
+  assert.equal(context().mutationCount, MUTATIONS.length);
+  assert.ok(MUTATIONS.length > 0);
+});
+
+// ------------------------------------------------------------------------------------------------------- --fast
+
+const SHA_A = 'a'.repeat(40);
+const SHA_B = 'b'.repeat(40);
+/** A stand-in for git that answers rev-parse from `answers`, keyed by its arguments; anything else throws. */
+const revGit = (answers) => (args) => {
+  const key = args.join(' ');
+  if (Object.hasOwn(answers, key)) return `${answers[key]}\n`;
+  throw new Error(`fatal: no answer for git ${key}`);
+};
+const UP = 'rev-parse --verify --quiet @{upstream}';
+const UP_NAME = 'rev-parse --abbrev-ref --symbolic-full-name @{upstream}';
+const PREV = 'rev-parse --verify --quiet HEAD~1';
+
+test('fastBase: the upstream by its name, else HEAD~1, else an error; a git that fails or prints no commit id is no base', () => {
+  assert.deepEqual(fastBase(revGit({ [UP]: SHA_A, [UP_NAME]: 'origin/claude/x', [PREV]: SHA_B })), { sha: SHA_A, label: 'origin/claude/x' });
+  assert.deepEqual(fastBase(revGit({ [PREV]: SHA_B })), { sha: SHA_B, label: 'HEAD~1' });
+  assert.deepEqual(fastBase(revGit({ [UP]: 'not a sha', [PREV]: SHA_B })), { sha: SHA_B, label: 'HEAD~1' });
+  assert.match(fastBase(revGit({})).error, /no upstream and no HEAD~1/);
+  assert.match(fastBase(revGit({ [PREV]: '' })).error, /no upstream and no HEAD~1/);
+});
+
+const since = (k, n, notRun) => `killed ${k} of ${n} selected since ${SHA_A}, ${notRun} not run (every selected guard bites)\n`;
+const BASE = { sha: SHA_A, label: 'origin/claude/x' };
+
+test('the fast row is a NOTE naming the base and the counts when every selected guard was killed, or none was selected; never a PASS', () => {
+  const r = fastVerdict({ code: 0, stdout: since(12, 12, 501) }, BASE, 513);
+  assert.equal(r.status, 'NOTE');
+  assert.equal(r.detail, 'since origin/claude/x: killed 12 of 12 selected, 501 not run');
+  const none = fastVerdict({ code: 0, stdout: `killed 0 of 0 selected since ${SHA_A}: nothing to judge\n` }, { sha: SHA_A, label: 'HEAD~1' }, 513);
+  assert.equal(none.status, 'NOTE');
+  assert.equal(none.detail, 'since HEAD~1: nothing to judge, 0 of 513 selected');
+  const told = fastVerdict({ code: 0, stdout: `UNGUARDED: scripts/new.mjs changed and no mutation names it\n${since(2, 2, 511)}` }, BASE, 513);
+  assert.equal(told.status, 'NOTE');
+  assert.match(told.detail, /2 of 2 selected, 511 not run; changed with no mutation naming it: scripts\/new\.mjs$/);
+});
+
+test('the fast row FAILS when a selected guard was not killed, the counts miss MUTATIONS, the line cannot be read or there is no base', () => {
+  const survived = fastVerdict({ code: 1, stdout: `SURVIVED: x\nkilled 11 of 12 selected since ${SHA_A}, 501 not run, 1 not killed\n` }, BASE, 513);
+  assert.equal(survived.status, 'FAIL');
+  assert.match(survived.detail, /since origin\/claude\/x: mutate\.mjs exited 1: .*1 not killed/);
+  assert.equal(fastVerdict({ code: 1, stdout: since(12, 12, 501) }, BASE, 513).status, 'FAIL', 'a non-zero exit, whatever the last line says');
+  const short = fastVerdict({ code: 0, stdout: since(12, 12, 500) }, BASE, 513);
+  assert.equal(short.status, 'FAIL');
+  assert.match(short.detail, /killed 12 of 12 selected and 500 not run, but MUTATIONS lists 513/);
+  assert.equal(fastVerdict({ code: 0, stdout: 'killed 12 of 12 mutations (every guard bites)\n' }, BASE, 513).status, 'FAIL', 'a full run is not a --since run');
+  assert.match(fastVerdict(null, { error: 'there is no upstream and no HEAD~1, so there is no base' }, 513).detail, /no upstream and no HEAD~1/);
+});
+
+test('fastMutations runs mutate.mjs --since the base commit, and with no base runs nothing and fails', () => {
+  const calls = [];
+  const node = (args) => { calls.push(args); return { code: 0, stdout: since(3, 3, 7) }; };
+  const r = fastMutations({ root: '/r', mutationCount: 10, git: revGit({ [UP]: SHA_A, [UP_NAME]: 'origin/claude/x' }), node });
+  assert.equal(r.status, 'NOTE', r.detail);
+  assert.deepEqual(calls, [[join('/r', 'galxe-desk/scripts/mutate.mjs'), '--since', SHA_A]]);
+  const none = fastMutations({ root: '/r', mutationCount: 10, git: revGit({}), node: () => { throw new Error('must not run'); } });
+  assert.equal(none.status, 'FAIL');
+  assert.match(none.detail, /no upstream and no HEAD~1/);
+});
+
+test('--fast runs every check of the full run, in order and as required, with only the mutations row swapped for the fast one', () => {
+  assert.equal(MODES.full, CHECKS);
+  assert.deepEqual(MODES.fast.map(([name, , required]) => [name, required]), CHECKS.map(([name, , required]) => [name, required]));
+  MODES.fast.forEach(([name, fn], i) => assert.equal(fn, name === 'mutations' ? fastMutations : CHECKS[i][1], name));
+  assert.equal(CHECKS[1][1], mutations);
+});
+
+const stub = (name, status) => [name, () => ({ status, detail: `${name} said ${status.toLowerCase()}` }), true];
+/** prove's output and exit code with stand-in checks for each mode. */
+const run = (argv, modes) => { const out = []; const code = prove(argv, { ctx: {}, modes, print: (s) => out.push(s) }); return { code, out: out.join('\n'), last: out.join('\n').split('\n').pop() }; };
+
+test('prove --fast: the last line starts "FAST CHECK ONLY:" and the word PROVEN never appears, on a pass or a fail', () => {
+  const passing = { full: [stub('full-only', 'PASS')], fast: [stub('quick', 'PASS'), stub('mutations', 'NOTE')] };
+  const p = run(['--fast'], passing);
+  assert.equal(p.code, 0);
+  assert.match(p.out, /quick said pass/);
+  assert.ok(!p.out.includes('full-only'), 'the fast checks ran, not the full ones');
+  assert.match(p.last, /^FAST CHECK ONLY: /);
+  assert.doesNotMatch(p.out, /PROVEN/);
+  const failing = run(['--fast'], { full: passing.full, fast: [stub('quick', 'FAIL'), stub('mutations', 'NOTE')] });
+  assert.equal(failing.code, 1);
+  assert.match(failing.last, /^FAST CHECK ONLY: 1 required check\(s\) failed\.$/);
+  assert.doesNotMatch(failing.out, /PROVEN/);
+  const full = run([], passing);
+  assert.equal(full.code, 0);
+  assert.match(full.out, /full-only said pass/);
+  assert.match(full.last, /^PROVEN: every required check holds\.$/);
+  assert.match(run([], { full: [stub('x', 'FAIL')], fast: [] }).last, /^NOT PROVEN: 1 required check\(s\) failed\.$/);
+});
+
+test('prove: any argument but --fast alone is refused with exit 1 before any check runs, and the command exits with it', () => {
+  assert.deepEqual(proveArgs([]), { mode: 'full' });
+  assert.deepEqual(proveArgs(['--fast']), { mode: 'fast' });
+  const never = [['boom', () => { throw new Error('a check ran'); }, true]];
+  for (const argv of [['--full'], ['fast'], ['--fast', '--fast'], ['--fast', 'x'], [''], ['--FAST']]) {
+    const r = run(argv, { full: never, fast: never });
+    assert.equal(r.code, 1, JSON.stringify(argv));
+    assert.match(r.out, /^refused: prove takes no argument, or --fast alone/, JSON.stringify(argv));
+    assert.doesNotMatch(r.out, /boom|PROVEN/);
+  }
+  let status = 0;
+  let stdout = '';
+  try { execFileSync(process.execPath, [join(HERE, 'prove.mjs'), '--nope'], { encoding: 'utf8', stdio: 'pipe' }); } catch (e) { status = e.status; stdout = String(e.stdout); }
+  assert.equal(status, 1);
+  assert.match(stdout, /^refused: /);
+});
+
+// ------------------------------------------------------------------------------------------- the owner-data corpus
+
+test('a lookbook caption, a comma list of multi-word phrases, is prose: not a seed on one line or down a page (corpus, 21 Nov 2026)', () => {
+  const file = 'v7-data-lookbook-captions.md';
+  const text = readFileSync(join(CLEAN_DIR, file), 'utf8');
+  assert.deepEqual(secretHits(page(file, text.split('\n'))), []);
+  const caption = 'Forest green velvet jacket, ocean blue silk dress, sand cotton hat, cream wool sock.';
+  assert.deepEqual(secretKinds(caption), [], 'one line');
+  assert.deepEqual(secretHits(page('c.md', [caption, 'Shot on location in the hills.'])), [], 'with a line after it');
+  assert.deepEqual(secretHits(page('c.md', ['The new season is here in', caption, caption])), [], 'with lines before it');
+  assert.equal(seedParts(caption).length, 4);
+  assert.deepEqual(seedEnds(caption).words, []);
+  assert.deepEqual(seedParts('forest green velvet jacket, ocean blue silk dress'), ['forest green velvet jacket, ocean blue silk dress'], 'two items are not a list');
+  assert.deepEqual(seedParts('forest, ocean blue, sand cotton hat'), ['forest, ocean blue, sand cotton hat'], 'a single word in the list');
+});
+
+const linesOf = (file, text) => page(file, String(text).split('\n'));
+
+test('every file in clean/ loads, gives no secret hit and, as .md or .txt, no terminal step; the floor is its count', () => {
+  const files = loadCorpus(CLEAN_DIR);
+  assert.equal(readdirSync(CLEAN_DIR).length, CORPUS_FLOOR, 'a file added to clean/ raises CORPUS_FLOOR');
+  assert.equal(files.length, CORPUS_FLOOR);
+  assert.ok(files.some((f) => f.name === 'v7-data-lookbook-captions.md'));
+  for (const { name, ext, text } of files) {
+    assert.deepEqual(secretHits(linesOf(name, text)), [], name);
+    if (ext === '.md' || ext === '.txt') assert.deepEqual(terminalSteps(name, text), [], name);
+  }
+});
+
+/** A corpus folder in a temp dir: each key a file name, each value its text or bytes. */
+const corpusDir = (files) => {
+  const d = tempDir('corpus-');
+  for (const [name, body] of Object.entries(files)) writeFileSync(join(d, name), body);
+  return d;
+};
+const GOOD = { 'stock.csv': 'colour,size,qty\nblack,small,2\n', 'notes.md': '# Notes\n\nOrders from amy@example.com and ben@example.org.\n' };
+
+test('loadCorpus fails closed: a missing folder, a count below the floor, a bad floor, a folder or a link, an unknown extension, a binary or non-UTF-8 file, an outside email, a handle or a phone number', () => {
+  assert.equal(loadCorpus(corpusDir(GOOD), { floor: 2 }).length, 2);
+  assert.throws(() => loadCorpus(join(tmpdir(), 'no-such-corpus-here')), /missing/);
+  assert.throws(() => loadCorpus(corpusDir(GOOD), { floor: 3 }), /holds 2 file\(s\), below its floor of 3/);
+  const short = tempDir('corpus-short-');
+  cpSync(CLEAN_DIR, short, { recursive: true });
+  unlinkSync(join(short, readdirSync(short)[0]));
+  assert.throws(() => loadCorpus(short), /below its floor/);
+  for (const floor of [0, -1, 1.5, NaN, '3']) assert.throws(() => loadCorpus(corpusDir(GOOD), { floor }), /floor must be a whole number/, String(floor));
+  const sub = corpusDir(GOOD);
+  mkdirSync(join(sub, 'more.md'));
+  assert.throws(() => loadCorpus(sub, { floor: 1 }), /more\.md: not a regular file/);
+  const link = corpusDir(GOOD);
+  symlinkSync(join(link, 'notes.md'), join(link, 'link.md'));
+  assert.throws(() => loadCorpus(link, { floor: 1 }), /link\.md: not a regular file/);
+  const bad = (files, why) => assert.throws(() => loadCorpus(corpusDir({ ...GOOD, ...files }), { floor: 1 }), why, JSON.stringify(Object.keys(files)));
+  bad({ 'run.sh': 'echo hi\n' }, /run\.sh: the extension "\.sh" is not one of/);
+  bad({ 'README': 'plain\n' }, /README: the extension "" is not one of/);
+  bad({ 'Notes.MD': 'plain\n' }, /Notes\.MD: the extension/);
+  bad({ 'img.csv': Buffer.from([0x63, 0x00, 0x64]) }, /img\.csv: a binary file/);
+  bad({ 'latin1.txt': Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x0a]) }, /latin1\.txt: not UTF-8/);
+  // Addresses and numbers from the ranges set aside for examples and fiction (RFC 2606 .test; ACMA's 0491 570 and
+  // 5550 ranges; Ofcom's 020 7946 0 and 07700 900; North America's 555-01), so none can be anyone's.
+  bad({ 'orders.csv': 'id,email\n1,amy@studio.test\n' }, /orders\.csv:2: an email address outside example\.com/);
+  bad({ 'orders.csv': 'id,email\n1,amy@mail.example.com\n' }, /orders\.csv:2: an email address outside/);
+  bad({ 'orders.csv': 'id,email\n1,amy@localhost\n' }, /orders\.csv:2: an email address outside/);
+  bad({ 'caption.md': 'Shot by @example_maker in the hills.\n' }, /caption\.md:1: a social handle/);
+  bad({ 'links.md': 'Follow along at instagram.com/example_maker\n' }, /links\.md:1: a social handle/);
+  for (const phone of ['+61 491 570 156', '0491 570 006', '0491570006', '(02) 5550 1234', '02 5550 1234', '020 7946 0958', '07700 900123', '(201) 555-0123', '201-555-0123', '+1 201 555 0123']) {
+    bad({ 'contacts.txt': `Call ${phone} after 9.\n` }, /contacts\.txt:1: a phone number/);
+  }
+  const quiet = (() => { try { loadCorpus(corpusDir({ 'a.csv': '1,amy@studio.test,0491 570 006\n' }), { floor: 1 }); } catch (e) { return e.message; } return ''; })();
+  assert.ok(quiet.includes('a.csv:1') && !quiet.includes('studio.test') && !quiet.includes('570 006'), `the reason names where, never the text: ${quiet}`);
+});
+
+test('the privacy rules pass the shapes the corpus holds: reserved emails, dates, time zones, prices, SKUs, order numbers and sizes', () => {
+  for (const ok of ['#1001,amy@example.com,paid,2026-11-01 10:02:11 +1100,fulfilled,AUD,178.00,12.00,190.00', 'cas@example.net and dee@example.invalid', 'JIF-HH-BLK-M', 'sizes 8 10 12 14 16', '01-11-2026 10:02', 'Order 100234', '10:00-16:00', '$0.50 $12.50', '2 @ $40', 'EAN 9300601234567']) {
+    assert.equal(linePrivacy(ok), null, ok);
+  }
+});
+
+/** Whether the scanners catch a caught.mjs case: secretHits reports its kind, or terminalSteps flags its page. */
+const caught = (c) => (c.kind === 'terminal-step' ? terminalSteps(c.file, c.text).length > 0 : secretHits(linesOf(c.file, c.text)).some((h) => h.kinds.includes(c.kind)));
+
+test('every caught.mjs positive is caught: each seed spelling, the cookies, every SECRET_SHAPES kind and a terminal step on a page Leif reads', () => {
+  const cases = positives();
+  for (const c of cases) assert.ok(caught(c), `not caught: ${c.name}`);
+  const kinds = new Set(cases.map((c) => c.kind));
+  for (const k of [...SECRET_SHAPES.map((s) => s.name), '0x-hex-key', 'bip39-seed', 'terminal-step']) assert.ok(kinds.has(k), `no positive for ${k}`);
+  const names = cases.map((c) => c.name);
+  for (const s of ['a seed on one line', 'a seed numbered down a page', 'a seed one word to a line', 'a seed as a comma list']) assert.ok(names.includes(s), s);
+  assert.equal(new Set(names).size, names.length, 'each positive has its own name');
+});
+
+test('every KNOWN_MISSES case is still missed, alone in its file: when a scanner change catches one, move it to positives()', () => {
+  assert.ok(KNOWN_MISSES.length >= 6);
+  for (const m of KNOWN_MISSES) {
+    assert.deepEqual(secretHits(linesOf(m.file, m.text)), [], m.name);
+    assert.ok(m.why, m.name);
+  }
+  for (const m of KNOWN_MISSES.filter((x) => x.name.startsWith('a seed as comma-separated'))) assert.ok(secretKinds(m.text.split(',').join(' ')).includes('bip39-seed'), `${m.name} is a seed once the commas go`);
+  const zero = mnemonic(Buffer.alloc(16, 0));
+  assert.deepEqual(zero, [...Array(11).fill(BIP39_WORDS[0]), BIP39_WORDS[3]], 'the published vector from all-zero entropy');
+  const sevens = mnemonic(Buffer.alloc(16, 0x7f));
+  assert.equal(BIP39_WORDS.indexOf(sevens[0]), 1019);
+  assert.deepEqual(sevens.slice(8, 11), sevens.slice(0, 3), 'eight words said one and a half times');
+});
+
+test('every KNOWN_FALSE_ALARMS case is still flagged: when a scanner change passes one, move it into clean/', () => {
+  assert.ok(KNOWN_FALSE_ALARMS.length >= 2);
+  for (const a of KNOWN_FALSE_ALARMS) assert.ok(caught(a), `no longer flagged: ${a.name}`);
+});
+
+test('the corpus scripts and README hold no secret shape of their own', () => {
+  for (const f of ['corpus/corpus.mjs', 'corpus/caught.mjs', 'corpus/README.md']) assert.deepEqual(secretHits(linesOf(f, readFileSync(join(HERE, f), 'utf8'))), [], f);
 });

@@ -1,17 +1,21 @@
 #!/usr/bin/env node
 // One command that answers "is it true?" for this whole repo.
 //
-//   npm run prove
+//   npm run prove                      # the proof: every check, every mutation
+//   node scripts/prove.mjs --fast      # the inner loop: every check, but only the mutations a change can reach
 //
-// Every summary Claude gives about this repo should be answerable by this command, and it exits 0 only when every
-// required check holds. It exists because a green test suite on its own proved too little here more than once: the
+// Every summary Claude gives about this repo should be answerable by the first command, and it exits 0 only when
+// every required check holds. The second is never the proof: its mutations row runs `mutate.mjs --since` the
+// upstream (else HEAD~1), is a NOTE at best, and its last line starts "FAST CHECK ONLY:", never PROVEN. Any other
+// argument is refused with exit 1. It exists because a green test suite on its own proved too little here more than once: the
 // "27 of 27 guards bite" claim was a hand count until a mutation check disproved it, a test file was once missing
 // entirely while `npm test` still passed, a draft with a known-wrong formula nearly went to the remote, and on
 // 8 Nov 2026 the secrets line printed PASS while it caught 1 of 13 realistic secret shapes.
 //
 // Required (any FAIL exits 1; a NOTE is printed, does not fail the run, and is never a PASS):
 //   1. tests       every *.test.mjs in the repo, run together, green, and at least one test per suite directory
-//   2. mutations   every guard in the repo is removed in turn and some test goes red (galxe-desk/scripts/mutate.mjs)
+//   2. mutations   every guard in the repo is removed in turn and some test goes red (galxe-desk/scripts/mutate.mjs),
+//                  and its last line says it killed N of N, N being the length of the MUTATIONS list it exports
 //   3. secrets     no key, token, seed phrase or private-key shape in the tree (tracked, and untracked but not
 //                  ignored), in what the next commit would record (the index), or in any line or message ever
 //                  committed (`git log -p --all`). One list of shapes. A binary file skipped is counted in the PASS.
@@ -27,14 +31,15 @@
 // Reported, never failed:
 //  10. rulebook    `desk:check` is honestly incomplete until the live crawl runs; it is shown, not hidden
 //
-// Every check takes one context, { root, studio, now, git }, and reads the repo, the clock and git only through it,
-// so prove.test.mjs runs each one on fixtures in a temp dir with a stand-in for git.
+// Every check takes one context, { root, studio, now, git, node, mutationCount }, and reads the repo, the clock, git
+// and child node runs only through it, so prove.test.mjs runs each one on fixtures in a temp dir with stand-ins.
 
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { MUTATIONS } from '../galxe-desk/scripts/mutate.mjs';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TEST_DIRS = ['galxe-desk/scripts', 'agency/scripts', '.claude/skills/joy-revise/scripts', 'scripts', 'claude-setup/skills/joy-boot/scripts', 'claude-setup/skills/maxx/scripts'];
@@ -47,7 +52,19 @@ const note = (detail) => ({ status: 'NOTE', detail });
 const firstLine = (e) => String(e?.message ?? e).split('\n')[0];
 const isText = (v) => typeof v === 'string' && v.trim() !== '';
 
-/** The run's context. Tests pass their own root, studio path, clock and git; the command uses the real ones. */
+/** node with `args` in `root`, as { code, stdout }: a red exit is a result to judge, never an exception. */
+export function nodeRun(root, args) {
+  try {
+    return { code: 0, stdout: execFileSync(process.execPath, args, { cwd: root, encoding: 'utf8', stdio: 'pipe', maxBuffer: MAX_BUFFER }) };
+  } catch (e) {
+    return { code: typeof e.status === 'number' ? e.status : null, stdout: String(e.stdout ?? ''), error: firstLine(e) };
+  }
+}
+
+/**
+ * The run's context. Tests pass their own root, studio path, clock, git and node; the command uses the real ones.
+ * `mutationCount` is the length of the MUTATIONS list mutate.mjs exports, which its run must account for line by line.
+ */
 export function context(over = {}) {
   const root = over.root ?? REPO;
   return {
@@ -55,6 +72,8 @@ export function context(over = {}) {
     studio: resolve(root, '..', 'joyisfree1'),
     now: Date.now(),
     git: (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: 'pipe', maxBuffer: MAX_BUFFER }),
+    node: (args) => nodeRun(root, args),
+    mutationCount: MUTATIONS.length,
     ...over,
   };
 }
@@ -449,11 +468,24 @@ export function seedLike(words) {
   return false;
 }
 
-/**
- * True when one line holds a seed: a run of BIP39 words that seedLike reads as one. Anything but a letter separates
- * words, so numbering, commas and quotes hide nothing.
- */
-export function seedRun(text) {
+// A comma list of PROSE_LIST_ITEMS items or more, each a phrase of PROSE_PHRASE_WORDS words or more, is prose, and
+// each phrase is read on its own: a lookbook caption ("Look 4: forest green velvet jacket, ocean blue silk dress, sand
+// cotton hat, cream wool sock.") lists pieces, and until 21 Nov 2026 its fourteen BIP39 words in a row read as a seed.
+// A comma list of single words is still read whole ("abandon, ability, able, ..."), and so is a seed cut once by a
+// comma, since two items are not a list. The gap this opens, a seed written as comma-separated pairs, threes or fours,
+// is written down in scripts/corpus/caught.mjs (KNOWN_MISSES) and asserted still missed.
+export const PROSE_LIST_ITEMS = 3;
+export const PROSE_PHRASE_WORDS = 2;
+
+/** The parts of a line read for a seed on their own: each phrase of a prose comma list, else the whole line. */
+export function seedParts(line) {
+  const items = String(line).split(',');
+  const prose = items.length >= PROSE_LIST_ITEMS && items.every((it) => (it.match(/[A-Za-z]+/g) ?? []).length >= PROSE_PHRASE_WORDS);
+  return prose ? items : [String(line)];
+}
+
+/** True when this text holds a run of BIP39 words that seedLike reads as one. Anything but a letter separates words. */
+function seedRunIn(text) {
   let run = [];
   for (const t of String(text).split(/[^A-Za-z]+/)) {
     if (!t) continue;
@@ -461,6 +493,14 @@ export function seedRun(text) {
     if (seedLike(run)) return true;
   }
   return false;
+}
+
+/**
+ * True when one line holds a seed: a run of BIP39 words that seedLike reads as one, within one of its parts
+ * (seedParts). Numbering, quotes and a comma list of single words hide nothing.
+ */
+export function seedRun(text) {
+  return seedParts(text).some(seedRunIn);
 }
 
 // Numbering and bullets around seed words neither count nor break a row: 1  1.  1)  1:  #1  (1)  1st  w1  word1  word_1
@@ -505,6 +545,10 @@ const listCells = (s) => {
 };
 
 export function seedEnds(text) {
+  // A prose comma list (seedParts) is never a row of seed words: only its first phrase may lead a run down the page,
+  // and only its last may end one, so a caption with a line after it is not a seed either.
+  const parts = seedParts(text);
+  if (parts.length > 1) return { lead: seedEnds(parts[0]).lead, trail: seedEnds(parts[parts.length - 1]).trail, words: [], nums: parts.flatMap((p) => seedEnds(p).nums) };
   const cells = SEED_CELLS.exec(String(text));
   const tokens = cells ? [cells[1], cells[2]] : listCells(String(text)) ?? String(text).split(/[\s|]+/);
   const marks = tokens.map(seedMark);
@@ -1089,12 +1133,74 @@ export function tests(ctx) {
   }
 }
 
+const MUTATE = 'galxe-desk/scripts/mutate.mjs';
+const outLines = (run) => String(run?.stdout ?? '').trim().split('\n');
+const exitedWith = (run) => `mutate.mjs exited ${run?.code ?? 'without a code'}: ${outLines(run).slice(-4).join(' | ') || run?.error || 'no output'}`;
+
+// mutate.mjs's last line for a full run that killed every mutation, and for a --since run (galxe-desk/scripts/mutate.mjs,
+// summarise). Anything else as the last line is not a result this row can count.
+export const FULL_RUN = /^killed (\d+) of (\d+) mutations \(every guard bites\)$/;
+export const SINCE_RUN = /^killed (\d+) of (\d+) selected since \S+, (\d+) not run \(every selected guard bites\)$/;
+export const SINCE_NONE = /^killed 0 of 0 selected since \S+: nothing to judge$/;
+
+/**
+ * The full mutations row. A PASS only when mutate.mjs exits 0 and its last line says it killed N of N, N being the
+ * length of the MUTATIONS list it exports (`expected`). Until 21 Nov 2026 exit 0 and the last line were enough, so a
+ * list that silently skipped lines would still have passed (B3). The failure names both numbers.
+ */
+export function mutationsVerdict(run, expected) {
+  if (run?.code !== 0) return fail(exitedWith(run));
+  const last = outLines(run).pop();
+  const m = FULL_RUN.exec(last);
+  if (!m) return fail(`mutate.mjs exited 0, but its last line is not "killed N of N mutations (every guard bites)": ${last || '(none)'}`);
+  const [killed, ran] = [Number(m[1]), Number(m[2])];
+  if (killed !== ran || ran !== expected) return fail(`mutate.mjs killed ${killed} of ${ran}, but MUTATIONS lists ${expected}: a line that did not run is not a guard that bites`);
+  return pass(last);
+}
+
 export function mutations(ctx) {
-  try {
-    return pass(sh(ctx, process.execPath, [join(ctx.root, 'galxe-desk/scripts/mutate.mjs')]).trim().split('\n').pop());
-  } catch (e) {
-    return fail(String(e.stdout || '').trim().split('\n').slice(-4).join(' | '));
-  }
+  return mutationsVerdict(ctx.node([join(ctx.root, MUTATE)]), ctx.mutationCount);
+}
+
+const SHA = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
+
+/**
+ * What --fast measures a change against: the upstream, else HEAD~1, as { sha, label }; with neither, { error }. A git
+ * that fails or prints something that is not a commit id counts as not there, never as "nothing changed".
+ */
+export function fastBase(git) {
+  const read = (args) => { try { return String(git(args)).trim(); } catch { return ''; } };
+  const up = read(['rev-parse', '--verify', '--quiet', '@{upstream}']);
+  if (SHA.test(up)) return { sha: up, label: read(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']) || '@{upstream}' };
+  const prev = read(['rev-parse', '--verify', '--quiet', 'HEAD~1']);
+  if (SHA.test(prev)) return { sha: prev, label: 'HEAD~1' };
+  return { error: 'there is no upstream and no HEAD~1, so there is no base to measure the change against' };
+}
+
+/**
+ * The fast mutations row: only the mutations a change since the base can reach ran, so it is a NOTE when every one
+ * selected was killed (or none was selected), never a PASS. It FAILS when one was not killed, when there is no base,
+ * when the last line cannot be read, and when selected and not run do not add up to the MUTATIONS list's length.
+ */
+export function fastVerdict(run, base, expected) {
+  if (base?.error) return fail(base.error);
+  const since = `since ${base?.label ?? 'an unknown base'}`;
+  if (run?.code !== 0) return fail(`${since}: ${exitedWith(run)}`);
+  const lines = outLines(run);
+  const last = lines.pop();
+  const unguarded = lines.filter((l) => l.startsWith('UNGUARDED: ')).map((l) => l.slice(11).split(' ')[0]);
+  const told = unguarded.length ? `; changed with no mutation naming it: ${unguarded.join(', ')}` : '';
+  if (SINCE_NONE.test(last)) return note(`${since}: nothing to judge, 0 of ${expected} selected${told}`);
+  const m = SINCE_RUN.exec(last);
+  if (!m) return fail(`${since}: mutate.mjs exited 0, but its last line is not "killed N of N selected since ...": ${last || '(none)'}`);
+  const [killed, chosen, notRun] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (killed !== chosen || chosen + notRun !== expected) return fail(`${since}: killed ${killed} of ${chosen} selected and ${notRun} not run, but MUTATIONS lists ${expected}`);
+  return note(`${since}: killed ${killed} of ${chosen} selected, ${notRun} not run${told}`);
+}
+
+export function fastMutations(ctx) {
+  const base = fastBase(ctx.git);
+  return fastVerdict(base.sha ? ctx.node([join(ctx.root, MUTATE), '--since', base.sha]) : null, base, ctx.mutationCount);
 }
 
 export function rulebook(ctx) {
@@ -1120,6 +1226,10 @@ export const CHECKS = [
   ['rulebook', rulebook, false],
 ];
 
+// --fast runs every check as the full run does, except the mutations row, which becomes the fast one.
+export const FAST_CHECKS = CHECKS.map(([name, fn, required]) => (name === 'mutations' ? [name, fastMutations, required] : [name, fn, required]));
+export const MODES = { full: CHECKS, fast: FAST_CHECKS };
+
 const MARKS = new Set(['PASS', 'FAIL', 'NOTE']);
 
 /** What a result prints as. On a required check anything but a known status is a FAIL: unknown is never a pass. */
@@ -1128,8 +1238,12 @@ export function markOf(result, required) {
   return required || s === 'PASS' ? s : 'NOTE';
 }
 
-/** Run the checks in order. A check that throws is a FAIL carrying its message, never a crash that hides the rest. */
-export function runChecks(ctx, checks = CHECKS) {
+/**
+ * Run the checks in order. A check that throws is a FAIL carrying its message, never a crash that hides the rest.
+ * No list, or an empty one, throws: no check run is never "every required check holds".
+ */
+export function runChecks(ctx, checks) {
+  if (!Array.isArray(checks) || !checks.length) throw new Error('no checks to run, so nothing can be said to hold');
   const rows = [];
   for (const [name, fn, required] of checks) {
     let r;
@@ -1143,11 +1257,36 @@ export function runChecks(ctx, checks = CHECKS) {
   return { rows, failed: rows.filter((r) => r.mark === 'FAIL').length };
 }
 
-const isMain = (() => { try { return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href; } catch { return false; } })();
-if (isMain) {
-  const { rows, failed } = runChecks(context());
-  for (const r of rows) console.log(`${r.mark.padEnd(4)}  ${r.name.padEnd(10)}  ${r.detail}`);
-  const notes = rows.filter((r) => r.mark === 'NOTE').length;
-  console.log(failed ? `\nNOT PROVEN: ${failed} required check(s) failed.` : `\nPROVEN: every required check holds${notes ? `; the ${notes} NOTE line(s) above are not passes` : ''}.`);
-  process.exitCode = failed ? 1 : 0;
+/** The command line: nothing (the full run) or --fast alone. Anything else is refused, never ignored. */
+export function proveArgs(argv) {
+  if (argv.length === 0) return { mode: 'full' };
+  if (argv.length === 1 && argv[0] === '--fast') return { mode: 'fast' };
+  return { error: `refused: prove takes no argument, or --fast alone; it was given ${argv.map((a) => JSON.stringify(a)).join(' ')}` };
 }
+
+/**
+ * The last line of a run. A fast run's starts "FAST CHECK ONLY:" and never says PROVEN, pass or fail, because its
+ * mutations row ran only part of the list.
+ */
+export function verdictLine(rows, failed, mode) {
+  const notes = rows.filter((r) => r.mark === 'NOTE').length;
+  const noted = notes ? `; the ${notes} NOTE line(s) above are not passes` : '';
+  if (mode === 'fast') return failed ? `FAST CHECK ONLY: ${failed} required check(s) failed.` : `FAST CHECK ONLY: no required check failed${noted}. Only the mutations this change can reach ran, so this is not the proof: the full run is.`;
+  return failed ? `NOT PROVEN: ${failed} required check(s) failed.` : `PROVEN: every required check holds${noted}.`;
+}
+
+/** The command: prints one row per check and the verdict, and returns the exit code. */
+export function prove(argv, { ctx, modes = MODES, print = (s) => console.log(s) } = {}) {
+  const o = proveArgs(argv);
+  if (o.error) {
+    print(o.error);
+    return 1;
+  }
+  const { rows, failed } = runChecks(ctx ?? context(), modes[o.mode]);
+  for (const r of rows) print(`${r.mark.padEnd(4)}  ${r.name.padEnd(10)}  ${r.detail}`);
+  print(`\n${verdictLine(rows, failed, o.mode)}`);
+  return failed ? 1 : 0;
+}
+
+const isMain = (() => { try { return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href; } catch { return false; } })();
+if (isMain) process.exitCode = prove(process.argv.slice(2));
