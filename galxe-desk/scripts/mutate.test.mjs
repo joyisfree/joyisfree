@@ -13,7 +13,7 @@ import {
   MUTATIONS, SUITES, SUITE_FOR, READS, SELF_REL, MAX_BUFFER, DEFAULT_JOBS, DEFAULT_TIMEOUT_MS,
   parseCli, selectOnly, changedSince, selectSince, importGraph, closure, selfChanges, classify, baselineProblem,
   runAll, runPool, missingSlots, summarise, validateLines, insertLines, addLines, main, prepare, suiteOf,
-  spawnNode, copyRepo, gitRun, relPath,
+  spawnNode, copyRepo, gitRun, relPath, configSpans, twinsOf, CONFIG,
 } from './mutate.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -424,8 +424,21 @@ test('a changed script in a suite folder that no mutation names is reported UNGU
   assert.deepEqual(r.unguarded, ['pkg/scripts/unnamed.mjs']);
 });
 
-// mutate.mjs itself, as a fixture: lines 2 to 8 are the list, line 9 is code.
+// mutate.mjs itself, as a fixture: lines 2 to 8 are the list, line 9 is code, lines 10 to 19 are its config blocks
+// (SUITES 10-13, SUITE_FOR 14, READS 15-17, relPath 18, SKIP 19) and line 20 is code again.
 const SELF_FX = 'pkg/scripts/self.mjs';
+const SELF_CONFIG = [
+  'export const SUITES = {',
+  "  'pkg/scripts': ['a.test.mjs'],",
+  "  'other/scripts': ['z.test.mjs'],",
+  '};',
+  "export const SUITE_FOR = { 'pkg/scripts/cli.mjs': ['pkg/scripts/a.test.mjs'] };",
+  'export const READS = {',
+  "  'other/scripts': ['data/table.json'],",
+  '};',
+  "export const relPath = (file) => (file.includes('/') ? file : `pkg/scripts/${file}`);",
+  "const SKIP = ['.git', 'node_modules'];",
+];
 const SELF_SRC = [
   '// the harness',
   'export const MUTATIONS = [',
@@ -436,11 +449,15 @@ const SELF_SRC = [
   "  ].map(([name, from, to]) => [name, 'pkg/scripts/cli.mjs', from, to]),",
   '];',
   'export function run() {}',
+  ...SELF_CONFIG,
+  'export function after() {}',
   '',
 ].join('\n');
 const LIST_SELF = [...LIST_FX, ['"quoted" name', 'pkg/scripts/a.mjs', 'x', 'y'], ["it's grouped", 'pkg/scripts/cli.mjs', 'p', 'q'], ['own guard', SELF_FX, 'run()', 'skip()']];
 const hunk = (head, ...body) => `diff --git a/s b/s\n--- a/s\n+++ b/s\n${head}\n${body.join('\n')}\n`;
-const selSelf = (diff) => selectSince(LIST_SELF, [SELF_FX], { ...FXO, reads: {}, self: SELF_FX, selfDiff: diff, selfSrc: SELF_SRC }).selected.map((m) => m[0]);
+const sinceSelf = (diff, src = SELF_SRC) => selectSince(LIST_SELF, [SELF_FX], { ...FXO, reads: {}, self: SELF_FX, selfDiff: diff, selfSrc: src });
+const selSelf = (diff, src) => sinceSelf(diff, src).selected.map((m) => m[0]);
+const ALL_SELF = LIST_SELF.map((m) => m[0]);
 
 test('a changed mutate.mjs selects only the lines it added, however their names are quoted', () => {
   assert.deepEqual(selSelf(hunk('@@ -3,0 +4 @@', '+  ["\\"quoted\\" name", "pkg/scripts/a.mjs", "x", "y"],')), ['"quoted" name']);
@@ -464,6 +481,102 @@ test('a line of mutate.mjs that names no mutation selects by its path, else ever
 
 test('mutate.mjs changed with no hunk to say how selects every mutation', () => {
   assert.deepEqual(selSelf(''), LIST_SELF.map((m) => m[0]));
+});
+
+test('a hunk of mutate.mjs in SUITES, SUITE_FOR, READS, relPath or SKIP selects every mutation, so an edited suite never passes unseen', () => {
+  const cases = [
+    ['SUITES', hunk('@@ -12 +12 @@', "-  'other/scripts': ['z.test.mjs', 'y.test.mjs'],", "+  'other/scripts': ['z.test.mjs'],")],
+    ['SUITES', hunk('@@ -11 +10,0 @@', "-  'agency/scripts': ['ab-test.test.mjs'],")], // its first entry deleted, right after the marker
+    ['SUITES', hunk('@@ -13,2 +12,0 @@', "-  'gone/scripts': ['g.test.mjs'],", "-  'more/scripts': ['m.test.mjs'],")], // two entries cut at its end
+    ['SUITES', hunk('@@ -8,3 +8,3 @@', '-];', '-export function run() { }', '-export const SUITES = {', '+];', '+export function run() {}', '+export const SUITES = {')],
+    ['SUITE_FOR', hunk('@@ -14 +14 @@', '-export const SUITE_FOR = {};', `+${SELF_CONFIG[4]}`)],
+    ['READS', hunk('@@ -16 +16 @@', "-  'other/scripts': [],", `+${SELF_CONFIG[6]}`)],
+    ['relPath', hunk('@@ -18 +18 @@', '-export const relPath = (file) => file;', `+${SELF_CONFIG[8]}`)],
+    ['SKIP', hunk('@@ -19 +19 @@', "-const SKIP = ['.git'];", `+${SELF_CONFIG[9]}`)],
+  ];
+  for (const [block, diff] of cases) {
+    const r = sinceSelf(diff);
+    assert.deepEqual(r.selected.map((m) => m[0]), ALL_SELF, diff);
+    assert.equal(r.everything, `${SELF_FX} changed ${block}, so every mutation is selected`, diff);
+  }
+  assert.equal(sinceSelf(hunk('@@ -11,2 +11,2 @@', '-a', '-b', "+  'pkg/scripts': ['a.test.mjs'],", '+x')).everything, `${SELF_FX} changed SUITES, so every mutation is selected`);
+  assert.equal(sinceSelf(hunk('@@ -12,4 +12,4 @@', '-a', '-b', '-c', '-d', '+a', '+b', '+c', '+d')).everything, `${SELF_FX} changed SUITES and SUITE_FOR and READS, so every mutation is selected`);
+  for (const diff of [hunk('@@ -9 +9 @@', '-export function run() { }', '+export function run() {}'), hunk('@@ -20 +20 @@', '-export function after() { }', '+export function after() {}')]) {
+    assert.deepEqual(selSelf(diff), ['own guard'], 'code outside the config still selects only its own guards');
+    assert.equal(sinceSelf(diff).everything, null);
+  }
+  assert.equal(selectSince(LIST_FX, ['pkg/scripts/a.mjs'], { ...FXO, reads: {} }).everything, null);
+  assert.deepEqual(configSpans(SELF_SRC), [
+    { name: 'SUITES', start: 10, end: 13 }, { name: 'SUITE_FOR', start: 14, end: 14 }, { name: 'READS', start: 15, end: 17 },
+    { name: 'relPath', start: 18, end: 18 }, { name: 'SKIP', start: 19, end: 19 },
+  ]);
+  assert.deepEqual(CONFIG.map((b) => b[0]), ['SUITES', 'SUITE_FOR', 'READS', 'relPath', 'SKIP']);
+});
+
+test('a mutate.mjs whose config blocks cannot each be found once, or one that never closes, selects every mutation', () => {
+  const without = (name) => SELF_SRC.split('\n').filter((l, i) => !(i >= 9 && i <= 12 && name === 'SUITES') && !(name === 'SKIP' && l.startsWith('const SKIP = '))).join('\n');
+  const code = hunk('@@ -9 +9 @@', '-export function run() { }', '+export function run() {}');
+  const sources = {
+    'no SUITES': without('SUITES'),
+    'no SKIP': without('SKIP'),
+    'SUITES twice': SELF_SRC.split('export function after() {}').join("export const SUITES = { 'x/scripts': [] };"),
+    'SKIP never closes': SELF_SRC.split(SELF_CONFIG[9]).join("const SKIP = [\n  '.git',").split('export function after() {}\n').join(''),
+    'no file at all': '',
+  };
+  for (const [what, src] of Object.entries(sources)) {
+    const r = sinceSelf(code, src);
+    assert.deepEqual(r.selected.map((m) => m[0]), ALL_SELF, what);
+    assert.match(r.everything, /changed, and its SUITES, SUITE_FOR, READS, relPath, SKIP cannot each be found once, so every mutation is selected$/, what);
+    assert.equal(configSpans(src), null, what);
+  }
+  const unclosed = sources['SKIP never closes'];
+  assert.ok(unclosed.trimEnd().endsWith("'.git',"), 'the fixture really ends inside SKIP');
+  // A comment that ends in ";" inside a block does not close it: only "};" or "];" (or the marker's own line) does.
+  const commented = SELF_SRC.split("  'other/scripts': ['z.test.mjs'],\n").join("  // the folders, each with its tests;\n  'other/scripts': ['z.test.mjs'],\n");
+  assert.deepEqual(selSelf(hunk('@@ -13 +13 @@', "-  'other/scripts': [],", "+  'other/scripts': ['z.test.mjs'],"), commented), ALL_SELF);
+  assert.deepEqual(configSpans(commented)[0], { name: 'SUITES', start: 10, end: 14 });
+});
+
+test("the verifier's case: one changed line in the real file's SUITES selects all of MUTATIONS, not only mutate.mjs's own", () => {
+  const real = readFileSync(MUTATE, 'utf8');
+  const lines = real.split('\n');
+  const lineOf = (prefix) => {
+    const at = lines.findIndex((l) => l.startsWith(prefix));
+    assert.ok(at >= 0 && lines.findIndex((l, i) => i > at && l.startsWith(prefix)) < 0, prefix);
+    return at + 1;
+  };
+  const cases = [
+    ['SUITES', "  'agency/scripts': ["], ['SUITES', "  '.claude/skills/joy-revise/scripts': ['worth-it"], ['SUITE_FOR', "  'galxe-desk/scripts/mutate.mjs': ["],
+    ['READS', "  'galxe-desk/scripts': ['.claude/agents/'],"], ['relPath', 'export const relPath = '], ['SKIP', 'const SKIP = '],
+  ];
+  const own = MUTATIONS.filter((m) => relPath(m[1]) === SELF_REL).length;
+  for (const [block, prefix] of cases) {
+    const n = lineOf(prefix);
+    const r = selectSince(MUTATIONS, [SELF_REL], { selfDiff: hunk(`@@ -${n} +${n} @@`, `-${lines[n - 1]} // was`, `+${lines[n - 1]}`), selfSrc: real });
+    assert.equal(r.selected.length, MUTATIONS.length, `${block} via ${prefix}: ${r.selected.length} of ${MUTATIONS.length}, mutate.mjs's own ${own}`);
+    assert.equal(r.everything, `${SELF_REL} changed ${block}, so every mutation is selected`);
+  }
+  const code = lineOf('export function classify(');
+  assert.equal(selectSince(MUTATIONS, [SELF_REL], { selfDiff: hunk(`@@ -${code} +${code} @@`, '-x', `+${lines[code - 1]}`), selfSrc: real }).selected.length, own);
+  assert.deepEqual(configSpans(real).map((s) => s.name), ['SUITES', 'SUITE_FOR', 'READS', 'relPath', 'SKIP']);
+});
+
+test('main prints one NOTE saying why every mutation is selected, and runs them all', async () => {
+  const sha = 'b'.repeat(40);
+  const git = (args) => {
+    if (args[0] === 'rev-parse') return { code: 0, stdout: `${sha}\n` };
+    if (args[0] === 'diff' && args.includes('-U0')) return { code: 0, stdout: hunk('@@ -3 +3 @@', '-x', '+y') };
+    return { code: 0, stdout: args[0] === 'diff' ? `${SELF_REL}\0` : '' };
+  };
+  let ran = null;
+  const out = [];
+  // FX holds no galxe-desk/scripts/mutate.mjs, so its config blocks cannot be found: every mutation is selected.
+  const code = await main(['--since', 'HEAD'], { mutations: LIST_FX, ...FXO, reads: {}, git, run: async (list) => { ran = list.map((m) => m[0]); return killedAll(list); }, print: (l) => out.push(l) });
+  assert.equal(code, 0);
+  assert.deepEqual(ran, LIST_FX.map((m) => m[0]));
+  assert.equal(out.filter((l) => l.startsWith('NOTE: ')).length, 1);
+  assert.match(out[0], /^NOTE: galxe-desk\/scripts\/mutate\.mjs changed, and its SUITES, .* cannot each be found once, so every mutation is selected$/);
+  assert.equal(out.at(-1), 'killed 4 of 4 selected since HEAD, 0 not run (every selected guard bites)');
 });
 
 test('nothing selected since a commit is the one honest 0 of 0, and a selection runs only what it picked', async () => {
@@ -513,6 +626,39 @@ test('--add refuses the whole batch, saying why per line, before anything runs',
   assert.match(validateLines([GOOD, GOOD], VOPTS).join(), /line 2 .*the name is taken/);
   for (const group of ['two\nlines', 'a\rb', 'a\u2028b', '', '   ', undefined]) assert.ok(validateLines([GOOD], { ...VOPTS, group }).length, JSON.stringify(group));
   for (const batch of [[], {}, 'x', null]) assert.ok(validateLines(batch, VOPTS).length, JSON.stringify(batch));
+});
+
+test('a line that is an existing guard under a new name is refused, so N of N never counts one guard twice', () => {
+  const twin = /is the same guard as "a refuses a negative": it leaves pkg\/scripts\/a\.mjs byte-identical/;
+  const copy = ['a copy', 'pkg/scripts/a.mjs', "if (x < 0) return 'refused';", "if (false) return 'refused';"];
+  const wider = ['the same cut, spelt shorter', 'pkg/scripts/a.mjs', 'if (x < 0) return', 'if (false) return'];
+  for (const line of [copy, wider]) {
+    const problems = validateLines([GOOD, line], VOPTS);
+    assert.equal(problems.length, 1, problems.join(' | '));
+    assert.match(problems[0], /^line 2 /);
+    assert.match(problems[0], twin);
+  }
+  const again = ['a positive passes again', 'pkg/scripts/a.mjs', '  return b(x);', "  return 'ok';"];
+  const inBatch = validateLines([GOOD, GOOD2, again], VOPTS);
+  assert.equal(inBatch.length, 1, inBatch.join(' | '));
+  assert.match(inBatch[0], /^line 3 .*is the same guard as "a positive passes through"/);
+  // A bare name and the full path are the same file.
+  const root = fixture();
+  write(root, 'galxe-desk/scripts/r.mjs', 'export const r = (x) => (x > 1 ? 1 : 0);\n');
+  write(root, 'galxe-desk/scripts/r.test.mjs', "import { test } from 'node:test';\ntest('r', () => {});\n");
+  const ropts = { ...VOPTS, root, suites: { ...SUITES_FX, 'galxe-desk/scripts': ['r.test.mjs'] }, mutations: [['r gate', 'r.mjs', 'x > 1', 'x > 2']] };
+  assert.match(validateLines([['r gate, by its path', 'galxe-desk/scripts/r.mjs', '(x > 1 ?', '(x > 2 ?']], ropts).join(), /same guard as "r gate": it leaves galxe-desk\/scripts\/r\.mjs byte-identical/);
+  assert.deepEqual(validateLines([['r gate, the other way', 'galxe-desk/scripts/r.mjs', 'x > 1', 'x < 1']], ropts), []);
+  // A listed line whose match is gone is the run's NO_MATCH, not a reason to refuse or to throw.
+  assert.deepEqual(validateLines([GOOD], { ...VOPTS, mutations: [...HARNESS_LIST, ['stale', 'pkg/scripts/a.mjs', 'no longer here', 'y']] }), []);
+});
+
+test('no two listed mutations leave their file byte-identical, so killed N of N counts each guard once', () => {
+  assert.deepEqual(twinsOf(MUTATIONS), []);
+  const wider = ['the same cut, spelt shorter', 'pkg/scripts/a.mjs', 'if (x < 0) return', 'if (false) return'];
+  const list = [...HARNESS_LIST, GOOD, wider, ['z one, by a longer from', 'other/scripts/z.mjs', '(x ? 1 : 0);', '(x ? 0 : 0);'], LIST_FX[3], ['gone', 'pkg/scripts/none.mjs', 'a', 'b']];
+  assert.deepEqual(twinsOf(list, { root: FX }), [['a refuses a negative', 'the same cut, spelt shorter'], ['z one, by a longer from', 'z one']]);
+  assert.deepEqual(twinsOf(LIST_FX, { root: FX }), []);
 });
 
 test("a line for the harness file itself is refused when its from would also match its own written line", () => {
@@ -614,7 +760,12 @@ test('every listed mutation is four strings with a unique name, a real change, o
   }
 });
 
-test("claude-setup's boot.mjs guard runs in the one pass, judged by its folder's suite", () => {
+test("claude-setup's two boot.mjs guards run in the one pass, judged by its folder's suite", () => {
   assert.deepEqual(SUITES['claude-setup/skills/joy-boot/scripts'], ['boot.test.mjs']);
-  assert.ok(MUTATIONS.some((m) => m[1] === 'claude-setup/skills/joy-boot/scripts/boot.mjs' && m[2] === 'big: 150_000,'));
+  const boot = 'claude-setup/skills/joy-boot/scripts/boot.mjs';
+  // The two cuts claude-setup's own mutate.mjs makes at once, each listed here alone, so each must bite alone.
+  for (const [from, to] of [['big: 150_000,', 'big: 1_500_000,'], ["if (!input || typeof input !== 'object' || Array.isArray(input)) input = {};", '']]) {
+    assert.ok(MUTATIONS.some((m) => m[1] === boot && m[2] === from && m[3] === to), from);
+  }
+  assert.equal(MUTATIONS.filter((m) => m[1] === boot).length, 2);
 });

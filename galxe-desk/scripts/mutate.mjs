@@ -7,7 +7,9 @@
 //   node galxe-desk/scripts/mutate.mjs                        # every mutation, four suites at a time
 //   node galxe-desk/scripts/mutate.mjs --only agency,ledger   # those whose file path contains a term; a term that
 //                                                             # selects nothing is refused, never "0 of 0"
-//   node galxe-desk/scripts/mutate.mjs --since origin/main    # only those a change since that commit can reach
+//   node galxe-desk/scripts/mutate.mjs --since origin/main    # only those a change since that commit can reach; a
+//                                                             # change to this file's SUITES, SUITE_FOR, READS,
+//                                                             # relPath or SKIP reaches every one
 //   node galxe-desk/scripts/mutate.mjs --add lines.json --group "<one line>"   # check, run, then write a batch
 //   node galxe-desk/scripts/mutate.mjs --list                 # just list them (after --only and --since)
 //   --jobs N (1 to 16, default 4 or fewer CPUs), --timeout-ms N (per suite run, default 120000), --verbose
@@ -26,12 +28,15 @@
 //
 // A guard of this file needs a `from` that does not also match its own line in MUTATIONS, so each one ends in a line
 // break or holds a backslash or a double quote, all of which the JSON of that line escapes (--add checks this).
+// No two lines may leave their file byte-identical: that is one guard under two names, counted twice in "N of N"
+// (--add refuses such a line, and mutate.test.mjs checks the whole list).
 
 import { cpSync, mkdtempSync, readFileSync, writeFileSync, renameSync, rmSync, existsSync, statSync, readdirSync, realpathSync } from 'node:fs';
 import { tmpdir, availableParallelism } from 'node:os';
 import { join, dirname, basename, resolve, relative, sep, isAbsolute, posix } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync, spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(DIR, '..', '..');
@@ -608,7 +613,6 @@ export const MUTATIONS = [
   ["an absolute path after a word said in prose is prose","scripts/prove.mjs","(?:${PATH_SHELL})\\\\s+${ABSOLUTE_PATH}","(?:${SHELL})\\\\s+${ABSOLUTE_PATH}"],
   ["yarn installs only when nothing but a flag follows","scripts/prove.mjs","|yarn\\\\s+(?:un|re)?install(?=\\\\s*(?:$|--?[A-Za-z]))","|yarn\\\\s+(?:un|re)?install"],
   ["yarn install alone on a line is still a step","scripts/prove.mjs","|yarn\\\\s+(?:un|re)?install(?=\\\\s*(?:$|--?[A-Za-z]))",""],
-  ["./ and ~/ count after any tool, even one said in prose","scripts/prove.mjs","'\\\\.{1,2}[\\\\\\\\/]', // a relative path: ./setup.sh, ..\\joyisfree","'(?!)', // a relative path: ./setup.sh, ..\\joyisfree"],
   // scripts/prove.mjs — verifier round 3: a CSV splits only as a seed backup row or a six-word comma list; a numbered list of several words to a number is a list (9 Nov 2026)
   ["a seed backup's two cells are read as a number and a word","scripts/prove.mjs","const cells = SEED_CELLS.exec(String(text));","const cells = null;"],
   ["semicolons separate a seed backup's cells","scripts/prove.mjs","[\"']?\\s*[,;]\\s*[\"']?([A-Za-z]+)","[\"']?\\s*,\\s*[\"']?([A-Za-z]+)"],
@@ -712,6 +716,23 @@ export const MUTATIONS = [
   // galxe-desk/scripts/mutate.mjs: a READS folder entry, so .claude/agents reaches agents.mjs (21 Nov 2026) (added by mutate --add)
   ["--since: a READS folder entry covers what is under it","galxe-desk/scripts/mutate.mjs","  const readChanged = (f) => (f.endsWith('/') ? [...changed].some((c) => c.startsWith(f)) : changed.has(f)); // a folder entry covers what is under it\n","  const readChanged = (f) => changed.has(f); // a folder entry covers what is under it\n"],
   ["--since: a changed agent file reruns the desk's firewall guards","galxe-desk/scripts/mutate.mjs","  'galxe-desk/scripts': ['.claude/agents/'],\n","\n"],
+  // claude-setup/skills/joy-boot/scripts/boot.mjs: its input guard, now that boot.test.mjs sends null (21 Nov 2026) (added by mutate --add)
+  ["boot: a null hook input is read as an empty object","claude-setup/skills/joy-boot/scripts/boot.mjs","if (!input || typeof input !== 'object' || Array.isArray(input)) input = {};",""],
+  // galxe-desk/scripts/mutate.mjs: a config hunk runs every guard; one guard never counts twice (21 Nov 2026) (added by mutate --add)
+  ["--since: a hunk in a config block of mutate.mjs selects every mutation","galxe-desk/scripts/mutate.mjs","  const everything = unknown ? 'changed, but no hunk of its diff says how' : own.config; // a config change reaches every folder's run\n","  const everything = unknown ? 'changed, but no hunk of its diff says how' : null; // a config change reaches every folder's run\n"],
+  ["--since: a config marker that is missing selects every mutation","galxe-desk/scripts/mutate.mjs","    if (at < 0 || twice) return null; // a marker missing or twice: where this block sits is unknown\n","    if (at < 0 || twice) return []; // a marker missing or twice: where this block sits is unknown\n"],
+  ["--since: a config marker found twice selects every mutation","galxe-desk/scripts/mutate.mjs","    const twice = at >= 0 && lines.some((l, i) => i > at && l.startsWith(marker)); // a second marker\n","    const twice = false; // a second marker\n"],
+  ["--since: a config block that never closes selects every mutation","galxe-desk/scripts/mutate.mjs","    if (end < 0) return null; // a block that never closes\n","    if (false) return null; // a block that never closes\n"],
+  ["--since: a config block runs to its closing line","galxe-desk/scripts/mutate.mjs","    spans.push({ name, start: at + 1, end: end + 1 }); // a block runs to its closing line\n","    spans.push({ name, start: at + 1, end: at + 1 }); // a block runs to its closing line\n"],
+  ["--since: a line ending in \";\" inside a config block does not close it","galxe-desk/scripts/mutate.mjs","(i === at || /^[}\\]]/.test(l))","true"],
+  ["--since: a cut touches the lines on both sides of it","galxe-desk/scripts/mutate.mjs","      const [lo, hi] = d === 0 ? [c, c + 1] : [c, c + d - 1]; // a cut touches the lines on both sides of it\n","      const [lo, hi] = [c, c + d - 1]; // a cut touches the lines on both sides of it\n"],
+  ["--since: a hunk that meets a config block marks it changed","galxe-desk/scripts/mutate.mjs","      for (const s of spans ?? []) if (lo <= s.end && hi >= s.start) touched.add(s.name); // this hunk changed a config block\n","      for (const s of spans ?? []) if (false) touched.add(s.name); // this hunk changed a config block\n"],
+  ["--since: config blocks that cannot be found select every mutation","galxe-desk/scripts/mutate.mjs","  const config = !spans ? `changed, and its ${CONFIG.map((b) => b[0]).join(', ')} cannot each be found once` : touched.size ? `changed ${[...touched].join(' and ')}` : null;\n","  const config = false ? `changed, and its ${CONFIG.map((b) => b[0]).join(', ')} cannot each be found once` : touched.size ? `changed ${[...touched].join(' and ')}` : null;\n"],
+  ["--add refuses a line that is an existing guard under a new name","galxe-desk/scripts/mutate.mjs","      if (twin !== undefined) problems.push(`${tag}: is the same guard as ${JSON.stringify(twin)}: it leaves ${rel} byte-identical`);\n","      if (false) problems.push(`${tag}: is the same guard as ${JSON.stringify(twin)}: it leaves ${rel} byte-identical`);\n"],
+  ["--add refuses a batch line that repeats an earlier line's cut","galxe-desk/scripts/mutate.mjs","      known.set(key, name); // a later line of the batch may not repeat it either\n","       // a later line of the batch may not repeat it either\n"],
+  ["--add checks a line against the guards already listed for its file","galxe-desk/scripts/mutate.mjs","    if (!effects.has(rel)) effects.set(rel, new Map(mutations.filter((m) => relPath(m[1]) === rel).map((m) => [effect(rel, src, m[2], m[3]), m[0]]).filter(([key]) => key !== null)));\n","    if (!effects.has(rel)) effects.set(rel, new Map());\n"],
+  ["--add counts a bare name and its full path as one file","galxe-desk/scripts/mutate.mjs","    if (!effects.has(rel)) effects.set(rel, new Map(mutations.filter((m) => relPath(m[1]) === rel).map((m) => [effect(rel, src, m[2], m[3]), m[0]]).filter(([key]) => key !== null)));\n","    if (!effects.has(rel)) effects.set(rel, new Map(mutations.filter((m) => m[1] === rel).map((m) => [effect(rel, src, m[2], m[3]), m[0]]).filter(([key]) => key !== null)));\n"],
+  ["two listed lines that leave a file byte-identical are found","galxe-desk/scripts/mutate.mjs","    if (seen.has(key)) pairs.push([seen.get(key), m[0]]); // one guard under two names\n","    if (false) pairs.push([seen.get(key), m[0]]); // one guard under two names\n"],
 ];
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -1045,12 +1066,37 @@ export function closure(graph, start) {
   return seen;
 }
 
-// A -U0 diff of mutate.mjs read against the file as it is now: the lines added inside the MUTATIONS array, and
-// whether any hunk falls outside it (then mutate.mjs's own code changed, and its own guards must run).
+// The blocks of this file that decide how every other file's guards are run: which tests judge a folder or a file
+// (SUITES, SUITE_FOR), what a folder's tests read (READS), which file a bare name means (relPath) and what a
+// mutation's copy leaves out (SKIP). A change to one of them can turn any guard's verdict, so --since runs them all.
+export const CONFIG = [['SUITES', 'export const SUITES = '], ['SUITE_FOR', 'export const SUITE_FOR = '], ['READS', 'export const READS = '], ['relPath', 'export const relPath = '], ['SKIP', 'const SKIP = ']];
+
+// Each config block's 1-based lines in `src`, from its marker to the first line at or after it that ends in ";" and
+// is the marker's own line or starts with "}" or "]". Null when a marker is missing or appears twice, or a block
+// never closes, because then where the config sits is unknown.
+export function configSpans(src) {
+  const lines = String(src).split('\n');
+  const spans = [];
+  for (const [name, marker] of CONFIG) {
+    const at = lines.findIndex((l) => l.startsWith(marker));
+    const twice = at >= 0 && lines.some((l, i) => i > at && l.startsWith(marker)); // a second marker
+    if (at < 0 || twice) return null; // a marker missing or twice: where this block sits is unknown
+    const end = lines.findIndex((l, i) => i >= at && l.trimEnd().endsWith(';') && (i === at || /^[}\]]/.test(l)));
+    if (end < 0) return null; // a block that never closes
+    spans.push({ name, start: at + 1, end: end + 1 }); // a block runs to its closing line
+  }
+  return spans;
+}
+
+// A -U0 diff of mutate.mjs read against the file as it is now: the lines added inside the MUTATIONS array, whether
+// any hunk falls outside it (then mutate.mjs's own code changed, and its own guards must run), and `config`: null,
+// or why the change reaches every guard (a hunk touched a config block, or where they sit cannot be read).
 export function selfChanges(diff, src) {
   const lines = String(src).split('\n');
   const open = lines.indexOf('export const MUTATIONS = [') + 1;
   const close = lines.findIndex((l, i) => i >= open && l === '];') + 1;
+  const spans = configSpans(src);
+  const touched = new Set();
   const added = [];
   let outside = !(open > 0 && close > open);
   let hunks = 0;
@@ -1063,13 +1109,16 @@ export function selfChanges(diff, src) {
       const d = h[2] === undefined ? 1 : Number(h[2]);
       const inside = d === 0 ? c >= open && c < close : c > open && c + d - 1 < close;
       if (!inside) outside = true; // this hunk changed code, not a line of the list
+      const [lo, hi] = d === 0 ? [c, c + 1] : [c, c + d - 1]; // a cut touches the lines on both sides of it
+      for (const s of spans ?? []) if (lo <= s.end && hi >= s.start) touched.add(s.name); // this hunk changed a config block
       next = c;
     } else if (hunks && line.startsWith('+')) {
       if (next > open && next < close) added.push(line.slice(1)); // a line of the list, by its own line number
       next++;
     }
   }
-  return { added, outside, hunks };
+  const config = !spans ? `changed, and its ${CONFIG.map((b) => b[0]).join(', ')} cannot each be found once` : touched.size ? `changed ${[...touched].join(' and ')}` : null;
+  return { added, outside, hunks, config };
 }
 
 // A name as it can be spelled in this file: raw, inside a JSON string, or inside a single-quoted string.
@@ -1081,15 +1130,18 @@ export const suiteFolders = (suites = SUITES, suiteFor = SUITE_FOR) =>
 // Which mutations a change can reach. A mutation of file F (folder D) is selected when anything F or its suite's
 // tests import, however deep, changed (F and the tests themselves included); a non-.mjs file under D's top-level
 // folder changed; a file READS lists for D changed; or, for mutate.mjs itself, its line changed (by name) or a hunk
-// fell outside MUTATIONS (its own guards). `unguarded` lists changed scripts in a suite folder no mutation names.
+// fell outside MUTATIONS (its own guards). Every mutation is selected when mutate.mjs changed with no hunk to say
+// how, or changed a config block (CONFIG), and `everything` then says why. `unguarded` lists changed scripts in a
+// suite folder no mutation names.
 export function selectSince(list, files, opts = {}) {
   const { root = REPO, suites = SUITES, suiteFor = SUITE_FOR, reads = READS, self = SELF_REL, selfDiff = '', selfSrc = '' } = opts;
   const changed = new Set(files);
   const selfChanged = changed.delete(self); // mutate.mjs is judged by its diff, not as one changed file
   const folders = suiteFolders(suites, suiteFor);
   const graph = opts.graph ?? importGraph(root, folders);
-  const own = selfChanged ? selfChanges(selfDiff, selfSrc) : { added: [], outside: false, hunks: 0 };
+  const own = selfChanged ? selfChanges(selfDiff, selfSrc) : { added: [], outside: false, hunks: 0, config: null };
   const unknown = selfChanged && own.hunks === 0; // mutate.mjs changed but no hunk says how: run everything
+  const everything = unknown ? 'changed, but no hunk of its diff says how' : own.config; // a config change reaches every folder's run
   const byLine = new Set();
   for (const line of own.added) {
     const t = line.trim();
@@ -1110,10 +1162,34 @@ export function selectSince(list, files, opts = {}) {
     for (const c of changed) if (!c.endsWith('.mjs') && c.startsWith(`${top}/`)) return true; // a data file nearby
     return (reads[dirOf(rel)] ?? []).some(readChanged);
   };
-  const selected = list.filter((m, i) => unknown || byLine.has(i) || touches(relPath(m[1])));
+  const selected = list.filter((m, i) => everything || byLine.has(i) || touches(relPath(m[1])));
   const named = new Set(list.map((m) => relPath(m[1])));
   const unguarded = [...changed].filter((f) => SCRIPT.test(f) && !/\.test\.m?js$/.test(f) && folders.includes(dirOf(f)) && !named.has(f) && existsSync(join(root, f))).sort();
-  return { selected, unguarded };
+  return { selected, unguarded, everything: everything ? `${self} ${everything}, so every mutation is selected` : null };
+}
+
+// What a mutation leaves its file as, as one key: the file and a hash of its mutated text, made by slicing. Null when
+// `from` is not found exactly once. Two mutations with one key are one guard under two names.
+const effect = (rel, src, from, to) => {
+  const at = findOnce(src, from);
+  return at.status ? null : `${rel}\0${createHash('sha256').update(src.slice(0, at.i) + to + src.slice(at.i + from.length)).digest('hex')}`;
+};
+
+// The pairs in `list` that leave their file byte-identical, [earlier name, later name]. Such a pair would count one
+// guard twice in "killed N of N". A line whose file or match is missing is the run's NO_MATCH, not a twin.
+export function twinsOf(list, { root = REPO, read = (p) => readFileSync(p, 'utf8') } = {}) {
+  const texts = new Map();
+  const seen = new Map();
+  const pairs = [];
+  for (const m of list) {
+    const rel = relPath(m[1]);
+    if (!texts.has(rel)) { try { texts.set(rel, read(join(root, rel))); } catch { texts.set(rel, null); } }
+    const key = texts.get(rel) === null ? null : effect(rel, texts.get(rel), m[2], m[3]);
+    if (key === null) continue;
+    if (seen.has(key)) pairs.push([seen.get(key), m[0]]); // one guard under two names
+    else seen.set(key, m[0]);
+  }
+  return pairs;
 }
 
 // Why a batch for --add cannot go in, one reason per line; empty when it can.
@@ -1129,6 +1205,11 @@ export function validateLines(batch, opts = {}) {
   const taken = new Set(mutations.map((m) => m[0]));
   const ins = typeof targetSrc === 'string' ? insertLines(targetSrc, batch, String(group ?? '')) : null;
   if (ins?.error) problems.push(ins.error);
+  const effects = new Map(); // per file, what each guard leaves it as: the list's, then the batch's so far
+  const effectsOf = (rel, src) => {
+    if (!effects.has(rel)) effects.set(rel, new Map(mutations.filter((m) => relPath(m[1]) === rel).map((m) => [effect(rel, src, m[2], m[3]), m[0]]).filter(([key]) => key !== null)));
+    return effects.get(rel);
+  };
   batch.forEach((line, k) => {
     if (!Array.isArray(line) || line.length !== 4 || !line.every((x) => typeof x === 'string')) {
       problems.push(`line ${k + 1}: must be [name, path, from, to], four strings`);
@@ -1157,9 +1238,17 @@ export function validateLines(batch, opts = {}) {
     }
     if (!suiteOf(rel, { root, suites, suiteFor }).length) problems.push(`${tag}: ${rel} has no suite to judge it`);
     if (from === '') return;
-    const found = findOnce(readFileSync(p, 'utf8'), from);
+    const src = readFileSync(p, 'utf8');
+    const found = findOnce(src, from);
     if (found.status) problems.push(`${tag}: from ${found.status === 'NO_MATCH' ? 'is not found' : 'occurs more than once'} in ${rel}`);
     else if (rel === target && ins?.text && findOnce(ins.text, from).status) problems.push(`${tag}: from would also match its own line once written into ${rel}`);
+    else {
+      const known = effectsOf(rel, src);
+      const key = effect(rel, src, from, to);
+      const twin = known.get(key);
+      if (twin !== undefined) problems.push(`${tag}: is the same guard as ${JSON.stringify(twin)}: it leaves ${rel} byte-identical`);
+      known.set(key, name); // a later line of the batch may not repeat it either
+    }
   });
   return problems;
 }
@@ -1257,6 +1346,7 @@ export async function main(argv, deps = {}) {
     const selfPath = join(root, SELF_REL);
     const sel = selectSince(mutations, ch.files, { root, suites, suiteFor, reads, selfDiff, selfSrc: existsSync(selfPath) ? readFileSync(selfPath, 'utf8') : '' });
     for (const f of sel.unguarded) print(`UNGUARDED: ${f} changed and no mutation names it`);
+    if (sel.everything) print(`NOTE: ${sel.everything}`);
     const keep = new Set(sel.selected);
     chosen = chosen.filter((m) => keep.has(m));
     notRun = mutations.length - chosen.length;

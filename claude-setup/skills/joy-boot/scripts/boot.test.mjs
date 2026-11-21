@@ -273,7 +273,7 @@ test('--verdict-only prints only the header, the verdict and the next step', () 
 });
 
 test('guards: malformed stdin, a missing transcript, an empty one and a non-object all exit 0 with a boot line', () => {
-  for (const input of ['not json', '', '[1,2]', '42', '{"source":5,"cwd":17,"transcript_path":{}}']) {
+  for (const input of ['not json', '', '[1,2]', '42', 'null', '{"source":5,"cwd":17,"transcript_path":{}}']) {
     const out = run([], input);
     assert.match(out, /^JOY BOOT · startup/, `input ${JSON.stringify(input)}`);
     assert.match(out, /Then: .*\/joyisfree/);
