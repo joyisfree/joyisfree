@@ -20,6 +20,14 @@ Rules that hold in this repo:
   `node galxe-desk/scripts/agents.mjs` (inside `npm test`) fails if any agent breaks this. The routine is
   `.claude/skills/galxe-claim/SKILL.md`.
 - **Every claim answerable by a command:** `npm test` (the gate, the ledger and the crawler, with guards shown to
-  fail), `npm run desk:check` (is the rulebook complete), `npm run desk:status` (the ledger and the kill rule).
+  fail), `npm run desk:check` (is the rulebook complete), `npm run desk:status` (the ledger and the kill rule),
+  `npm run prove` (the proof: PROVEN only when every listed guard, all N, is shown to bite) and `npm run prove:fast`
+  (the inner loop: only what a change can reach, never PROVEN).
+- **The method is machinery** (docs/plan-2026-11-19.md). `.claude/hooks/guard.mjs` blocks force pushes, hard resets,
+  `clean -f`, history rewrites and `rm -rf` outside tmp, in sessions opened in this folder (one opened a folder up does not
+  load it). A new guard's mutation line goes in only through `node galxe-desk/scripts/mutate.mjs --add <file.json>
+  --group "<one line>"`, which runs it and writes nothing unless it is killed. Confirmed findings are fixed through the
+  saved workflows `.claude/workflows/review-3x.js`, then `fix-verify.js` (at most 2 rounds, then back to the lead);
+  each run gets a `workflow run:` line in `galxe-desk/docs/errors.md`, which the 19 Dec kill rule counts.
 - **Nothing from here enters the studio repo.** The studio asserts that its app contacts only its own origin.
 - Run git as `git -C <path> <command>`, never `cd <path> && git`.

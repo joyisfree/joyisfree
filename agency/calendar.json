@@ -107,5 +107,14 @@
     "status": "decided",
     "lapsesIf": "it is not read by 5 Jan: the flow keeps running and costing up to A$30 a month with nobody checking it",
     "closedBecause": "Withdrawn 8 Nov 2026 by the premise check: no label storefront (0 order notices in 90 days) and no live payment rail (agency/facts.json). Parked with every label play until Leif says he wants the shop open; nothing is asked of him for it."
+  },
+  {
+    "id": "workflow-kill-rule",
+    "date": "2026-12-19",
+    "what": "The method's kill rule (docs/plan-2026-11-19.md, section 19): count the saved-workflow runs logged in galxe-desk/docs/errors.md since 21 Nov (lines with \"workflow run:\"); remove .claude/workflows/review-3x.js or fix-verify.js if it has none, and remove fix-verify if any run needed more than its 2 rounds. Then mark this item decided with what was kept and why.",
+    "whose": "Claude",
+    "kind": "date",
+    "status": "open",
+    "lapsesIf": "it is not done by 19 Dec 2026: prove's decisions row turns red the next day, so a saved workflow that is never used cannot stay in the repo unnoticed"
   }
 ]
