@@ -19,4 +19,6 @@ Rules that hold in this repo:
 - **Every claim answerable by a command:** `npm test` (the gate, the ledger and the crawler, with guards shown to
   fail), `npm run desk:check` (is the rulebook complete), `npm run desk:status` (the ledger and the kill rule).
 - **Nothing from here enters the studio repo.** The studio asserts that its app contacts only its own origin.
+- **IMA means the influencer marketing agency** (`agency-desk/`). Anything with Quran, Sunnah or voice-overs, or
+  faceless YouTube content, always belongs to the Dawah Channel, a separate project on Leif's Mac, never to the agency.
 - Run git as `git -C <path> <command>`, never `cd <path> && git`.

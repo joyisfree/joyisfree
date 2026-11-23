@@ -1,6 +1,6 @@
 ---
 name: agency-personalise
-description: The agency desk's routine. Use when Leif says "personalise" a creator (a YouTube handle) or a brand person, pastes someone's LinkedIn posts, says "draft it" or "forget" someone, hands over the LinkedIn sheet and says go, a warm brand replies, or he asks for connection notes, DMs, follow-ups, a one-pager, a creator pitch or an audit of the agency sheets. Not for the studio app or the Galxe desk.
+description: The agency desk's routine. Use when Leif says "personalise" a creator (a YouTube handle) or a brand person, pastes someone's LinkedIn posts, says "draft it" or "forget" someone, hands over the LinkedIn sheet and says go, a warm brand replies, or he asks for connection notes, DMs, follow-ups, a one-pager, a creator pitch or an audit of the agency sheets. Not for the studio app or the Galxe desk, and not for Quran, Sunnah, voice-overs or faceless YouTube content (always the Dawah Channel).
 ---
 
 # Agency personalise routine
