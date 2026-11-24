@@ -11,6 +11,8 @@
 //                                                             # change to this file's SUITES, SUITE_FOR, READS,
 //                                                             # relPath or SKIP reaches every one
 //   node galxe-desk/scripts/mutate.mjs --add lines.json --group "<one line>"   # check, run, then write a batch
+//   node galxe-desk/scripts/mutate.mjs --try lines.json       # the same checks and run, each line's status, and
+//                                                             # nothing written; exit 0 only when every line is KILLED
 //   node galxe-desk/scripts/mutate.mjs --list                 # just list them (after --only and --since)
 //   --jobs N (1 to 16, default 4 or fewer CPUs), --timeout-ms N (per suite run, default 120000), --verbose
 //   (every result in list order, so --jobs 1 and --jobs 4 print the same bytes), --no-narrow (see below)
@@ -1224,6 +1226,12 @@ export const MUTATIONS = [
   // galxe-desk/scripts/mutate.mjs — a LEFTOVER line prints the same bytes on every run of a leaking suite (plan 20, step D) (added by mutate --add)
   ["a LEFTOVER line writes mkdtemp's six random characters as XXXXXX","galxe-desk/scripts/mutate.mjs","const template = (name) => { const m = MKDTEMP.exec(name); return m ? `${m[1]}XXXXXX` : name; };\n","const template = (name) => name;\n"],
   ["a LEFTOVER line lists its entries in one order","galxe-desk/scripts/mutate.mjs","    const names = b.leftover.map(template).sort();\n","    const names = b.leftover.map(template);\n"],
+  // galxe-desk/scripts/mutate.mjs — --try runs a batch as --add would and writes nothing (plan 20, step C2) (added by mutate --add)
+  ["--try never writes","galxe-desk/scripts/mutate.mjs","  if (dryRun) return { ok: !notKilled.length, problems: [], results }; // --try: the batch ran, and is never written\n","  // --try: the batch ran, and is never written\n"],
+  ["--try exits 1 on a line not killed","galxe-desk/scripts/mutate.mjs","  if (dryRun) return { ok: !notKilled.length, problems: [], results }; // --try: the batch ran, and is never written\n","  if (dryRun) return { ok: true, problems: [], results }; // --try: the batch ran, and is never written\n"],
+  ["--try and --add run nothing for a batch with a bad line","galxe-desk/scripts/mutate.mjs","  if (problems.length) return { ok: false, problems };\n","\n"],
+  ["--try takes no --add, --only, --since or --list","galxe-desk/scripts/mutate.mjs","  if (o.try !== undefined && (o.add !== undefined || o.only || o.since !== undefined || o.list)) o.errors.push('--try runs its own batch only; drop --add, --only, --since and --list');\n","  if (false) o.errors.push('--try runs its own batch only; drop --add, --only, --since and --list');\n"],
+  ["--try names a result that never came back","galxe-desk/scripts/mutate.mjs","      print(typeof res?.status === 'string' ? `${res.status}: ${name}${res.detail ? ` — ${res.detail}` : ''}` : `MISSING: ${name} — its result never came back`);\n","      print(`${res?.status}: ${name}${res?.detail ? ` — ${res.detail}` : ''}`);\n"],
 ];
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -1555,11 +1563,11 @@ export function summarise(results, n, { verbose = false, since, notRun = 0 } = {
   return { lines, code: bad ? 1 : 0 };
 }
 
-const VALUED = new Set(['--only', '--jobs', '--timeout-ms', '--since', '--add', '--group']);
+const VALUED = new Set(['--only', '--jobs', '--timeout-ms', '--since', '--add', '--group', '--try']);
 
 // The command line, read strictly: an unknown argument, a bad number or a lone --group is an error, never a default.
 export function parseCli(argv) {
-  const o = { list: false, verbose: false, narrow: true, only: undefined, jobs: DEFAULT_JOBS, timeoutMs: DEFAULT_TIMEOUT_MS, since: undefined, add: undefined, group: undefined, errors: [] };
+  const o = { list: false, verbose: false, narrow: true, only: undefined, jobs: DEFAULT_JOBS, timeoutMs: DEFAULT_TIMEOUT_MS, since: undefined, add: undefined, group: undefined, try: undefined, errors: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--list') o.list = true;
@@ -1580,12 +1588,14 @@ export function parseCli(argv) {
         else o.timeoutMs = Number(v);
       } else if (a === '--since') o.since = v;
       else if (a === '--add') o.add = v;
+      else if (a === '--try') o.try = v;
       else o.group = v;
     } else o.errors.push(`unknown argument ${JSON.stringify(a)}`); // a typo is refused, not ignored
   }
   if (o.add !== undefined && o.group === undefined) o.errors.push('--add needs --group "<one line>"');
   if (o.group !== undefined && o.add === undefined) o.errors.push('--group goes with --add');
   if (o.add !== undefined && (o.only || o.since !== undefined || o.list)) o.errors.push('--add runs its own batch only; drop --only, --since and --list');
+  if (o.try !== undefined && (o.add !== undefined || o.only || o.since !== undefined || o.list)) o.errors.push('--try runs its own batch only; drop --add, --only, --since and --list');
   return o;
 }
 
@@ -1792,8 +1802,10 @@ export function twinsOf(list, { root = REPO, read = (p) => readFileSync(p, 'utf8
 }
 
 // Why a batch for --add cannot go in, one reason per line; empty when it can.
+// `needGroup` false is --try, which writes nothing and so names no group: its own line stands in for the group's.
 export function validateLines(batch, opts = {}) {
-  const { mutations = MUTATIONS, root = REPO, group, suites = SUITES, suiteFor = SUITE_FOR, target = SELF_REL, targetSrc } = opts;
+  const { mutations = MUTATIONS, root = REPO, suites = SUITES, suiteFor = SUITE_FOR, target = SELF_REL, targetSrc, needGroup = true } = opts;
+  const group = needGroup ? opts.group : 'tried with --try, never written';
   const problems = [];
   if (typeof group !== 'string' || !group.trim()) problems.push('--group must name the batch in one line');
   else if (/[\r\n\u2028\u2029]/.test(group)) problems.push('--group holds a line break; it must be one line');
@@ -1874,12 +1886,13 @@ function writeAtomic(file, text) {
 const loadList = async (file) => (await import(`${pathToFileURL(file).href}?add=${Date.now()}-${process.hrtime.bigint()}`)).MUTATIONS;
 
 // --add: refuse the whole batch on any bad line; run it; write it only if every line is KILLED; then re-import the
-// file and put the old bytes back unless its list now ends with the batch.
+// file and put the old bytes back unless its list now ends with the batch. `dryRun` is --try: the same checks (no
+// group needed) and the same run, its results returned, and nothing ever written.
 export async function addLines(batch, opts = {}) {
-  const { group, root = REPO, target = join(root, SELF_REL), mutations = MUTATIONS, suites = SUITES, suiteFor = SUITE_FOR, load = loadList } = opts;
+  const { group, root = REPO, target = join(root, SELF_REL), mutations = MUTATIONS, suites = SUITES, suiteFor = SUITE_FOR, load = loadList, dryRun = false } = opts;
   const run = opts.run ?? ((lines) => runAll(lines, { root, suites, suiteFor, jobs: opts.jobs, timeoutMs: opts.timeoutMs, narrow: opts.narrow }));
   const before = readFileSync(target, 'utf8');
-  const problems = validateLines(batch, { mutations, root, group, suites, suiteFor, target: posixRel(relative(root, target)), targetSrc: before });
+  const problems = validateLines(batch, { mutations, root, group, suites, suiteFor, target: posixRel(relative(root, target)), targetSrc: before, needGroup: !dryRun });
   if (problems.length) return { ok: false, problems };
   const { results = [] } = (await run(batch)) ?? {};
   const notKilled = [];
@@ -1887,6 +1900,7 @@ export async function addLines(batch, opts = {}) {
     const r = results[k];
     if (r?.status !== 'KILLED') notKilled.push(`line ${k + 1} (${JSON.stringify(batch[k][0])}) was not killed: ${r?.status ?? 'MISSING'}${r?.detail ? ` — ${r.detail}` : ''}`);
   }
+  if (dryRun) return { ok: !notKilled.length, problems: [], results }; // --try: the batch ran, and is never written
   if (notKilled.length) return { ok: false, problems: notKilled }; // nothing is written unless every line bites
   const ins = insertLines(before, batch, group);
   if (ins.error) return { ok: false, problems: [ins.error] };
@@ -1915,6 +1929,26 @@ export async function main(argv, deps = {}) {
     const r = await add(batch, { group: o.group, root, mutations, jobs: o.jobs, timeoutMs: o.timeoutMs, narrow: o.narrow });
     for (const p of r.problems) print(`refused: ${p}`);
     print(r.ok ? `added ${batch.length} mutation${batch.length === 1 ? '' : 's'} under "${o.group}", every one killed` : 'added nothing');
+    return r.ok ? 0 : 1;
+  }
+  if (o.try !== undefined) {
+    let batch;
+    try { batch = JSON.parse(readText(o.try)); } catch (err) { print(`refused: ${o.try} is not readable JSON (${err.message})`); return 1; }
+    const tried = (lines) => run(lines, { root, suites, suiteFor, jobs: o.jobs, timeoutMs: o.timeoutMs, narrow: o.narrow, warn });
+    const r = await add(batch, { root, mutations, suites, suiteFor, jobs: o.jobs, timeoutMs: o.timeoutMs, narrow: o.narrow, dryRun: true, run: tried });
+    for (const p of r.problems) print(`refused: ${p}`);
+    if (!Array.isArray(r.results)) {
+      print('tried nothing: the batch was refused before anything ran');
+      return 1;
+    }
+    let killed = 0;
+    batch.forEach(([name], k) => {
+      const res = r.results[k];
+      if (res?.status === 'KILLED') killed++;
+      print(typeof res?.status === 'string' ? `${res.status}: ${name}${res.detail ? ` — ${res.detail}` : ''}` : `MISSING: ${name} — its result never came back`);
+    });
+    const bad = batch.length - killed;
+    print(`tried ${batch.length} line${batch.length === 1 ? '' : 's'}: ${killed} killed${bad ? `, ${bad} not killed` : ' (every line bites)'}; nothing was written`);
     return r.ok ? 0 : 1;
   }
   let chosen = mutations;

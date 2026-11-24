@@ -949,6 +949,83 @@ test('--add needs --group, takes no --only, --since or --list, and reads its bat
   assert.match(out.join(), /not readable JSON/);
 });
 
+// ---- C2: --try runs a batch as --add would and writes nothing (plan 20) -----------------------------------------
+
+// A fixture whose galxe-desk/scripts/mutate.mjs is the small harness, and a batch file beside it.
+function tryFixture(batch) {
+  const root = fixture();
+  write(root, SELF_REL, HARNESS);
+  const file = join(root, 'lines.json');
+  writeFileSync(file, typeof batch === 'string' ? batch : JSON.stringify(batch));
+  return { root, file, opts: { mutations: HARNESS_LIST, root, suites: SUITES_FX, suiteFor: {} } };
+}
+
+test('--try runs a batch through the harness, needs no --group, prints each status and writes nothing', async () => {
+  const { root, file, opts } = tryFixture([GOOD, GOOD2]);
+  const out = [];
+  let ran = null;
+  const run = async (batch, o) => { ran = { names: batch.map((m) => m[0]), o }; return killedAll(batch); };
+  const code = await main(['--try', file, '--jobs', '2', '--no-narrow'], { ...opts, run, print: (l) => out.push(l) });
+  assert.equal(code, 0, out.join('\n'));
+  assert.deepEqual(out, ['KILLED: a positive passes through', 'KILLED: a second guard', 'tried 2 lines: 2 killed (every line bites); nothing was written']);
+  assert.deepEqual(ran.names, [GOOD[0], GOOD2[0]]);
+  assert.equal(ran.o.jobs, 2);
+  assert.equal(ran.o.narrow, false);
+  assert.equal(readFileSync(join(root, SELF_REL), 'utf8'), HARNESS, '--try wrote into the harness file');
+});
+
+test('--try exits 1 on a line not killed or never come back, names it, and still writes nothing', async () => {
+  const runs = [
+    async (b) => ({ results: [{ name: b[0][0], status: 'KILLED' }, { name: b[1][0], status: 'SURVIVED', detail: 'the suite stayed green with this guard removed' }] }),
+    async (b) => ({ results: [{ name: b[0][0], status: 'KILLED' }] }),
+  ];
+  const wants = [
+    ['KILLED: a positive passes through', 'SURVIVED: a second guard — the suite stayed green with this guard removed', 'tried 2 lines: 1 killed, 1 not killed; nothing was written'],
+    ['KILLED: a positive passes through', 'MISSING: a second guard — its result never came back', 'tried 2 lines: 1 killed, 1 not killed; nothing was written'],
+  ];
+  for (const [k, run] of runs.entries()) {
+    const { root, file, opts } = tryFixture([GOOD, GOOD2]);
+    const out = [];
+    assert.equal(await main(['--try', file], { ...opts, run, print: (l) => out.push(l) }), 1, out.join('\n'));
+    assert.deepEqual(out, wants[k]);
+    assert.equal(readFileSync(join(root, SELF_REL), 'utf8'), HARNESS);
+  }
+});
+
+test('--try refuses a bad line, or a batch that is not JSON, before running anything', async () => {
+  const cases = [
+    [[GOOD, ['absent', 'pkg/scripts/a.mjs', 'not in the file', 'y']], ['refused: line 2 ("absent"): from is not found in pkg/scripts/a.mjs', 'tried nothing: the batch was refused before anything ran']],
+    [[['a refuses a negative', 'pkg/scripts/a.mjs', 'return b(x);', 'return 0;']], ['refused: line 1 ("a refuses a negative"): the name is taken', 'tried nothing: the batch was refused before anything ran']],
+    ['[not json', null],
+  ];
+  for (const [batch, want] of cases) {
+    const { root, file, opts } = tryFixture(batch);
+    let ran = false;
+    const out = [];
+    const code = await main(['--try', file], { ...opts, run: async () => { ran = true; return { results: [] }; }, print: (l) => out.push(l) });
+    assert.equal(code, 1, out.join('\n'));
+    assert.equal(ran, false, 'a refused batch ran');
+    if (want) assert.deepEqual(out, want);
+    else assert.match(out.join('\n'), /^refused: .*lines\.json is not readable JSON/);
+    assert.equal(readFileSync(join(root, SELF_REL), 'utf8'), HARNESS);
+  }
+});
+
+test('--try takes no --add, --only, --since or --list, and needs a value', async () => {
+  const only = /--try runs its own batch only; drop --add, --only, --since and --list/;
+  for (const argv of [['--try', 'x.json', '--add', 'y.json', '--group', 'g'], ['--try', 'x.json', '--only', 'a'], ['--try', 'x.json', '--since', 'HEAD'], ['--try', 'x.json', '--list']]) {
+    assert.match(parseCli(argv).errors.join(' | '), only, argv.join(' '));
+    let called = false;
+    const touch = async () => { called = true; return { ok: true, problems: [], results: [] }; };
+    assert.equal(await main(argv, { mutations: LIST_FX, add: touch, run: touch, print: () => {} }), 1, argv.join(' '));
+    assert.equal(called, false, argv.join(' '));
+  }
+  assert.match(parseCli(['--try']).errors.join(), /--try needs a value/);
+  assert.match(parseCli(['--try', 'x.json', '--group', 'g']).errors.join(), /--group goes with --add/);
+  assert.deepEqual(parseCli(['--try', 'x.json']).errors, []);
+  assert.equal(parseCli(['--try', 'x.json']).try, 'x.json');
+});
+
 // ---- the list itself, its suites, and the folded-in claude-setup guard -----------------------------------------
 
 test("a file's own suite beats its folder's, and a listed suite not yet written is NO_SUITE, never the folder's", () => {
