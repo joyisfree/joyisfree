@@ -2,18 +2,23 @@
 // so they still run when the invocation path has a space, a symlink or a non-ASCII character. A raw
 // `file://${process.argv[1]}` would not match import.meta.url then, and the CLI would silently do nothing.
 // The same one-line fix is in rank.mjs, ledger.mjs, do-card.mjs and rulebook-crawl.mjs; rank.mjs stands for all.
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, existsSync, symlinkSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, existsSync, symlinkSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
+// Every folder a test makes sits inside SCRATCH, and SCRATCH goes when the file is done, so a run leaves no temp folder.
+// rmSync removes the symlink below, never the rank.mjs it points at.
+const SCRATCH = mkdtempSync(join(tmpdir(), 'portability-test-'));
+after(() => rmSync(SCRATCH, { recursive: true, force: true }));
+const scratch = (prefix) => mkdtempSync(join(SCRATCH, prefix));
 
 test('rank.mjs still runs as a CLI when its path has a space and goes through a symlink', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'has space-'));
+  const dir = scratch('has space-');
   const cands = join(dir, 'c.json');
   const out = join(dir, 'out.md');
   writeFileSync(cands, JSON.stringify([{ _note: 'metadata only: the gate skips it, so no network is needed' }]));

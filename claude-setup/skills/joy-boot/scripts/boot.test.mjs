@@ -1,5 +1,5 @@
 // Tests for boot.mjs: every verdict, every guard, the one-second budget. Run: node --test claude-setup/skills/joy-boot/scripts/
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -12,7 +12,11 @@ import { spawn, spawnSync } from 'node:child_process';
 // to the repo's secret scan (scripts/prove.mjs) or to GitHub's push protection; r() removes the marks before use.
 const r = s => s.replaceAll('§', '');
 const BOOT = new URL('./boot.mjs', import.meta.url).pathname;
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'joy-boot-'));
+// Every folder a test makes sits inside SCRATCH, and SCRATCH goes when the file is done, so a run leaves no temp folder.
+// rmSync removes the symlinks the tests make (to boot.mjs, to a folder), never what they point at.
+const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'joy-boot-test-'));
+after(() => fs.rmSync(SCRATCH, { recursive: true, force: true }));
+const tmp = () => fs.mkdtempSync(path.join(SCRATCH, 'joy-boot-'));
 const row = (type, extra = {}) => JSON.stringify({ type, isSidechain: false, message: { role: type, content: 'hi' }, ...extra });
 const user = (text = 'please continue') => row('user', { message: { role: 'user', content: text } });
 const assistant = ctx => row('assistant', { message: { role: 'assistant', content: [{ type: 'text', text: 'ok' }], usage: { input_tokens: 10, cache_creation_input_tokens: 1000, cache_read_input_tokens: ctx - 1010, output_tokens: 5 } } });

@@ -3,7 +3,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { mkdtempSync, readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, readFileSync, existsSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseLlmsTxt, extractLinks, htmlToText, pagePath, fetchWithDeadline, crawl, check, parseIndex, renderIndex, counts } from './rulebook-crawl.mjs';
@@ -30,6 +30,11 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}`;
 after(() => server.close());
+
+// Every folder a test makes sits inside SCRATCH, and SCRATCH goes when the file is done, so a run leaves no temp folder.
+const SCRATCH = mkdtempSync(join(tmpdir(), 'crawl-test-'));
+after(() => rmSync(SCRATCH, { recursive: true, force: true }));
+const scratch = (prefix) => mkdtempSync(join(SCRATCH, prefix));
 
 test('parseLlmsTxt keeps same-host links, strips .md and drops other hosts', () => {
   const urls = parseLlmsTxt('[a](/legal/terms) [b](/quest/intro.md) [c](https://other.example/x)', `${base}/llms.txt`);
@@ -67,7 +72,7 @@ test('fetchWithDeadline retries a flaky page up to the cap and then succeeds', a
 });
 
 test('crawl discovers, saves with front-matter, fails closed on MISSING, and records changes', async () => {
-  const outDir = mkdtempSync(join(tmpdir(), 'rulebook-'));
+  const outDir = scratch('rulebook-');
   const sources = { llms: [`${base}/llms.txt`], helpCentres: [`${base}/help`], pages: [`${base}/hang`] };
   const r = await crawl(sources, { outDir, timeoutMs: 150, retries: 1, backoffMs: 5, now: new Date('2026-10-28T00:00:00Z') });
   const byUrl = Object.fromEntries(r.rows.map((x) => [x.url, x]));
@@ -104,7 +109,7 @@ test('crawl discovers, saves with front-matter, fails closed on MISSING, and rec
 });
 
 test('check reports no index as incomplete, and counts read pages', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'rulebook-empty-'));
+  const dir = scratch('rulebook-empty-');
   assert.equal(check(dir).complete, false);
   mkdirSync(dir, { recursive: true });
   const rows = [
@@ -126,7 +131,7 @@ import { unconfirmedMarkers } from './rulebook-crawl.mjs';
 test('unconfirmed rule lines are counted, the legend is not, and check stays incomplete until they are zero', () => {
   const text = 'Legend: DIGEST = search summary, RECHECK = confirm live\n§A1 a rule. help/1, DIGEST.\n§A2 another, RECHECK.\n§A3 confirmed. VERIFIED.\n';
   assert.equal(unconfirmedMarkers(text), 2);
-  const dir = mkdtempSync(join(tmpdir(), 'rulebook-markers-'));
+  const dir = scratch('rulebook-markers-');
   writeFileSync(join(dir, 'INDEX.md'), renderIndex([{ url: 'https://a/1', status: 'FETCHED', sha: 'a'.repeat(64), read: 'yes', note: 'n' }], 'now'));
   writeFileSync(join(dir, 'RULES.md'), text);
   writeFileSync(join(dir, 'CLAIMING.md'), 'Legend: RECHECK\nwindow 15 days (RECHECK)\n');
@@ -147,7 +152,7 @@ test('an empty index is not complete, CRLF rows still parse, and the rule files 
   ];
   const crlf = renderIndex(rows, 'now').replace(/\n/g, '\r\n');
   assert.equal(parseIndex(crlf).size, 2, 'CRLF line endings must not silently drop every row');
-  const dir = mkdtempSync(join(tmpdir(), 'rulebook-norules-'));
+  const dir = scratch('rulebook-norules-');
   writeFileSync(join(dir, 'INDEX.md'), renderIndex([rows[0]], 'now'));
   const c = check(dir);
   assert.equal(c.complete, false, 'a read index without RULES.md and CLAIMING.md is not a read rulebook');
@@ -155,7 +160,7 @@ test('an empty index is not complete, CRLF rows still parse, and the rule files 
 });
 
 test('a page that goes MISSING and then changes is still logged as CHANGED and marked unread', async () => {
-  const outDir = mkdtempSync(join(tmpdir(), 'rulebook-mut-'));
+  const outDir = scratch('rulebook-mut-');
   const sources = { pages: [`${base}/mut`] };
   mutPhase = 'A';
   await crawl(sources, { outDir, timeoutMs: 300, retries: 1, backoffMs: 5, now: new Date('2026-10-28T00:00:00Z') });

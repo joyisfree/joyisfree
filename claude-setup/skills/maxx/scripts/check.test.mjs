@@ -1,13 +1,17 @@
 // check.mjs must PASS when /maxx adds only the Joy Boot hook, and FAIL on any other hook change or lost guardrail.
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 const CHECK = new URL('./check.mjs', import.meta.url).pathname;
+// Every folder a test makes sits inside SCRATCH, and SCRATCH goes when the file is done, so a run leaves no temp folder.
+const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'maxx-check-test-'));
+after(() => fs.rmSync(SCRATCH, { recursive: true, force: true }));
+const scratch = (prefix) => fs.mkdtempSync(path.join(SCRATCH, prefix));
 const JOY = { matcher: 'startup|resume|clear|fork', hooks: [{ type: 'command', command: '[ -f ~/.claude/hooks/joy-boot.mjs ] && node ~/.claude/hooks/joy-boot.mjs 2>/dev/null || true', timeout: 5 }] };
 const JOY_VERDICT = { hooks: [{ timeout: 5, command: '[ -f ~/.claude/hooks/joy-boot.mjs ] && node ~/.claude/hooks/joy-boot.mjs --verdict-only 2>/dev/null || true', type: 'command' }], matcher: 'startup|resume|clear|fork' };
 const run = (before, after) => {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'maxx-check-'));
+  const d = scratch('maxx-check-');
   fs.writeFileSync(path.join(d, 'b.json'), JSON.stringify(before)); fs.writeFileSync(path.join(d, 'a.json'), JSON.stringify(after));
   const r = spawnSync(process.execPath, [CHECK, path.join(d, 'b.json'), path.join(d, 'a.json')], { encoding: 'utf8' });
   return { code: r.status, out: r.stdout };
@@ -38,7 +42,7 @@ test('FAIL: an existing hook removed, even with Joy Boot added', () => {
   assert.equal(r.code, 1, r.out); assert.match(r.out, /hooks CHANGED/);
 });
 test('PASS: no backup file means settings.json did not exist before', () => {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'maxx-check-'));
+  const d = scratch('maxx-check-');
   fs.writeFileSync(path.join(d, 'a.json'), JSON.stringify({ hooks: { SessionStart: [JOY] } }));
   const r = spawnSync(process.execPath, [CHECK, path.join(d, 'missing.json'), path.join(d, 'a.json')], { encoding: 'utf8' });
   assert.equal(r.status, 0, r.stdout); assert.match(r.stdout, /no backup: settings.json did not exist before/); assert.match(r.stdout, /\nPASS\n?$/);
