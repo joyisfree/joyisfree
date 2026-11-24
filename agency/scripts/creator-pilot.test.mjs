@@ -7,13 +7,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   PILOT_DEFAULTS, REASONS, toCents, hashId, normId, parseLedger, validatePilot, validateEvent, screen, status,
-  checkPayout, checkAppend, format, weekly, pilotSha256, canonicalEmail,
+  checkPayout, checkAppend, format, weekly, pilotSha256, canonicalEmail, cli as pilotCli,
 } from './creator-pilot.mjs';
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), 'creator-pilot.mjs');
@@ -65,9 +65,31 @@ function sandbox(lines = [], pilot = PILOT) {
   writeFileSync(join(dir, 'ledger.jsonl'), lines.map((l) => `${JSON.stringify(l)}\n`).join(''));
   return dir;
 }
+// The command line runs in-process, through the script's exported cli(), in the sandbox folder (io.cwd), and answers
+// with the {code, out, err} the spawned process gave. Three tests still start the real process, through parity(),
+// which runs it both ways on two copies of the same folder and requires the same exit code, stdout, stderr and files.
 const cli = (dir, ...argv) => {
+  let out = '';
+  let err = '';
+  const code = pilotCli(argv, { cwd: dir, out: (s) => { out += `${s}\n`; }, err: (s) => { err += `${s}\n`; } });
+  return { code, out, err };
+};
+const spawned = (dir, ...argv) => {
   const r = spawnSync(process.execPath, [SCRIPT, ...argv], { cwd: dir, encoding: 'utf8' });
   return { code: r.status, out: r.stdout, err: r.stderr };
+};
+const tree = (dir) => Object.fromEntries(readdirSync(dir, { recursive: true }).sort().map((f) => [f, statSync(join(dir, f)).isFile() ? readFileSync(join(dir, f), 'utf8') : 'a folder']));
+const parity = (dir, ...argv) => {
+  const twin = mkdtempSync(join(tmpdir(), 'creator-pilot-twin-'));
+  try {
+    cpSync(dir, twin, { recursive: true });
+    const real = spawned(dir, ...argv);
+    assert.deepEqual(cli(twin, ...argv), real, `cli() and the real process differ on: ${argv.join(' ')}`);
+    assert.deepEqual(tree(twin), tree(dir), `cli() and the real process left different files after: ${argv.join(' ')}`);
+    return real;
+  } finally {
+    rmSync(twin, { recursive: true, force: true });
+  }
 };
 const paths = ['--file', 'ledger.jsonl', '--pilot', 'pilot.json'];
 const ledgerText = (dir) => readFileSync(join(dir, 'ledger.jsonl'), 'utf8');
@@ -828,23 +850,23 @@ test('CLI status exits 0 only on CONTINUE, and 2 on STOP_DAY60, NOT_PRE_REGISTER
   try {
     const go = sandbox(ledger2525());
     dirs.push(go);
-    const r0 = cli(go, 'status', ...paths, '--now', at(61, 12));
+    const r0 = parity(go, 'status', ...paths, '--now', at(61, 12));
     assert.equal(r0.code, 0, r0.out + r0.err);
     assert.match(r0.out, /Verdict {2}CONTINUE: \$25\.25 per order < \$30/);
     const stop = sandbox(ledger45());
     dirs.push(stop);
-    const r1 = cli(stop, 'status', ...paths, '--now', at(61, 12));
+    const r1 = parity(stop, 'status', ...paths, '--now', at(61, 12));
     assert.equal(r1.code, 2);
     assert.match(r1.out, /STOP_DAY60: \$45\.00 per order >= \$30/);
     const unfixed = sandbox(ledger2525(), { ...PILOT, decidedOn: '2026-11-10' });
     dirs.push(unfixed);
-    const r2 = cli(unfixed, 'status', ...paths, '--now', at(61, 12));
+    const r2 = parity(unfixed, 'status', ...paths, '--now', at(61, 12));
     assert.equal(r2.code, 2);
     assert.match(r2.out, /NOT_PRE_REGISTERED/);
     const corrupt = sandbox([CA]);
     dirs.push(corrupt);
     writeFileSync(join(corrupt, 'ledger.jsonl'), `${JSON.stringify(CA)}\n{bad\n`);
-    const r3 = cli(corrupt, 'status', ...paths, '--now', at(3, 12));
+    const r3 = parity(corrupt, 'status', ...paths, '--now', at(3, 12));
     assert.equal(r3.code, 2);
     assert.match(r3.out, /INVALID_LEDGER: line 2/);
   } finally {
@@ -856,14 +878,14 @@ test('CLI a refused pay writes nothing: to an unknown creator, or over what is o
   const dir = sandbox(build([CA, order('1001', 'JOYA', 2)], nowAt(3)));
   try {
     const before = ledgerText(dir);
-    const r1 = cli(dir, 'pay', ...paths, '--creator', 'Z', '--amount', '5', '--ref', 'BANK-1', '--now', at(3, 12));
+    const r1 = parity(dir, 'pay', ...paths, '--creator', 'Z', '--amount', '5', '--ref', 'BANK-1', '--now', at(3, 12));
     assert.equal(r1.code, 1);
     assert.match(r1.err, /refused unknown creator "Z"/);
-    const r2 = cli(dir, 'pay', ...paths, '--creator', 'A', '--amount', '16', '--ref', 'BANK-1', '--now', at(3, 12));
+    const r2 = parity(dir, 'pay', ...paths, '--creator', 'A', '--amount', '16', '--ref', 'BANK-1', '--now', at(3, 12));
     assert.equal(r2.code, 1);
     assert.match(r2.err, /\$16\.00 is more than JOYA is owed \(\$15\.00\)/);
     assert.equal(ledgerText(dir), before);
-    const r3 = cli(dir, 'pay', ...paths, '--creator', 'a', '--amount', '15', '--ref', 'bank-1', '--now', at(3, 12));
+    const r3 = parity(dir, 'pay', ...paths, '--creator', 'a', '--amount', '15', '--ref', 'bank-1', '--now', at(3, 12));
     assert.equal(r3.code, 0, r3.err);
     assert.match(ledgerText(dir), /"creator":"A","amountUsd":15,"ref":"BANK-1"/);
   } finally {
@@ -937,13 +959,13 @@ test('CLI round 2: a bare --file, --pilot or --from is refused, and nothing is r
 test('CLI round 2: check refuses a dollar figure written as a string by name, with no stack trace', () => {
   const dir = sandbox([], { ...PILOT, capUsd: '600' });
   try {
-    const r = cli(dir, 'check', ...paths);
+    const r = parity(dir, 'check', ...paths);
     assert.equal(r.code, 1);
     assert.match(r.err, /capUsd must be a JSON number, not "600"/);
     assert.doesNotMatch(r.err, /TypeError/);
     const good = sandbox([]);
     try {
-      const ok = cli(good, 'check', ...paths);
+      const ok = parity(good, 'check', ...paths);
       assert.equal(ok.code, 0, ok.err);
       assert.match(ok.out, /cap \$600, 60 days/);
     } finally {

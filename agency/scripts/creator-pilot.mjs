@@ -53,7 +53,7 @@
 
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export const EVENT_TYPES = new Set(['rules', 'creator', 'post', 'order', 'signup', 'refund', 'payout', 'flag']);
@@ -891,9 +891,8 @@ export function formatWeekly(rows) {
 
 // ---------------------------------------------------------------- the command line
 
-function args() {
+function args(a) {
   const out = {};
-  const a = process.argv.slice(3);
   for (let i = 0; i < a.length; i++) {
     if (a[i].startsWith('--')) {
       const k = a[i].slice(2);
@@ -927,90 +926,107 @@ const USAGE = `usage: creator-pilot.mjs <command> [--file agency/pilot/ledger.js
   weekly
 The first write pins pilot.json: line 1 of the ledger is its sha256, and every command refuses once the file changes.`;
 
-function main(cmd, o) {
+/** What the command line prints through: one call per line, as console.log and console.error print it. */
+const CONSOLE = Object.freeze({ out: (s) => console.log(s), err: (s) => console.error(s) });
+
+/**
+ * The command line, callable in-process: argv is what follows the script's name (the command, then its flags).
+ * io.out and io.err are each called once per line, with the text console.log or console.error would be given (the
+ * command line passes those). io.cwd, when given, is the folder relative paths are read and written in, as for a
+ * process started there; what is printed names each path as it was typed. Returns the exit code. It never calls
+ * process.exit and keeps nothing between calls, so the tests can run it in-process and get what a fresh process does.
+ */
+export function cli(argv, io = CONSOLE) {
+  return main(argv[0], args(argv.slice(1)), io);
+}
+
+function main(cmd, o, io) {
   // args() turns a bare flag into 'true', and `o.file || default` would take that for a path: the event would go to
   // a second ledger called ./true and the real one would miss it. A path flag without a path is refused.
   for (const k of ['file', 'pilot', 'from']) {
     if (o[k] === 'true' || o[k] === '') {
-      console.error(`--${k} needs a path (a bare --${k} would read or write a file called "true")\n${USAGE}`);
+      io.err(`--${k} needs a path (a bare --${k} would read or write a file called "true")\n${USAGE}`);
       return 1;
     }
   }
+  // Every file is opened at onDisk(path), and every message names it as typed. With no io.cwd the path goes to node:fs
+  // unchanged, so the command line reads and writes exactly what it always did.
+  const onDisk = (path) => (io.cwd === undefined ? path : resolve(io.cwd, path));
   const file = o.file || 'agency/pilot/ledger.jsonl';
   const pilotPath = o.pilot || 'agency/pilot/pilot.json';
   const now = o.now !== undefined ? strictTime(o.now) : Date.now();
   if (Number.isNaN(now)) {
-    console.error('--now must be an ISO date');
+    io.err('--now must be an ISO date');
     return 1;
   }
   const commands = ['check', 'add-creator', 'post', 'order', 'import-orders', 'signup', 'refund', 'pay', 'flag', 'status', 'weekly'];
   if (!commands.includes(cmd)) {
-    console.error(USAGE);
+    io.err(USAGE);
     return 1;
   }
-  if (!existsSync(pilotPath)) {
-    console.error(`no pilot rules at ${pilotPath}. Write them before the first event, starting from:\n${JSON.stringify(PILOT_DEFAULTS, null, 2)}`);
+  if (!existsSync(onDisk(pilotPath))) {
+    io.err(`no pilot rules at ${pilotPath}. Write them before the first event, starting from:\n${JSON.stringify(PILOT_DEFAULTS, null, 2)}`);
     return 1;
   }
   let pilot;
   try {
-    pilot = JSON.parse(readFileSync(pilotPath, 'utf8'));
+    pilot = JSON.parse(readFileSync(onDisk(pilotPath), 'utf8'));
   } catch (err) {
-    console.error(`${pilotPath} is not JSON: ${err.message}`);
+    io.err(`${pilotPath} is not JSON: ${err.message}`);
     return 1;
   }
   if (cmd === 'check') {
     const problems = validatePilot(pilot);
     if (problems.length) {
-      console.error(`NOT_PRE_REGISTERED: ${pilotPath}\n${problems.map((p) => `  missing ${p}`).join('\n')}`);
+      io.err(`NOT_PRE_REGISTERED: ${pilotPath}\n${problems.map((p) => `  missing ${p}`).join('\n')}`);
       return 1;
     }
     // check reads the ledger's pin too: rules edited after the first write are refused here as everywhere else.
     let pinNote = 'not pinned yet: the first write pins them as line 1 of the ledger';
-    const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
+    const text = existsSync(onDisk(file)) ? readFileSync(onDisk(file), 'utf8') : '';
     if (text.trim()) {
       let ledger;
       try {
         ledger = parseLedger(text);
       } catch (err) {
-        console.error(`INVALID_LEDGER: ${err.message}`);
+        io.err(`INVALID_LEDGER: ${err.message}`);
         return 1;
       }
       const unpinnedRules = pinProblems(ledger, pilot);
       if (unpinnedRules.length) {
-        console.error(`NOT_PRE_REGISTERED: ${pilotPath}\n${unpinnedRules.map((p) => `  ${p}`).join('\n')}`);
+        io.err(`NOT_PRE_REGISTERED: ${pilotPath}\n${unpinnedRules.map((p) => `  ${p}`).join('\n')}`);
         return 1;
       }
       pinNote = `pinned by line 1 of ${file}`;
     }
-    console.log(`rules fixed on ${pilot.decidedOn}, day 1 is ${pilot.startDate}: cap $${plain(pilot.capUsd)}, ${pilot.days} days, ${pilot.maxCreators} creators, ${pilot.commissionRate * 100}% commission, $${plain(pilot.signupUsd)} a sign-up, baseline AOV $${plain(pilot.baselineAovUsd)}; ${pinNote}`);
+    io.out(`rules fixed on ${pilot.decidedOn}, day 1 is ${pilot.startDate}: cap $${plain(pilot.capUsd)}, ${pilot.days} days, ${pilot.maxCreators} creators, ${pilot.commissionRate * 100}% commission, $${plain(pilot.signupUsd)} a sign-up, baseline AOV $${plain(pilot.baselineAovUsd)}; ${pinNote}`);
     return 0;
   }
 
   let entries;
   try {
-    entries = parseLedger(existsSync(file) ? readFileSync(file, 'utf8') : '');
+    entries = parseLedger(existsSync(onDisk(file)) ? readFileSync(onDisk(file), 'utf8') : '');
   } catch (err) {
     if (cmd === 'status' || cmd === 'weekly') {
-      console.log(format({ verdict: 'INVALID_LEDGER', verdictText: `INVALID_LEDGER: ${err.message}`, problems: [] }));
+      io.out(format({ verdict: 'INVALID_LEDGER', verdictText: `INVALID_LEDGER: ${err.message}`, problems: [] }));
       return 2;
     }
-    console.error(`refused: INVALID_LEDGER: ${err.message}`);
+    io.err(`refused: INVALID_LEDGER: ${err.message}`);
     return 1;
   }
 
   if (cmd === 'status') {
     const s = status(entries, pilot, now);
-    console.log(format(s));
+    io.out(format(s));
     return s.verdict === 'CONTINUE' ? 0 : 2;
   }
   if (cmd === 'weekly') {
     const s = status(entries, pilot, now);
     if (s.verdict === 'NOT_PRE_REGISTERED' || s.verdict === 'INVALID_LEDGER') {
-      console.log(format(s));
+      io.out(format(s));
       return 2;
     }
-    console.log(formatWeekly(weekly(entries, pilot, now)));
+    io.out(formatWeekly(weekly(entries, pilot, now)));
     return 0;
   }
 
@@ -1024,19 +1040,19 @@ function main(cmd, o) {
   };
   let events;
   if (cmd === 'import-orders') {
-    if (!o.from || !existsSync(o.from)) {
-      console.error('import-orders needs --from export.json (the store export, as a JSON array)');
+    if (!o.from || !existsSync(onDisk(o.from))) {
+      io.err('import-orders needs --from export.json (the store export, as a JSON array)');
       return 1;
     }
     let rows;
     try {
-      rows = JSON.parse(readFileSync(o.from, 'utf8'));
+      rows = JSON.parse(readFileSync(onDisk(o.from), 'utf8'));
     } catch (err) {
-      console.error(`${o.from} is not JSON: ${err.message}`);
+      io.err(`${o.from} is not JSON: ${err.message}`);
       return 1;
     }
     if (!Array.isArray(rows)) {
-      console.error(`${o.from} must be a JSON array of orders`);
+      io.err(`${o.from} must be a JSON array of orders`);
       return 1;
     }
     events = rows.map((row) => build(() => {
@@ -1079,7 +1095,7 @@ function main(cmd, o) {
   if (entries.length === 0) {
     const r = checkAppend([], pilot, { ts: new Date(now).toISOString(), type: 'rules', pilotSha256: pilotSha256(pilot) }, now);
     if (!r.ok) {
-      console.error(`refused ${r.reasons.join('; ')}`);
+      io.err(`refused ${r.reasons.join('; ')}`);
       return 1;
     }
     pin = r.event;
@@ -1093,16 +1109,16 @@ function main(cmd, o) {
     } else refused.push({ i, ev, reasons: r.reasons });
   });
   if (accepted.length) {
-    mkdirSync(dirname(file), { recursive: true });
-    appendFileSync(file, [...(pin ? [pin] : []), ...accepted].map((e) => `${JSON.stringify(e)}\n`).join(''));
+    mkdirSync(dirname(onDisk(file)), { recursive: true });
+    appendFileSync(onDisk(file), [...(pin ? [pin] : []), ...accepted].map((e) => `${JSON.stringify(e)}\n`).join(''));
   }
   for (const r of refused) {
     const which = cmd === 'import-orders' ? `row ${r.i + 1}${r.ev.orderId ? ` (${r.ev.orderId})` : ''}: ` : '';
-    console.error(`refused ${which}${r.reasons.join('; ')}`);
+    io.err(`refused ${which}${r.reasons.join('; ')}`);
   }
-  if (accepted.length) console.log(`recorded ${accepted.length} ${accepted.length === 1 ? accepted[0].type : 'lines'} in ${file}${pin ? ` (line 1 pins the rules: pilot.json sha256 ${pin.pilotSha256})` : ''}`);
+  if (accepted.length) io.out(`recorded ${accepted.length} ${accepted.length === 1 ? accepted[0].type : 'lines'} in ${file}${pin ? ` (line 1 pins the rules: pilot.json sha256 ${pin.pilotSha256})` : ''}`);
   return refused.length ? 1 : 0;
 }
 
 const isMain = (() => { try { return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href; } catch { return false; } })();
-if (isMain) process.exitCode = main(process.argv[2], args());
+if (isMain) process.exitCode = cli(process.argv.slice(2));

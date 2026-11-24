@@ -12,14 +12,14 @@
 // prints is the band read, and an arm past its plan says the default stands.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   analyse, requiredPerArm, detectableLiftPct, normalCdf, erf, strictDate, format, preflight, checkPreRegistration,
-  differenceInterval, parseArgs, exitCode, MIN_EXPECTED_CONVERSIONS, VERDICTS,
+  differenceInterval, parseArgs, exitCode, MIN_EXPECTED_CONVERSIONS, VERDICTS, cli as abTestCli,
 } from './ab-test.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -805,12 +805,27 @@ test('the scan behind the step-5 comment finds the maxima it quotes, where it sa
 
 // ------------------------------------------------------------------ the command line
 
+// The command line runs in-process, through the script's exported cli(), and answers in the shape the spawned process
+// did: out is stdout, and after a non-zero exit stdout then stderr. Three tests still start the real process, through
+// parity(), which runs it both ways and requires the same exit code, stdout and stderr from each.
+function inProcess(args) {
+  let stdout = '';
+  let stderr = '';
+  const code = abTestCli(args, { out: (s) => { stdout += `${s}\n`; }, err: (s) => { stderr += `${s}\n`; } });
+  return { code, stdout, stderr };
+}
+function spawned(args) {
+  const r = spawnSync(process.execPath, [SCRIPT, ...args], { encoding: 'utf8' });
+  return { code: r.status, stdout: r.stdout, stderr: r.stderr };
+}
+const asRun = ({ code, stdout, stderr }) => ({ code, out: code === 0 ? stdout : `${stdout}${stderr}` });
 function cli(args) {
-  try {
-    return { code: 0, out: execFileSync(process.execPath, [SCRIPT, ...args], { encoding: 'utf8', stdio: 'pipe' }) };
-  } catch (err) {
-    return { code: err.status, out: `${err.stdout}${err.stderr}` };
-  }
+  return asRun(inProcess(args));
+}
+function parity(args) {
+  const real = spawned(args);
+  assert.deepEqual(inProcess(args), real, `cli() and the real process differ on: ${args.join(' ')}`);
+  return asRun(real);
 }
 
 test('exitCode: 0 only for WINNER on an analysis, PRE_REGISTERED on a check, BIG_ENOUGH on a preflight', () => {
@@ -902,11 +917,11 @@ test('CLI: --check passes a plan whose send and read still lie ahead of today, w
   try {
     const p = join(dir, 'planned.json');
     writeFileSync(p, JSON.stringify(planned));
-    const r = cli(['--check', '--file', p]);
+    const r = parity(['--check', '--file', p]);
     assert.equal(r.code, 0, r.out);
     assert.match(r.out, /^CHECK {2}PRE_REGISTERED$/m);
     // Read as an analysis the same file is refused: there cannot be data from the future.
-    const a = cli(['--file', p]);
+    const a = parity(['--file', p]);
     assert.equal(a.code, 1);
     assert.match(a.out, /is in the future: there cannot be data yet/);
   } finally {
@@ -918,7 +933,7 @@ test('CLI: --check passes the shipped template, whose plannedPerArm is the figur
   const t = JSON.parse(readFileSync(TEMPLATE, 'utf8'));
   const pf = preflight({ listSize: 2000, metric: 'orders', baselineRate: String(t.preRegistered.baselineRate), minLiftPct: t.preRegistered.minLiftPct });
   assert.equal(t.preRegistered.plannedPerArm, pf.planPerArm);
-  const r = cli(['--check', '--file', TEMPLATE]);
+  const r = parity(['--check', '--file', TEMPLATE]);
   assert.equal(r.code, 0, r.out);
   assert.match(r.out, /CHECK {2}PRE_REGISTERED/);
   assert.match(t._read_me_first, new RegExp(`under ${(pf.planPerArm * 2).toLocaleString('en-AU')} \\(${pf.planPerArm.toLocaleString('en-AU')} per arm`));
@@ -944,13 +959,13 @@ test('CLI: --preflight on 2,000 orders prints TOO SMALL with 19,586 needed and 2
 
 test('CLI: --preflight refuses a mistyped or empty flag with exit 2, where it used to fall back to the defaults and say go', () => {
   for (const extra of [['--min_lift', '20'], ['--min-lift'], ['--baseline', '0.0003'], ['--baseline-rate', '--min-lift', '50']]) {
-    const r = cli(['--preflight', '--list-size', '60000', '--metric', 'orders', ...extra]);
+    const r = parity(['--preflight', '--list-size', '60000', '--metric', 'orders', ...extra]);
     assert.equal(r.code, 2, `${extra.join(' ')}: ${r.out}`);
     assert.doesNotMatch(r.out, /BIG ENOUGH/);
     assert.match(r.out, /usage:/);
   }
   // Given properly, the intended figure is the one used: a 20% lift on 40,000 is TOO SMALL, exit 1.
-  assert.equal(cli(['--preflight', '--list-size', '40000', '--metric', 'orders', '--min-lift', '20']).code, 1);
+  assert.equal(parity(['--preflight', '--list-size', '40000', '--metric', 'orders', '--min-lift', '20']).code, 1);
 });
 
 test('the run-sheet quotes the figures the tool computes, not older ones', () => {

@@ -690,33 +690,46 @@ const USAGE = [
   '       ab-test.mjs --file <experiment.json>',
 ].join('\n');
 
+/** The experiment file, parsed, or the line that says why it could not be read. */
 function readExperiment(file) {
   try {
-    return JSON.parse(readFileSync(file, 'utf8'));
+    return { experiment: JSON.parse(readFileSync(file, 'utf8')) };
   } catch (err) {
-    console.error(`cannot read ${file}: ${err.message}`);
-    return undefined;
+    return { error: `cannot read ${file}: ${err.message}` };
   }
 }
 
-const isMain = (() => { try { return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href; } catch { return false; } })();
-if (isMain) {
-  const args = parseArgs(process.argv.slice(2));
+/** What the command line prints through: one call per line, as console.log and console.error print it. */
+const CONSOLE = Object.freeze({ out: (s) => console.log(s), err: (s) => console.error(s) });
+
+/**
+ * The command line, callable in-process: argv is what follows the script's name. io.out and io.err are each called
+ * once per line, with the text console.log or console.error would be given (the command line passes those). Returns
+ * the exit code. It never calls process.exit and keeps nothing between calls, and a relative --file is read from the
+ * current folder, as before, so the tests can run it in-process and get what a fresh process prints.
+ */
+export function cli(argv, io = CONSOLE) {
+  const args = parseArgs(argv);
   if (args.error) {
-    console.error(`${args.error}\n\n${USAGE}`);
-    process.exitCode = 2;
-  } else if (args.mode === 'preflight') {
-    const r = preflight(args.values);
-    if (r.verdict === 'INVALID') console.error(`${format(r)}\n\n${USAGE}`);
-    else console.log(format(r));
-    process.exitCode = exitCode('preflight', r.verdict);
-  } else {
-    const e = readExperiment(args.values.file);
-    if (e === undefined) process.exitCode = 2;
-    else {
-      const r = args.mode === 'check' ? checkPreRegistration(e) : analyse(e);
-      console.log(format(r));
-      process.exitCode = exitCode(args.mode, r.verdict);
-    }
+    io.err(`${args.error}\n\n${USAGE}`);
+    return 2;
   }
+  if (args.mode === 'preflight') {
+    const r = preflight(args.values);
+    if (r.verdict === 'INVALID') io.err(`${format(r)}\n\n${USAGE}`);
+    else io.out(format(r));
+    return exitCode('preflight', r.verdict);
+  }
+  const read = readExperiment(args.values.file);
+  if (read.error !== undefined) {
+    io.err(read.error);
+    return 2;
+  }
+  const e = read.experiment;
+  const r = args.mode === 'check' ? checkPreRegistration(e) : analyse(e);
+  io.out(format(r));
+  return exitCode(args.mode, r.verdict);
 }
+
+const isMain = (() => { try { return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href; } catch { return false; } })();
+if (isMain) process.exitCode = cli(process.argv.slice(2));
