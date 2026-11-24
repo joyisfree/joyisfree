@@ -1,4 +1,7 @@
 # State — 15 Nov 2026, YouTube open, roster measured (the Agency Desk)
+
+> **Newest: see [`../HANDOFF.md`](../HANDOFF.md) (24 Nov).** This file stops at 15 Nov, and some of it was withdrawn
+> later that day: the page-read measurements, and the scheduled drafting.
 - **Goal:** every brand contact Leif adds on LinkedIn gets a true note and DM that earns a reply; email only after a yes (Spam Act).
 - **Done 15 Nov:**
   - Leif allowed YouTube and both website domains.
