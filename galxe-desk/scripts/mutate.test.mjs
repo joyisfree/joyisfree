@@ -4,9 +4,9 @@
 // a timeout or a git failure on demand. The fixture holds no real data.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, readdirSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, readdirSync, existsSync } from 'node:fs';
 import { tmpdir, availableParallelism } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
@@ -269,6 +269,47 @@ test('a mutation that stops its file from parsing is UNPARSEABLE, never a kill: 
   assert.equal(code, 1, 'an unparseable line is not a guard that bites');
   assert.match(lines.at(-1), /killed 1 of 5 mutations, 4 not killed/);
   assert.equal(classify({ code: 1, stdout: '# fail 1', unparseable: 'it no longer parses' }), 'UNPARSEABLE');
+});
+
+// ---- D: a suite run's temp files stay in its throwaway folder (plan 20) ------------------------------------------
+
+test("a suite run's temp files stay inside its throwaway folder, and what a baseline left is named before the last line", { timeout: 30000 }, async () => {
+  const root = fixture();
+  const marker = `mutate-leak-marker-${process.pid}-${process.hrtime.bigint()}`;
+  write(root, 'pkg/scripts/a.test.mjs', [
+    "import { test } from 'node:test';",
+    "import assert from 'node:assert/strict';",
+    "import { writeFileSync } from 'node:fs';",
+    "import { tmpdir } from 'node:os';",
+    "import { join } from 'node:path';",
+    "import { gate } from './a.mjs';",
+    `writeFileSync(join(tmpdir(), ${JSON.stringify(marker)}), 'left behind');`,
+    "test('a negative is refused', () => assert.equal(gate(-1), 'refused'));",
+    '',
+  ].join('\n'));
+  const out = [];
+  try {
+    const code = await main(['--verbose'], { mutations: [LIST_FX[0]], root, suites: SUITES_FX, suiteFor: {}, print: (l) => out.push(l), warn: () => {} });
+    assert.equal(existsSync(join(tmpdir(), marker)), false, 'the test wrote into the real temp folder, outside its throwaway folder');
+    assert.equal(code, 0, out.join('\n'));
+    assert.deepEqual(out, ['KILLED: a refuses a negative', `LEFTOVER: pkg/scripts/a.test.mjs left 1 entry: ${marker}`, 'killed 1 of 1 mutations (every guard bites)']);
+  } finally {
+    rmSync(join(tmpdir(), marker), { force: true });
+  }
+});
+
+test('a LEFTOVER line says how many entries a baseline left and names at most ten; a suite that leaves nothing prints none', async () => {
+  const spawn = async (args, o) => {
+    const v = variant(FX, o.cwd);
+    if (v === 'baseline' && args.some((a) => a.endsWith('a.test.mjs'))) {
+      for (let k = 12; k >= 1; k--) writeFileSync(join(o.env.TMPDIR, `e${String(k).padStart(2, '0')}`), '');
+    }
+    return v === 'baseline' ? GREEN : RED;
+  };
+  const out = [];
+  const code = await main([], { mutations: LIST_FX, ...FXO, run: (list, o) => runAll(list, { ...o, spawn }), print: (l) => out.push(l), warn: () => {} });
+  assert.equal(code, 0, out.join('\n'));
+  assert.deepEqual(out, ['LEFTOVER: pkg/scripts/a.test.mjs left 12 entries: e01, e02, e03, e04, e05, e06, e07, e08, e09, e10, and 2 more', 'killed 4 of 4 mutations (every guard bites)']);
 });
 
 // ---- --jobs and the pool -----------------------------------------------------------------------------------

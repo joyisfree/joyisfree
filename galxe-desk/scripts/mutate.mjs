@@ -31,7 +31,7 @@
 // No two lines may leave their file byte-identical: that is one guard under two names, counted twice in "N of N"
 // (--add refuses such a line, and mutate.test.mjs checks the whole list).
 
-import { cpSync, mkdtempSync, readFileSync, writeFileSync, renameSync, rmSync, existsSync, statSync, readdirSync, realpathSync } from 'node:fs';
+import { cpSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, renameSync, rmSync, existsSync, statSync, readdirSync, realpathSync } from 'node:fs';
 import { tmpdir, availableParallelism } from 'node:os';
 import { join, dirname, basename, resolve, relative, sep, isAbsolute, posix } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -1191,6 +1191,11 @@ export const MUTATIONS = [
   ["corpus: a country code without its + is spaced, so a dashed SKU or a dotted IP address is not one","scripts/corpus/corpus.mjs","61 [2-8]\\d{0,3}(?: \\d{3,6})","61[ .-][2-8]\\d{0,3}(?:[ .-]\\d{3,6})"],
   // .claude/workflows/fix-verify.js — round 2 no longer assumes the shared branch stood still (its first live run, 21 Nov 2026) (added by mutate --add)
   ["workflows: fix-verify round 2 starts on a branch of its own at round 1's head",".claude/workflows/fix-verify.js","'Then run `git switch -c fix-verify/' + t.key","'Then run `git merge --ff-only fix-verify/' + t.key"],
+  // galxe-desk/scripts/mutate.mjs — a suite run's temp files stay in its throwaway folder, and what a baseline leaves is named (plan 20, step D) (added by mutate --add)
+  ["a suite run's temp folder is inside its throwaway folder","galxe-desk/scripts/mutate.mjs","{ cwd: repo, timeoutMs, maxBuffer, env: { TMPDIR: tmp } });\n","{ cwd: repo, timeoutMs, maxBuffer });\n"],
+  ["a suite run's environment is laid over this one's","galxe-desk/scripts/mutate.mjs","    const env = { ...process.env, ...overlay };\n","    const env = { ...process.env };\n"],
+  ["leftovers are reported","galxe-desk/scripts/mutate.mjs","  return baselines.filter((b) => b?.leftover?.length).map((b) => {\n","  return baselines.filter(() => false).map((b) => {\n"],
+  ["LEFTOVER lines come before the last line","galxe-desk/scripts/mutate.mjs","  for (const line of [...s.lines.slice(0, -1), ...leftoverLines(baselines), ...s.lines.slice(-1)]) print(line); // the last line stays last\n","  for (const line of [...s.lines, ...leftoverLines(baselines)]) print(line); // the last line stays last\n"],
 ];
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -1262,10 +1267,11 @@ export function baselineProblem(r) {
 const stop = (child) => { try { process.kill(-child.pid, 'SIGKILL'); } catch { try { child.kill('SIGKILL'); } catch { /* gone */ } } };
 const stopAll = () => { for (const child of LIVE) stop(child); };
 
-// Run node with `args` in its own process group, so a deadline or an overflow stops its children too.
-export function spawnNode(args, { cwd, timeoutMs = DEFAULT_TIMEOUT_MS, maxBuffer = MAX_BUFFER } = {}) {
+// Run node with `args` in its own process group, so a deadline or an overflow stops its children too. `env` is laid
+// over this process's own environment: a suite run passes its TMPDIR, so its temp files stay in its throwaway folder.
+export function spawnNode(args, { cwd, timeoutMs = DEFAULT_TIMEOUT_MS, maxBuffer = MAX_BUFFER, env: overlay = {} } = {}) {
   return new Promise((done) => {
-    const env = { ...process.env };
+    const env = { ...process.env, ...overlay };
     delete env.NODE_TEST_CONTEXT; // set under node --test, where a nested runner prints no TAP and exits 0
     let child;
     let timer;
@@ -1343,12 +1349,18 @@ export function parseBreak(rel, before, path, write) {
   return lost.length ? `the mutated ${rel} no longer parses as ${lost.join(' or ')}, so its suite going red says nothing of the guard` : null;
 }
 
-async function runSuite(root, suite, m, { spawn: run, copy, timeoutMs, maxBuffer }) {
+// One run of `files` (test files, from the repo root) in a fresh throwaway folder that holds `repo`, the copy, and
+// `tmp`, the run's TMPDIR: whatever its tests leave in the temp folder stays inside, is listed as `leftover` and goes
+// when the folder does. The copy is unmutated when `m` is null (a baseline), else it has `m` applied.
+async function runSuite(root, files, m, { spawn: run, copy, timeoutMs, maxBuffer }) {
   const work = mkdtempSync(join(tmpdir(), 'mutate-'));
+  const repo = join(work, 'repo');
+  const tmp = join(work, 'tmp');
   try {
-    copy(root, work);
+    copy(root, repo);
+    mkdirSync(tmp);
     if (m) {
-      const p = join(work, m.rel);
+      const p = join(repo, m.rel);
       const src = readFileSync(p, 'utf8');
       const at = findOnce(src, m.from);
       if (at.status) return { code: null, signal: null, detail: `${at.detail} in the copy of ${m.rel}` };
@@ -1356,10 +1368,24 @@ async function runSuite(root, suite, m, { spawn: run, copy, timeoutMs, maxBuffer
       const broke = parseBreak(m.rel, src, p, () => { writeFileSync(p, mutated); return mutated; });
       if (broke) return { code: null, signal: null, unparseable: broke, detail: broke }; // never run as a kill
     }
-    return await run(['--test', '--test-reporter=tap', ...suite.map((f) => join(work, f))], { cwd: work, timeoutMs, maxBuffer });
+    const r = await run(['--test', '--test-reporter=tap', ...files.map((f) => join(repo, f))], { cwd: repo, timeoutMs, maxBuffer, env: { TMPDIR: tmp } });
+    let leftover;
+    try { leftover = readdirSync(tmp).sort(); } catch (err) { leftover = [`(its temp folder could not be read: ${err.code ?? err.message})`]; }
+    return { ...r, leftover };
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
+}
+
+// One line per baseline that left anything in its temp folder: a suite should clean up after itself (plan 20 counted
+// about 450 folders left in the machine's temp folder by each full proof before runs were contained).
+export function leftoverLines(baselines = []) {
+  return baselines.filter((b) => b?.leftover?.length).map((b) => {
+    const n = b.leftover.length;
+    const named = b.leftover.slice(0, 10).join(', ') + (n > 10 ? `, and ${n - 10} more` : '');
+    const suite = b.suite.length === 1 ? b.suite[0] : `${[...new Set(b.suite.map(dirOf))].join(', ')} (${b.suite.length} test files)`;
+    return `LEFTOVER: ${suite} left ${n} ${n === 1 ? 'entry' : 'entries'}: ${named}`;
+  });
 }
 
 // At most `jobs` workers at once. Each result is stored at its item's own position, so the output order never
@@ -1418,7 +1444,7 @@ export async function runAll(list, opts = {}) {
     const r = await runSuite(root, p.suite, p, deps);
     return describe(p.name, classify(r), r, deps);
   }, (p, err) => ({ name: p.name, status: 'CRASHED', detail: `the run threw: ${err?.message ?? err}` }));
-  return { results, missing: missingSlots(results, list.length), baselines: keys.map((key) => ({ suite: key.split('\n'), problem: red.get(key) ?? null })) };
+  return { results, missing: missingSlots(results, list.length), baselines: keys.map((key, i) => ({ suite: key.split('\n'), problem: red.get(key) ?? null, leftover: base[i]?.leftover ?? [] })) };
 }
 
 // The printed report and the exit code. Counted against `n`, the number chosen, never the number that came back.
@@ -1797,7 +1823,7 @@ export async function addLines(batch, opts = {}) {
 
 // The command. Returns the exit code; `print` receives each line of the report.
 export async function main(argv, deps = {}) {
-  const { mutations = MUTATIONS, root = REPO, suites = SUITES, suiteFor = SUITE_FOR, reads = READS, git = gitRun, run = runAll, add = addLines, print = (s) => console.log(s), readText = (f) => readFileSync(f, 'utf8') } = deps;
+  const { mutations = MUTATIONS, root = REPO, suites = SUITES, suiteFor = SUITE_FOR, reads = READS, git = gitRun, run = runAll, add = addLines, print = (s) => console.log(s), warn = (s) => console.error(s), readText = (f) => readFileSync(f, 'utf8') } = deps;
   const o = parseCli(argv);
   if (o.errors.length) {
     for (const e of o.errors) print(`refused: ${e}`);
@@ -1849,9 +1875,9 @@ export async function main(argv, deps = {}) {
     print(`\n${chosen.length} mutations.`);
     return 0;
   }
-  const { results } = chosen.length ? await run(chosen, { root, suites, suiteFor, jobs: o.jobs, timeoutMs: o.timeoutMs }) : { results: [] };
+  const { results, baselines } = chosen.length ? await run(chosen, { root, suites, suiteFor, jobs: o.jobs, timeoutMs: o.timeoutMs, warn }) : { results: [] };
   const s = summarise(results, chosen.length, { verbose: o.verbose, since: o.since, notRun });
-  for (const line of s.lines) print(line);
+  for (const line of [...s.lines.slice(0, -1), ...leftoverLines(baselines), ...s.lines.slice(-1)]) print(line); // the last line stays last
   return s.code;
 }
 
