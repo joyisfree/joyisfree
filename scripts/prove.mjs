@@ -1142,6 +1142,8 @@ const exitedWith = (run) => `mutate.mjs exited ${run?.code ?? 'without a code'}:
 export const FULL_RUN = /^killed (\d+) of (\d+) mutations \(every guard bites\)$/;
 export const SINCE_RUN = /^killed (\d+) of (\d+) selected since \S+, (\d+) not run \(every selected guard bites\)$/;
 export const SINCE_NONE = /^killed 0 of 0 selected since \S+: nothing to judge$/;
+// With --cache, the line before the last one: how many of the selected were killed before and not run (plan 20, A3).
+export const CACHED_RUN = /^CACHED: (\d+) of the (\d+) selected were killed before on byte-identical inputs and were not re-run$/;
 
 /**
  * The full mutations row. A PASS only when mutate.mjs exits 0 and its last line says it killed N of N, N being the
@@ -1195,12 +1197,22 @@ export function fastVerdict(run, base, expected) {
   if (!m) return fail(`${since}: mutate.mjs exited 0, but its last line is not "killed N of N selected since ...": ${last || '(none)'}`);
   const [killed, chosen, notRun] = [Number(m[1]), Number(m[2]), Number(m[3])];
   if (killed !== chosen || chosen + notRun !== expected) return fail(`${since}: killed ${killed} of ${chosen} selected and ${notRun} not run, but MUTATIONS lists ${expected}`);
-  return note(`${since}: killed ${killed} of ${chosen} selected, ${notRun} not run${told}`);
+  // Read like UNGUARDED: at most one CACHED line, of the same selection, and never more taken from the cache than killed.
+  const cached = lines.filter((l) => l.startsWith('CACHED: '));
+  let fromCache = '';
+  if (cached.length) {
+    const c = cached.length === 1 ? CACHED_RUN.exec(cached[0]) : null;
+    if (!c) return fail(`${since}: mutate.mjs printed a CACHED line this row cannot read: ${cached.join(' | ')}`);
+    if (Number(c[2]) !== chosen || Number(c[1]) > killed) return fail(`${since}: its CACHED line says ${c[1]} of ${c[2]}, but it killed ${killed} of ${chosen} selected`);
+    fromCache = ` (${c[1]} of them from the cache)`;
+  }
+  return note(`${since}: killed ${killed} of ${chosen} selected${fromCache}, ${notRun} not run${told}`);
 }
 
+// The fast row passes --cache, so a kill made on byte-identical inputs is not run again; the full row never does.
 export function fastMutations(ctx) {
   const base = fastBase(ctx.git);
-  return fastVerdict(base.sha ? ctx.node([join(ctx.root, MUTATE), '--since', base.sha]) : null, base, ctx.mutationCount);
+  return fastVerdict(base.sha ? ctx.node([join(ctx.root, MUTATE), '--since', base.sha, '--cache']) : null, base, ctx.mutationCount);
 }
 
 export function rulebook(ctx) {

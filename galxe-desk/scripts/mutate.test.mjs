@@ -1057,6 +1057,195 @@ test('--reach prints every test file\'s record and fails when one has none; it t
   assert.equal(parseCli(['--reach', '--jobs', '2']).errors.length, 0);
 });
 
+// ---- A3: --cache reuses a kill on byte-identical inputs, for --since and --only only (plan 20) ------------------
+
+const FX_TESTS = ['harness/list.test.mjs', 'other/scripts/z.test.mjs', 'pkg/scripts/a.test.mjs'];
+const FX_READS = { 'pkg/scripts/a.test.mjs': A_READS, 'other/scripts/z.test.mjs': Z_READS, 'harness/list.test.mjs': ['harness/list.test.mjs'] };
+// A fake suite run for the cache tests on `root`: green unmutated, red for a mutation named in `killers`, and, when
+// recorded, the record reach.mjs would write for each test file run (FX_READS, plus any `opaque` reason).
+function cacheRuns(root, { killers = ['a refuses a negative'], opaque = [], list = LIST_FX, reads = FX_READS, kills = () => true } = {}) {
+  const calls = [];
+  const spawn = async (args, o) => {
+    const files = args.filter((a) => a.endsWith('.test.mjs')).map((a) => relative(o.cwd, a).split(sep).join('/'));
+    let v = 'baseline';
+    for (const [name, file, , to] of list) {
+      const now = readFileSync(join(o.cwd, file), 'utf8');
+      if (now !== readFileSync(join(root, file), 'utf8') && now.includes(to)) v = name;
+    }
+    const recorded = Boolean(o.env?.REACH_DIR);
+    calls.push([v, files, recorded]);
+    if (recorded) {
+      for (const t of files) {
+        const lines = [{ start: 1, owner: t, pid: 1, node: process.version }, ...(reads[t] ?? []).map((p) => ({ p, k: 'file' })), ...opaque.map((why) => ({ opaque: why }))];
+        writeFileSync(join(o.env.REACH_DIR, `${encodeURIComponent(t)}.1-1.jsonl`), lines.map((l) => `${JSON.stringify(l)}\n`).join(''));
+      }
+    }
+    return v !== 'baseline' && killers.includes(v) && kills(files) ? RED : GREEN;
+  };
+  return { calls, spawn };
+}
+// The cache as main opens it: the reach map made again first (with fakes), then the index on disk.
+async function cacheOf(root, dir, { day = '2026-11-24', status = 'ok', env = {} } = {}) {
+  const { records } = await harness.refreshReach(FX_TESTS, { root, cacheDir: dir, jobs: 1, spawn: fakeRecorder(FX_READS), harness: 'h', day });
+  if (status !== 'ok') records['pkg/scripts/a.test.mjs'] = { ...records['pkg/scripts/a.test.mjs'], status, reasons: ['why'] };
+  return harness.openCache(dir, records, { harness: 'h', day, env });
+}
+const runCached = (root, list, spawn, cache) => runAll(list, { root, suites: SUITES_FX, suiteFor: {}, jobs: 1, spawn, cache, warn: () => {} });
+
+test('--cache keeps a kill, and the same mutation on byte-identical inputs is KILLED from the cache with nothing run', async () => {
+  const root = fixture();
+  const dir = cacheFolder();
+  const first = cacheRuns(root);
+  let cache = await cacheOf(root, dir);
+  let r = await runCached(root, [LIST_FX[0]], first.spawn, cache);
+  assert.deepEqual(r.results, [{ name: 'a refuses a negative', status: 'KILLED' }]);
+  assert.equal(cache.stored, 1);
+  assert.ok(first.calls.some(([v, , recorded]) => v === 'a refuses a negative' && recorded), 'its mutated run was recorded');
+  assert.ok(first.calls.every(([, , recorded]) => recorded), 'with --cache every run of a wholly recorded suite is recorded');
+  const again = cacheRuns(root);
+  cache = await cacheOf(root, dir);
+  r = await runCached(root, [LIST_FX[0]], again.spawn, cache);
+  assert.deepEqual(r.results, [{ name: 'a refuses a negative', status: 'KILLED', cached: true }]);
+  assert.deepEqual(again.calls, [], 'no baseline and no mutated run');
+  assert.deepEqual(r.baselines, []);
+  // Without --cache nothing is read from it, and nothing is recorded.
+  const plain = cacheRuns(root);
+  r = await runAll([LIST_FX[0]], { root, suites: SUITES_FX, suiteFor: {}, jobs: 1, spawn: plain.spawn, warn: () => {} });
+  assert.deepEqual(r.results, [{ name: 'a refuses a negative', status: 'KILLED' }]);
+  assert.ok(plain.calls.length && plain.calls.every(([, , recorded]) => !recorded));
+});
+
+test('--cache misses when a file the killer read, the day or the mutation itself differs, and when its entry is corrupt or gone', async () => {
+  const root = fixture();
+  const dir = cacheFolder();
+  const keep = async (o) => runCached(root, [LIST_FX[0]], cacheRuns(root).spawn, await cacheOf(root, dir, o));
+  const reran = async (list, o) => {
+    const s = cacheRuns(root);
+    const r = await runCached(root, list, s.spawn, await cacheOf(root, dir, o));
+    return { ran: s.calls.length > 0, result: r.results[0] };
+  };
+  await keep();
+  assert.deepEqual(await reran([LIST_FX[0]]), { ran: false, result: { name: 'a refuses a negative', status: 'KILLED', cached: true } });
+  assert.equal((await reran([LIST_FX[0]], { day: '2026-11-25' })).ran, true, 'a new Sydney day');
+  assert.equal((await reran([LIST_FX[0]], { env: { HOME: '/elsewhere' } })).ran, true, 'another HOME, TZ, LANG, CLAUDE* or NODE* variable');
+  const otherTo = ['a refuses a negative', 'pkg/scripts/a.mjs', "if (x < 0) return 'refused';", "if (x < 1) return 'refused';"];
+  assert.equal((await reran([otherTo])).ran, true, 'the same name with another swap');
+  assert.equal((await reran([LIST_FX[0]])).ran, false, 'and the kept one still holds');
+  assert.equal((await reran([LIST_FX[0]], { status: 'opaque' })).ran, true, 'a killer whose record is OPAQUE now');
+  write(root, 'pkg/lib/d.mjs', "export const d = (x) => (x > 0 ? 'ok' : 'none');\n");
+  assert.deepEqual(await reran([LIST_FX[0]]), { ran: true, result: { name: 'a refuses a negative', status: 'KILLED' } }, 'a file three imports deep that the killer read');
+  assert.equal((await reran([LIST_FX[0]])).ran, false, 'kept again on the new bytes');
+  const results = join(dir, 'results');
+  for (const f of readdirSync(results)) if (f !== 'index.json') writeFileSync(join(results, f), '{ not json');
+  assert.equal((await reran([LIST_FX[0]])).ran, true, 'a corrupt entry is a miss');
+  for (const f of readdirSync(results)) if (f !== 'index.json') writeFileSync(join(results, f), JSON.stringify({ status: 'SURVIVED', name: 'a refuses a negative' }));
+  assert.equal((await reran([LIST_FX[0]])).ran, true, 'an entry that is not a kill is a miss');
+  for (const f of readdirSync(results)) rmSync(join(results, f));
+  assert.equal((await reran([LIST_FX[0]])).ran, true, 'a missing entry and index are a miss');
+});
+
+test('--cache keeps a kill made narrowed, by the one test file that made it, and takes it from the cache next time', async () => {
+  const root = multiFixture();
+  const dir = cacheFolder();
+  const reads = { [MCORE]: [MCORE, 'm/scripts/core.mjs'], [MGATE]: [MGATE, 'm/scripts/gate.mjs', 'm/scripts/core.mjs'], [MSPAWN]: [MSPAWN] };
+  const open = async () => harness.openCache(dir, (await harness.refreshReach(MALL, { root, cacheDir: dir, jobs: 1, spawn: fakeRecorder(reads), harness: 'h', day: 'd' })).records, { harness: 'h', day: 'd', env: {} });
+  const go = async () => {
+    const s = cacheRuns(root, { killers: ['core refuses'], list: MLIST, reads, kills: (files) => files.length === 1 && files[0] === MCORE });
+    const cache = await open();
+    const r = await runAll([MLIST[0]], { root, suites: MSUITES, suiteFor: {}, jobs: 1, spawn: s.spawn, cache, warn: () => {} });
+    return { calls: s.calls.filter(([v]) => v !== 'baseline').map(([, files]) => files), result: r.results[0], index: cache.index };
+  };
+  const first = await go();
+  assert.deepEqual(first.calls, [[MCORE]], 'its own test, alone, killed it');
+  assert.deepEqual(first.result, { name: 'core refuses', status: 'KILLED' });
+  assert.deepEqual(first.index['core refuses'], { killer: [MCORE], paths: { [MCORE]: 'file', 'm/scripts/core.mjs': 'file' } });
+  const second = await go();
+  assert.deepEqual([second.calls, second.result], [[], { name: 'core refuses', status: 'KILLED', cached: true }]);
+});
+
+test('--cache keeps only a KILLED, and never one whose killer is OPAQUE in the map or in its run', async () => {
+  const kept = async (list, { killers, opaque, status } = {}) => {
+    const root = fixture();
+    const dir = cacheFolder();
+    const s = cacheRuns(root, { killers, opaque });
+    const cache = await cacheOf(root, dir, { status });
+    const r = await runCached(root, list, s.spawn, cache);
+    return { stored: cache.stored, statuses: r.results.map((x) => x.status), recorded: s.calls.some(([, , rec]) => rec), index: harness.openCache(dir, {}, { harness: 'h', day: 'd' }).index };
+  };
+  const survived = await kept([LIST_FX[1]], { killers: [] });
+  assert.deepEqual([survived.stored, survived.statuses, survived.index], [0, ['SURVIVED'], {}]);
+  const blind = await kept([LIST_FX[0]], { status: 'opaque' });
+  assert.deepEqual([blind.stored, blind.statuses, blind.recorded], [0, ['KILLED'], false], 'a suite with an OPAQUE record is not recorded, so nothing is kept');
+  const seen = await kept([LIST_FX[0]], { opaque: ['spawnSync: a node child started without the recorder'] });
+  assert.deepEqual([seen.stored, seen.statuses, seen.recorded], [0, ['KILLED'], true], 'a killer the recorder could not see whole in this run');
+});
+
+test("the cache key changes with each thing that decides a kill: harness, node, platform, day, variables, the line, the killer and what it read", () => {
+  const base = { harness: 'h', node: 'v1', platform: 'linux', day: '2026-11-24', env: 'e' };
+  const records = { 't.test.mjs': { paths: { 'a.mjs': { k: 'file', s: 'file:1' } } } };
+  const one = { base, tuple: ['n', 'a.mjs', 'x', 'y'], killer: ['t.test.mjs'], touched: [['a.mjs', 'file', 'file:2'], ['b.json', 'file', 'absent']], records };
+  const key = harness.cacheKey(one);
+  assert.match(key, /^[0-9a-f]{64}$/);
+  assert.equal(harness.cacheKey({ ...one, touched: [...one.touched].reverse() }), key, 'the order paths were read in does not matter');
+  const changed = [
+    { ...one, base: { ...base, harness: 'g' } }, { ...one, base: { ...base, node: 'v2' } }, { ...one, base: { ...base, platform: 'darwin' } },
+    { ...one, base: { ...base, day: '2026-11-25' } }, { ...one, base: { ...base, env: 'f' } },
+    { ...one, tuple: ['n', 'a.mjs', 'x', 'z'] }, { ...one, tuple: ['m', 'a.mjs', 'x', 'y'] }, { ...one, killer: ['u.test.mjs'] },
+    { ...one, touched: [['a.mjs', 'file', 'file:3'], ['b.json', 'file', 'absent']] }, { ...one, touched: [['a.mjs', 'file', 'file:2']] },
+    { ...one, records: { 't.test.mjs': { paths: { 'a.mjs': { k: 'file', s: 'file:9' } } } } },
+  ];
+  for (const c of changed) assert.notEqual(harness.cacheKey(c), key, JSON.stringify(c));
+  const env = { HOME: '/h', TZ: 'UTC', LANG: 'C', CLAUDE_X: '1', NODE_OPTIONS: '', PATH: '/bin', NODE_TEST_CONTEXT: 'child-v8' };
+  assert.equal(harness.envHash(env), harness.envHash({ ...env, PATH: '/other', NODE_TEST_CONTEXT: 'x', USER: 'u' }), 'only HOME, TZ, LANG, CLAUDE* and NODE* count, never the test runner context');
+  for (const k of ['HOME', 'TZ', 'LANG', 'CLAUDE_X', 'NODE_OPTIONS']) assert.notEqual(harness.envHash({ ...env, [k]: 'other' }), harness.envHash(env), k);
+});
+
+test('--cache goes with --since or --only, never a full run, and says how many it took from the cache before the last line', async () => {
+  for (const argv of [['--cache'], ['--cache', '--verbose'], ['--cache', '--add', 'x.json', '--group', 'g'], ['--cache', '--try', 'x.json'], ['--cache', '--reach']]) {
+    assert.match(parseCli(argv).errors.join(' | '), /--cache goes with --since or --only/, argv.join(' '));
+    let ran = false;
+    assert.equal(await main(argv, { mutations: LIST_FX, run: async () => { ran = true; return { results: [] }; }, add: async () => { ran = true; return { ok: true, problems: [] }; }, print: () => {} }), 1);
+    assert.equal(ran, false, argv.join(' '));
+  }
+  assert.deepEqual(parseCli(['--cache', '--only', 'pkg']).errors, []);
+  assert.deepEqual(parseCli(['--cache', '--since', 'HEAD']).errors, []);
+  assert.equal(parseCli(['--only', 'pkg']).cache, false);
+  const cached = [{ name: 'a', status: 'KILLED', cached: true }, { name: 'b', status: 'KILLED' }];
+  assert.deepEqual(summarise(cached, 2, { since: 'HEAD', notRun: 3, cache: true }).lines, ['CACHED: 1 of the 2 selected were killed before on byte-identical inputs and were not re-run', 'killed 2 of 2 selected since HEAD, 3 not run (every selected guard bites)']);
+  assert.deepEqual(summarise(cached, 2, { cache: true }).lines, ['CACHED: 1 of the 2 selected were killed before on byte-identical inputs and were not re-run', 'killed 2 of 2 mutations (every guard bites)']);
+  assert.deepEqual(summarise(cached, 2, { since: 'HEAD', notRun: 3 }).lines, ['killed 2 of 2 selected since HEAD, 3 not run (every selected guard bites)'], 'no CACHED line without --cache');
+  assert.deepEqual(summarise([], 0, { since: 'HEAD', cache: true }).lines, ['killed 0 of 0 selected since HEAD: nothing to judge']);
+  // main: --only --cache records the chosen suites, opens the cache in the map's folder and hands it to the run.
+  const dir = cacheFolder();
+  let seen = null;
+  const asked = [];
+  const out = [];
+  const reach = async (tests, o) => { asked.push([tests, o.cacheDir]); return { records: ALL_RECORDED, refreshed: [] }; };
+  const run = async (list, o) => { seen = o.cache; return { results: list.map((m, i) => ({ name: m[0], status: 'KILLED', ...(i === 0 ? { cached: true } : {}) })), baselines: [{ suite: ['pkg/scripts/a.test.mjs'], leftover: ['x'] }] }; };
+  assert.equal(await main(['--only', 'pkg/scripts/a.mjs', '--cache'], { mutations: LIST_FX, ...FXO, reach, cacheDir: dir, run, env: {}, print: (l) => out.push(l), warn: () => {} }), 0);
+  assert.deepEqual(asked, [[['pkg/scripts/a.test.mjs'], dir]], "only the chosen mutations' suites are recorded");
+  assert.equal(seen.dir, dir);
+  assert.deepEqual(seen.records, ALL_RECORDED);
+  assert.deepEqual(out, ['CACHED: 1 of the 2 selected were killed before on byte-identical inputs and were not re-run', 'LEFTOVER: pkg/scripts/a.test.mjs left 1 entry: x', 'killed 2 of 2 mutations (every guard bites)']);
+  // Without --cache the run gets none.
+  await main(['--only', 'pkg/scripts/a.mjs'], { mutations: LIST_FX, ...FXO, reach, cacheDir: dir, run, env: {}, print: () => {}, warn: () => {} });
+  assert.equal(seen, null);
+  // With no home for the cache every chosen mutation runs, and the run says so.
+  const warned = [];
+  const homeless = (args) => (args.includes('--git-common-dir') ? { code: 128, stdout: '' } : { code: 0, stdout: '' });
+  seen = 'not set';
+  assert.equal(await main(['--only', 'pkg/scripts/a.mjs', '--cache'], { mutations: LIST_FX, ...FXO, reach, git: homeless, run, env: {}, print: () => {}, warn: (l) => warned.push(l) }), 0);
+  assert.equal(seen, null);
+  assert.match(warned.join('\n'), /^NOTE: git rev-parse --git-common-dir failed .*; --cache reads and keeps nothing, so every chosen mutation runs$/);
+  // --since --cache makes the reach map once and opens the cache on it.
+  const root = gitFixture();
+  write(root, 'pkg/scripts/a.mjs', `${readFileSync(join(root, 'pkg/scripts/a.mjs'), 'utf8')}// changed\n`);
+  asked.length = 0;
+  assert.equal(await main(['--since', 'HEAD', '--cache'], { mutations: LIST_FX, root, suites: SUITES_FX, suiteFor: {}, reads: {}, git: fxGit, reach, cacheDir: dir, run, env: {}, print: () => {}, warn: () => {} }), 0);
+  assert.equal(asked.length, 1, 'one refresh of the map, not two');
+  assert.deepEqual(seen.records, ALL_RECORDED);
+});
+
 // ---- --add -------------------------------------------------------------------------------------------------
 
 const GOOD = ['a positive passes through', 'pkg/scripts/a.mjs', 'return b(x);', "return 'ok';"];

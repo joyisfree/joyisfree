@@ -1277,6 +1277,7 @@ test('mutations: the check runs mutate.mjs once with no argument and counts agai
   const r = mutations({ root: '/r', mutationCount: 3, node: (args) => { calls.push(args); return { code: 0, stdout: FULL_OK(3) }; } });
   assert.equal(r.status, 'PASS', r.detail);
   assert.deepEqual(calls, [[join('/r', 'galxe-desk/scripts/mutate.mjs')]]);
+  assert.ok(!calls.flat().includes('--cache'), 'the full proof never reads the cache, so PROVEN keeps its meaning (plan 20, A3)');
   assert.equal(context().mutationCount, MUTATIONS.length);
   assert.ok(MUTATIONS.length > 0);
 });
@@ -1330,12 +1331,27 @@ test('the fast row FAILS when a selected guard was not killed, the counts miss M
   assert.match(fastVerdict(null, { error: 'there is no upstream and no HEAD~1, so there is no base' }, 513).detail, /no upstream and no HEAD~1/);
 });
 
-test('fastMutations runs mutate.mjs --since the base commit, and with no base runs nothing and fails', () => {
+const cachedLine = (k, n) => `CACHED: ${k} of the ${n} selected were killed before on byte-identical inputs and were not re-run\n`;
+
+test('the fast note names how many kills came from the cache, and a CACHED line it cannot read or that does not add up FAILS it (plan 20, A3)', () => {
+  const r = fastVerdict({ code: 0, stdout: `${cachedLine(98, 126)}${since(126, 126, 935)}` }, BASE, 1061);
+  assert.equal(r.status, 'NOTE', r.detail);
+  assert.equal(r.detail, 'since origin/claude/x: killed 126 of 126 selected (98 of them from the cache), 935 not run');
+  const told = fastVerdict({ code: 0, stdout: `UNGUARDED: scripts/new.mjs changed and no mutation names it\n${cachedLine(0, 2)}${since(2, 2, 511)}` }, BASE, 513);
+  assert.equal(told.detail, 'since origin/claude/x: killed 2 of 2 selected (0 of them from the cache), 511 not run; changed with no mutation naming it: scripts/new.mjs');
+  for (const bad of [cachedLine(13, 12), cachedLine(3, 11), 'CACHED: some of them\n', `${cachedLine(1, 12)}${cachedLine(2, 12)}`]) {
+    const f = fastVerdict({ code: 0, stdout: `${bad}${since(12, 12, 501)}` }, BASE, 513);
+    assert.equal(f.status, 'FAIL', bad);
+    assert.match(f.detail, /CACHED/, bad);
+  }
+});
+
+test('fastMutations runs mutate.mjs --since the base commit with --cache, and with no base runs nothing and fails', () => {
   const calls = [];
   const node = (args) => { calls.push(args); return { code: 0, stdout: since(3, 3, 7) }; };
   const r = fastMutations({ root: '/r', mutationCount: 10, git: revGit({ [UP]: SHA_A, [UP_NAME]: 'origin/claude/x' }), node });
   assert.equal(r.status, 'NOTE', r.detail);
-  assert.deepEqual(calls, [[join('/r', 'galxe-desk/scripts/mutate.mjs'), '--since', SHA_A]]);
+  assert.deepEqual(calls, [[join('/r', 'galxe-desk/scripts/mutate.mjs'), '--since', SHA_A, '--cache']]);
   const none = fastMutations({ root: '/r', mutationCount: 10, git: revGit({}), node: () => { throw new Error('must not run'); } });
   assert.equal(none.status, 'FAIL');
   assert.match(none.detail, /no upstream and no HEAD~1/);

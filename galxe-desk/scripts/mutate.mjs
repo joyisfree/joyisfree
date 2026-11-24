@@ -15,6 +15,9 @@
 //                                                             # nothing written; exit 0 only when every line is KILLED
 //   node galxe-desk/scripts/mutate.mjs --list                 # just list them (after --only and --since)
 //   node galxe-desk/scripts/mutate.mjs --reach                # what each test file reads, recorded (see below)
+//   node galxe-desk/scripts/mutate.mjs --since <rev> --cache  # with --since or --only only: a mutation KILLED before
+//                                                             # on byte-identical inputs is KILLED without a run, and a
+//                                                             # CACHED line says how many; the full run never reads it
 //   --jobs N (1 to 16, default 4 or fewer CPUs), --timeout-ms N (per suite run, default 120000), --verbose
 //   (every result in list order, so --jobs 1 and --jobs 4 print the same bytes), --no-narrow (see below)
 //
@@ -56,7 +59,7 @@ import { join, dirname, basename, resolve, relative, sep, isAbsolute, posix } fr
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readRecords, recorderEnv } from './reach.mjs';
+import { KIND_RANK, readRecords, recorderEnv } from './reach.mjs';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(DIR, '..', '..');
@@ -1330,6 +1333,48 @@ export const MUTATIONS = [
   ["--reach is read from the command line","galxe-desk/scripts/mutate.mjs","    else if (a === '--reach') o.reach = true; // record what each test file reads, and print it\n","    // record what each test file reads, and print it\n"],
   ["--reach takes no mutation flag","galxe-desk/scripts/mutate.mjs","  if (o.reach && (o.add !== undefined || o.try !== undefined || o.only || o.since !== undefined || o.list || o.verbose)) o.errors.push('--reach records and prints what each test file reads, and runs no mutation; drop --add, --try, --only, --since, --list and --verbose');\n","  if (false) o.errors.push('--reach records and prints what each test file reads, and runs no mutation; drop --add, --try, --only, --since, --list and --verbose');\n"],
   ["reach.mjs is judged by its own suite","galxe-desk/scripts/mutate.mjs","  'galxe-desk/scripts/reach.mjs': ['galxe-desk/scripts/reach.test.mjs'],\n",""],
+  // galxe-desk/scripts/mutate.mjs and scripts/prove.mjs — --cache reuses a kill made on byte-identical inputs, for --since and --only only; prove --fast passes it and names the count, the full proof never does (plan 20, step A3) (added by mutate --add)
+  ["--cache: a full run is refused","galxe-desk/scripts/mutate.mjs","  if (o.cache && o.since === undefined && !o.only) o.errors.push('--cache goes with --since or --only: a full run never reads the cache, so its \"killed N of N\" is always run now');\n","  if (false) o.errors.push('--cache goes with --since or --only: a full run never reads the cache, so its \"killed N of N\" is always run now');\n"],
+  ["--cache is read from the command line","galxe-desk/scripts/mutate.mjs","    else if (a === '--cache') o.cache = true; // reuse a kill made on byte-identical inputs\n","    // reuse a kill made on byte-identical inputs\n"],
+  ["--cache: a mutation killed before on byte-identical inputs runs nothing","galxe-desk/scripts/mutate.mjs","  if (cache) prepared.forEach((p, i) => { if (!p.status && cachedKill(cache, root, p)) prepared[i] = { name: p.name, status: 'KILLED', cached: true }; });\n",""],
+  ["--cache: a narrowed kill is kept","galxe-desk/scripts/mutate.mjs","      if (classify(one) === 'KILLED') keep(p, [t], one); // kept for --cache, if its run was recorded whole\n",""],
+  ["--cache: a kill by the whole suite is kept","galxe-desk/scripts/mutate.mjs","    if (status === 'KILLED') keep(p, p.suite, r); // kept for --cache, if its run was recorded whole\n",""],
+  ["--cache: every run of a wholly recorded suite is recorded","galxe-desk/scripts/mutate.mjs","record: cache ? (files) => files.every((f) => cache.records?.[f]?.status === 'ok') : null };\n","record: null };\n"],
+  ["--cache: a suite with an OPAQUE record is not recorded","galxe-desk/scripts/mutate.mjs","record: cache ? (files) => files.every((f) => cache.records?.[f]?.status === 'ok') : null };\n","record: cache ? () => true : null };\n"],
+  ["--cache: the index is written when the run ends","galxe-desk/scripts/mutate.mjs","  if (cache) { try { writeIndex(cache); } catch (err) { warn(`NOTE: the cache index could not be written to ${cache.dir} (${err.code ?? err.message})`); } }\n",""],
+  ["--cache: a killer seen OPAQUE in its run is never kept","galxe-desk/scripts/mutate.mjs","    if (!seen || seen.opaque.length || cache.records?.[t]?.status !== 'ok') return false;\n","    if (!seen) return false;\n"],
+  ["--cache: a killer whose record is not complete now is a miss","galxe-desk/scripts/mutate.mjs","  if (!e.killer.every((t) => cache.records?.[t]?.status === 'ok')) return false;\n",""],
+  ["--cache: the mutated text stands for the mutated file in the key","galxe-desk/scripts/mutate.mjs","  const touched = Object.entries(e.paths).map(([q, k]) => [q, k, pathState(root, q, k, over)]);\n","  const touched = Object.entries(e.paths).map(([q, k]) => [q, k, pathState(root, q, k)]);\n"],
+  ["--cache: an entry that is not a kill is a miss","galxe-desk/scripts/mutate.mjs","    return hit?.status === 'KILLED' && hit.name === p.name;\n","    return true;\n"],
+  ["--cache: the key holds the harness","galxe-desk/scripts/mutate.mjs","  return sha256(JSON.stringify({ v: 1, harness: base.harness, node: base.node, platform: base.platform, day: base.day, env: base.env, tuple, killer, touched: [...touched].sort(byPath), records: killer.map((t) => [t, record(t)]) }));\n","  return sha256(JSON.stringify({ v: 1, node: base.node, platform: base.platform, day: base.day, env: base.env, tuple, killer, touched: [...touched].sort(byPath), records: killer.map((t) => [t, record(t)]) }));\n"],
+  ["--cache: the key holds the node version","galxe-desk/scripts/mutate.mjs","  return sha256(JSON.stringify({ v: 1, harness: base.harness, node: base.node, platform: base.platform, day: base.day, env: base.env, tuple, killer, touched: [...touched].sort(byPath), records: killer.map((t) => [t, record(t)]) }));\n","  return sha256(JSON.stringify({ v: 1, harness: base.harness, platform: base.platform, day: base.day, env: base.env, tuple, killer, touched: [...touched].sort(byPath), records: killer.map((t) => [t, record(t)]) }));\n"],
+  ["--cache: the key holds the platform","galxe-desk/scripts/mutate.mjs","  return sha256(JSON.stringify({ v: 1, harness: base.harness, node: base.node, platform: base.platform, day: base.day, env: base.env, tuple, killer, touched: [...touched].sort(byPath), records: killer.map((t) => [t, record(t)]) }));\n","  return sha256(JSON.stringify({ v: 1, harness: base.harness, node: base.node, day: base.day, env: base.env, tuple, killer, touched: [...touched].sort(byPath), records: killer.map((t) => [t, record(t)]) }));\n"],
+  ["--cache: the key holds the Sydney day","galxe-desk/scripts/mutate.mjs","  return sha256(JSON.stringify({ v: 1, harness: base.harness, node: base.node, platform: base.platform, day: base.day, env: base.env, tuple, killer, touched: [...touched].sort(byPath), records: killer.map((t) => [t, record(t)]) }));\n","  return sha256(JSON.stringify({ v: 1, harness: base.harness, node: base.node, platform: base.platform, env: base.env, tuple, killer, touched: [...touched].sort(byPath), records: killer.map((t) => [t, record(t)]) }));\n"],
+  ["--cache: the key holds the variables","galxe-desk/scripts/mutate.mjs","  return sha256(JSON.stringify({ v: 1, harness: base.harness, node: base.node, platform: base.platform, day: base.day, env: base.env, tuple, killer, touched: [...touched].sort(byPath), records: killer.map((t) => [t, record(t)]) }));\n","  return sha256(JSON.stringify({ v: 1, harness: base.harness, node: base.node, platform: base.platform, day: base.day, tuple, killer, touched: [...touched].sort(byPath), records: killer.map((t) => [t, record(t)]) }));\n"],
+  ["--cache: the key holds the line itself","galxe-desk/scripts/mutate.mjs","  return sha256(JSON.stringify({ v: 1, harness: base.harness, node: base.node, platform: base.platform, day: base.day, env: base.env, tuple, killer, touched: [...touched].sort(byPath), records: killer.map((t) => [t, record(t)]) }));\n","  return sha256(JSON.stringify({ v: 1, harness: base.harness, node: base.node, platform: base.platform, day: base.day, env: base.env, killer, touched: [...touched].sort(byPath), records: killer.map((t) => [t, record(t)]) }));\n"],
+  ["--cache: the key holds what the killing run read","galxe-desk/scripts/mutate.mjs","  return sha256(JSON.stringify({ v: 1, harness: base.harness, node: base.node, platform: base.platform, day: base.day, env: base.env, tuple, killer, touched: [...touched].sort(byPath), records: killer.map((t) => [t, record(t)]) }));\n","  return sha256(JSON.stringify({ v: 1, harness: base.harness, node: base.node, platform: base.platform, day: base.day, env: base.env, tuple, killer, records: killer.map((t) => [t, record(t)]) }));\n"],
+  ["--cache: the order paths were read in is not part of the key","galxe-desk/scripts/mutate.mjs","  return sha256(JSON.stringify({ v: 1, harness: base.harness, node: base.node, platform: base.platform, day: base.day, env: base.env, tuple, killer, touched: [...touched].sort(byPath), records: killer.map((t) => [t, record(t)]) }));\n","  return sha256(JSON.stringify({ v: 1, harness: base.harness, node: base.node, platform: base.platform, day: base.day, env: base.env, tuple, killer, touched, records: killer.map((t) => [t, record(t)]) }));\n"],
+  ["--cache: the key holds each killer's record","galxe-desk/scripts/mutate.mjs","  return sha256(JSON.stringify({ v: 1, harness: base.harness, node: base.node, platform: base.platform, day: base.day, env: base.env, tuple, killer, touched: [...touched].sort(byPath), records: killer.map((t) => [t, record(t)]) }));\n","  return sha256(JSON.stringify({ v: 1, harness: base.harness, node: base.node, platform: base.platform, day: base.day, env: base.env, tuple, killer, touched: [...touched].sort(byPath) }));\n"],
+  ["--cache: the key holds HOME, TZ, LANG and the CLAUDE and NODE variables","galxe-desk/scripts/mutate.mjs","const CACHE_VARS = (k) => (/^(CLAUDE|NODE)/.test(k) || ['TZ', 'LANG', 'HOME'].includes(k)) && k !== 'NODE_TEST_CONTEXT';\n","const CACHE_VARS = (k) => false;\n"],
+  ["--cache: the test runner context is not part of the key","galxe-desk/scripts/mutate.mjs","const CACHE_VARS = (k) => (/^(CLAUDE|NODE)/.test(k) || ['TZ', 'LANG', 'HOME'].includes(k)) && k !== 'NODE_TEST_CONTEXT';\n","const CACHE_VARS = (k) => /^(CLAUDE|NODE)/.test(k) || ['TZ', 'LANG', 'HOME'].includes(k);\n"],
+  ["--cache: the key holds the variables of this run","galxe-desk/scripts/mutate.mjs","  return { dir, records, base: { harness, node, platform, day, env: envHash(env) }, index: readIndex(dir), stored: 0 };\n","  return { dir, records, base: { harness, node, platform, day, env: envHash({}) }, index: readIndex(dir), stored: 0 };\n"],
+  ["--cache: a CACHED line counts the kills taken from the cache","galxe-desk/scripts/mutate.mjs","    if (r.status === 'KILLED' && r.cached === true) cached++; // killed before on byte-identical inputs, not run now\n","    // killed before on byte-identical inputs, not run now\n"],
+  ["--cache: the CACHED line comes before a --since last line","galxe-desk/scripts/mutate.mjs","    if (cache) lines.push(cachedLine(cached, n));\n    lines.push(`killed ${killed} of ${n} selected since ${since}","    lines.push(`killed ${killed} of ${n} selected since ${since}"],
+  ["--cache: no CACHED line without --cache","galxe-desk/scripts/mutate.mjs","    if (cache) lines.push(cachedLine(cached, n));\n    lines.push(`killed ${killed} of ${n} selected since ${since}","    lines.push(cachedLine(cached, n));\n    lines.push(`killed ${killed} of ${n} selected since ${since}"],
+  ["--cache: the CACHED line comes before an --only last line","galxe-desk/scripts/mutate.mjs","  if (cache) lines.push(cachedLine(cached, n));\n  lines.push(`killed ${killed} of ${n} mutations","  lines.push(`killed ${killed} of ${n} mutations"],
+  ["--cache: main hands the cache to the run","galxe-desk/scripts/mutate.mjs","await run(chosen, { root, suites, suiteFor, jobs: o.jobs, cache, timeoutMs: o.timeoutMs, narrow: o.narrow, warn }) : { results: [] };\n","await run(chosen, { root, suites, suiteFor, jobs: o.jobs, timeoutMs: o.timeoutMs, narrow: o.narrow, warn }) : { results: [] };\n"],
+  ["--cache: the summary is told the cache is on","galxe-desk/scripts/mutate.mjs","  const s = summarise(results, chosen.length, { verbose: o.verbose, since: o.since, notRun, cache: o.cache });\n","  const s = summarise(results, chosen.length, { verbose: o.verbose, since: o.since, notRun });\n"],
+  ["--cache: --only records only the chosen suites","galxe-desk/scripts/mutate.mjs","    const got = mapped ?? (await recordsFor([...new Set(chosen.flatMap((m) => suiteOf(relPath(m[1]), { root, suites, suiteFor })))].sort()));\n","    const got = mapped ?? (await recordsFor(suiteTests(root, suites, suiteFor)));\n"],
+  ["--cache: --since reuses the reach map it made","galxe-desk/scripts/mutate.mjs","    mapped = got;\n",""],
+  ["--cache: with no home for the cache every chosen mutation runs, and it says so","galxe-desk/scripts/mutate.mjs","    if (got.error) warn(`NOTE: ${got.error}; --cache reads and keeps nothing, so every chosen mutation runs`);\n","    if (got.error) ;\n"],
+  ["--cache: the cache opens in the reach map's folder","galxe-desk/scripts/mutate.mjs","    else cache = openCache(got.dir, got.records, { env });\n","    else cache = null;\n"],
+  ["the full proof never reads the cache","scripts/prove.mjs","ctx.node([join(ctx.root, MUTATE)])","ctx.node([join(ctx.root, MUTATE), '--cache'])"],
+  ["the fast row reuses kills from the cache","scripts/prove.mjs","'--since', base.sha, '--cache']","'--since', base.sha]"],
+  ["the fast note names how many came from the cache","scripts/prove.mjs","fromCache = ` (${c[1]} of them from the cache)`;","fromCache = '';"],
+  ["a CACHED line the fast row cannot read fails it","scripts/prove.mjs","if (!c) return fail(`${since}: mutate.mjs printed a CACHED line","if (false) return fail(`${since}: mutate.mjs printed a CACHED line"],
+  ["two CACHED lines fail the fast row","scripts/prove.mjs","const c = cached.length === 1 ? CACHED_RUN.exec(cached[0]) : null;","const c = CACHED_RUN.exec(cached[0]);"],
+  ["a CACHED count of another selection fails the fast row","scripts/prove.mjs","if (Number(c[2]) !== chosen || Number(c[1]) > killed) return fail(","if (Number(c[1]) > killed) return fail("],
+  ["more kills from the cache than killed fails the fast row","scripts/prove.mjs","if (Number(c[2]) !== chosen || Number(c[1]) > killed) return fail(","if (Number(c[2]) !== chosen) return fail("],
 ];
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -1595,11 +1640,15 @@ export function narrowFor(p, graph, { green } = {}) {
 // --no-narrow runs it, and that run's verdict is the result. A kill found only there is a REACH_MISS on `warn` (the
 // import map missed the killer: a slower run, never a different verdict), as is NOT_GREEN_ALONE for a file left out.
 export async function runAll(list, opts = {}) {
-  const { root = REPO, jobs = DEFAULT_JOBS, timeoutMs = DEFAULT_TIMEOUT_MS, maxBuffer = MAX_BUFFER, suites = SUITES, suiteFor = SUITE_FOR, spawn: run = spawnNode, copy = copyRepo, pool = runPool, narrow = true, warn = (s) => console.error(s) } = opts;
-  const deps = { spawn: run, copy, timeoutMs, maxBuffer };
+  const { root = REPO, jobs = DEFAULT_JOBS, timeoutMs = DEFAULT_TIMEOUT_MS, maxBuffer = MAX_BUFFER, suites = SUITES, suiteFor = SUITE_FOR, spawn: run = spawnNode, copy = copyRepo, pool = runPool, narrow = true, warn = (s) => console.error(s), cache = null } = opts;
+  // With --cache, every run of a suite whose test files all have complete records is recorded, so a kill can be kept.
+  const deps = { spawn: run, copy, timeoutMs, maxBuffer, record: cache ? (files) => files.every((f) => cache.records?.[f]?.status === 'ok') : null };
   const texts = new Map();
   const read = (p) => { if (!texts.has(p)) texts.set(p, readFileSync(p, 'utf8')); return texts.get(p); };
   const prepared = list.map((m) => prepare(m, { root, suites, suiteFor, read }));
+  // A mutation killed before on byte-identical inputs is KILLED from the cache: it runs nothing, its suite no baseline.
+  if (cache) prepared.forEach((p, i) => { if (!p.status && cachedKill(cache, root, p)) prepared[i] = { name: p.name, status: 'KILLED', cached: true }; });
+  const keep = (p, files, r) => { if (cache) { try { keepKill(cache, p, files, r); } catch { /* the cache never decides a verdict */ } } };
   const keys = [...new Set(prepared.filter((p) => !p.status).map((p) => p.suite.join('\n')))];
   const multi = new Set(narrow ? keys.filter((key) => key.includes('\n')) : []); // the suites a mutation may narrow
   const alone = [...new Set([...multi].flatMap((key) => key.split('\n')))];
@@ -1628,21 +1677,27 @@ export async function runAll(list, opts = {}) {
       const one = await runSuite(root, [t], p, { ...deps, check: !checked });
       checked = true;
       if (!one.ran) return describe(p.name, classify(one), one, deps); // decided before any test ran: it no longer parses
+      if (classify(one) === 'KILLED') keep(p, [t], one); // kept for --cache, if its run was recorded whole
       if (classify(one) === 'KILLED') return describe(p.name, 'KILLED', one, deps); // the first kill decides
     }
     const r = await runSuite(root, p.suite, p, { ...deps, check: !checked }); // the whole suite decides
     const status = classify(r);
+    if (status === 'KILLED') keep(p, p.suite, r); // kept for --cache, if its run was recorded whole
     if (status === 'KILLED' && multi.has(key)) missed[at] = `REACH_MISS: ${p.name} — only its whole suite killed it; ${tries.length ? `${tries.join(', ')} alone did not` : 'no test file both imports it and is green alone'}`;
     return describe(p.name, status, r, deps);
   }, (p, err) => ({ name: p.name, status: 'CRASHED', detail: `the run threw: ${err?.message ?? err}` }));
   for (const line of missed) if (line) warn(line); // in list order, whatever finished first
+  if (cache) { try { writeIndex(cache); } catch (err) { warn(`NOTE: the cache index could not be written to ${cache.dir} (${err.code ?? err.message})`); } }
   return { results, missing: missingSlots(results, list.length), baselines: keys.map((key, i) => ({ suite: key.split('\n'), problem: red.get(key) ?? null, leftover: base[i]?.leftover ?? [] })) };
 }
 
 // The printed report and the exit code. Counted against `n`, the number chosen, never the number that came back.
-export function summarise(results, n, { verbose = false, since, notRun = 0 } = {}) {
+// With --cache it says, before the last line, how many of the kills were taken from the cache.
+const cachedLine = (k, n) => `CACHED: ${k} of the ${n} selected were killed before on byte-identical inputs and were not re-run`;
+export function summarise(results, n, { verbose = false, since, notRun = 0, cache = false } = {}) {
   const lines = [];
   let killed = 0;
+  let cached = 0;
   let bad = 0;
   for (let i = 0; i < n; i++) {
     const r = results?.[i];
@@ -1653,10 +1708,12 @@ export function summarise(results, n, { verbose = false, since, notRun = 0 } = {
     }
     if (r.status === 'KILLED') killed++;
     else bad++; // only KILLED counts
+    if (r.status === 'KILLED' && r.cached === true) cached++; // killed before on byte-identical inputs, not run now
     if (verbose || r.status !== 'KILLED') lines.push(`${r.status}: ${r.name}${r.detail ? ` — ${r.detail}` : ''}`);
   }
   if (since !== undefined) {
     if (n === 0) return { lines: [...lines, `killed 0 of 0 selected since ${since}: nothing to judge`], code: 0 };
+    if (cache) lines.push(cachedLine(cached, n));
     lines.push(`killed ${killed} of ${n} selected since ${since}, ${notRun} not run${bad ? `, ${bad} not killed` : ' (every selected guard bites)'}`);
     return { lines, code: bad ? 1 : 0 };
   }
@@ -1664,6 +1721,7 @@ export function summarise(results, n, { verbose = false, since, notRun = 0 } = {
     lines.push('killed 0 of 0 mutations: nothing ran, so nothing is proven');
     return { lines, code: 1 }; // an empty run is never "every guard bites"
   }
+  if (cache) lines.push(cachedLine(cached, n));
   lines.push(`killed ${killed} of ${n} mutations${bad ? `, ${bad} not killed` : ' (every guard bites)'}`);
   return { lines, code: bad ? 1 : 0 };
 }
@@ -1672,13 +1730,14 @@ const VALUED = new Set(['--only', '--jobs', '--timeout-ms', '--since', '--add', 
 
 // The command line, read strictly: an unknown argument, a bad number or a lone --group is an error, never a default.
 export function parseCli(argv) {
-  const o = { list: false, verbose: false, narrow: true, reach: false, only: undefined, jobs: DEFAULT_JOBS, timeoutMs: DEFAULT_TIMEOUT_MS, since: undefined, add: undefined, group: undefined, try: undefined, errors: [] };
+  const o = { list: false, verbose: false, narrow: true, reach: false, cache: false, only: undefined, jobs: DEFAULT_JOBS, timeoutMs: DEFAULT_TIMEOUT_MS, since: undefined, add: undefined, group: undefined, try: undefined, errors: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--list') o.list = true;
     else if (a === '--verbose') o.verbose = true;
     else if (a === '--no-narrow') o.narrow = false; // every mutation runs its whole suite, as before plan 20
     else if (a === '--reach') o.reach = true; // record what each test file reads, and print it
+    else if (a === '--cache') o.cache = true; // reuse a kill made on byte-identical inputs
     else if (VALUED.has(a)) {
       const v = argv[++i];
       if (v === undefined || v.startsWith('--')) o.errors.push(`${a} needs a value`);
@@ -1703,6 +1762,7 @@ export function parseCli(argv) {
   if (o.add !== undefined && (o.only || o.since !== undefined || o.list)) o.errors.push('--add runs its own batch only; drop --only, --since and --list');
   if (o.try !== undefined && (o.add !== undefined || o.only || o.since !== undefined || o.list)) o.errors.push('--try runs its own batch only; drop --add, --only, --since and --list');
   if (o.reach && (o.add !== undefined || o.try !== undefined || o.only || o.since !== undefined || o.list || o.verbose)) o.errors.push('--reach records and prints what each test file reads, and runs no mutation; drop --add, --try, --only, --since, --list and --verbose');
+  if (o.cache && o.since === undefined && !o.only) o.errors.push('--cache goes with --since or --only: a full run never reads the cache, so its "killed N of N" is always run now');
   return o;
 }
 
@@ -1930,6 +1990,85 @@ export async function refreshReach(tests, opts = {}) {
     try { writeReachMap(cacheDir, made); } catch (err) { warn(`NOTE: the reach map could not be written to ${cacheDir} (${err.code ?? err.message}); this run still uses what it recorded`); }
   }
   return { records: Object.fromEntries(tests.map((t) => [t, files[t]])), refreshed: stale };
+}
+
+// --------------------------------------------------------------------------------------------- the result cache
+// --cache (plan 20, step A3), for --since and --only only, never the full run, so PROVEN keeps its meaning. A KILLED
+// whose killing run was recorded whole, by test files whose records are complete, is kept in <cache>/results under a
+// key that holds everything that decides it; the same mutation is then KILLED without a run while that key is the same.
+
+const CACHE_VARS = (k) => (/^(CLAUDE|NODE)/.test(k) || ['TZ', 'LANG', 'HOME'].includes(k)) && k !== 'NODE_TEST_CONTEXT';
+/** A hash of the variables a test run inherits that can change what it does: HOME, TZ, LANG, CLAUDE* and NODE*. */
+export const envHash = (env = process.env) => sha256(JSON.stringify(Object.keys(env).filter(CACHE_VARS).sort().map((k) => [k, env[k]])));
+
+const byPath = (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
+/**
+ * One kill's key: the harness, node and platform, the Sydney day (an entry is good for one day at most), the variables'
+ * hash, the line [name, file, from, to], the killing test files, every path the killing run read with what it held in
+ * the mutated copy (`touched`, [path, kind, state]), and each killing file's record in the reach map.
+ */
+export function cacheKey({ base, tuple, killer, touched, records }) {
+  const record = (t) => Object.entries(records?.[t]?.paths ?? {}).map(([p, v]) => [p, v?.k, v?.s]).sort(byPath);
+  return sha256(JSON.stringify({ v: 1, harness: base.harness, node: base.node, platform: base.platform, day: base.day, env: base.env, tuple, killer, touched: [...touched].sort(byPath), records: killer.map((t) => [t, record(t)]) }));
+}
+
+const RESULTS = 'results';
+const INDEX = 'index.json';
+const readIndex = (dir) => {
+  try {
+    const i = JSON.parse(readFileSync(join(dir, RESULTS, INDEX), 'utf8'));
+    if (i?.version === 1 && i.entries && typeof i.entries === 'object' && !Array.isArray(i.entries)) return i.entries;
+  } catch { /* missing or corrupt: nothing is cached */ }
+  return {};
+};
+
+/** The cache a --cache run reads and adds to: in `dir`, judged against `records` (the reach map, made again first). */
+export function openCache(dir, records, { harness = harnessHash(), node = process.version, platform = process.platform, day = sydneyDay(), env = process.env } = {}) {
+  return { dir, records, base: { harness, node, platform, day, env: envHash(env) }, index: readIndex(dir), stored: 0 };
+}
+
+// Whether `p` was KILLED before on inputs byte-identical to now's. Any doubt (no entry, a killer whose record is not
+// complete now, a from that no longer matches once, an entry that is missing, corrupt or not a kill) is a miss.
+function cachedKill(cache, root, p) {
+  const e = cache.index[p.name];
+  if (!e || !Array.isArray(e.killer) || !e.killer.length || !e.paths || typeof e.paths !== 'object') return false;
+  if (!e.killer.every((t) => cache.records?.[t]?.status === 'ok')) return false;
+  let src;
+  try { src = readFileSync(join(root, p.rel), 'utf8'); } catch { return false; }
+  const at = findOnce(src, p.from);
+  if (at.status) return false;
+  const over = { rel: p.rel, text: src.slice(0, at.i) + p.to + src.slice(at.i + p.from.length) };
+  const touched = Object.entries(e.paths).map(([q, k]) => [q, k, pathState(root, q, k, over)]);
+  const key = cacheKey({ base: cache.base, tuple: [p.name, p.rel, p.from, p.to], killer: e.killer, touched, records: cache.records });
+  try {
+    const hit = JSON.parse(readFileSync(join(cache.dir, RESULTS, `${key}.json`), 'utf8'));
+    return hit?.status === 'KILLED' && hit.name === p.name;
+  } catch {
+    return false;
+  }
+}
+
+// Keep a KILLED of `p` by the run of `files`, only when every one of them was seen whole in that run and has a complete
+// record in the map; the entry goes in by a temp file and a rename, and the index entry is written when the run ends.
+function keepKill(cache, p, files, run) {
+  const merged = {};
+  for (const t of files) {
+    const seen = run?.reach?.[t];
+    if (!seen || seen.opaque.length || cache.records?.[t]?.status !== 'ok') return false;
+    for (const [q, v] of Object.entries(seen.paths)) if (!merged[q] || KIND_RANK[v.k] > KIND_RANK[merged[q].k]) merged[q] = v;
+  }
+  const touched = Object.entries(merged).map(([q, v]) => [q, v.k, v.s]);
+  const key = cacheKey({ base: cache.base, tuple: [p.name, p.rel, p.from, p.to], killer: files, touched, records: cache.records });
+  mkdirSync(join(cache.dir, RESULTS), { recursive: true });
+  writeAtomic(join(cache.dir, RESULTS, `${key}.json`), `${JSON.stringify({ status: 'KILLED', name: p.name, killer: files, day: cache.base.day })}\n`);
+  cache.index[p.name] = { killer: files, paths: Object.fromEntries(Object.entries(merged).map(([q, v]) => [q, v.k])) };
+  cache.stored++;
+  return true;
+}
+
+function writeIndex(cache) {
+  mkdirSync(join(cache.dir, RESULTS), { recursive: true });
+  writeAtomic(join(cache.dir, RESULTS, INDEX), `${JSON.stringify({ version: 1, entries: { ...readIndex(cache.dir), ...cache.index } })}\n`);
 }
 
 // The blocks of this file that decide how every other file's guards are run: which tests judge a folder or a file
@@ -2265,6 +2404,7 @@ export async function main(argv, deps = {}) {
     chosen = sel.chosen;
   }
   let notRun = 0;
+  let mapped = null; // the reach map --since made again, which --cache then reuses
   if (o.since !== undefined) {
     const ch = changedSince(o.since, { git, root });
     if (ch.error) {
@@ -2283,6 +2423,7 @@ export async function main(argv, deps = {}) {
     const selfPath = join(root, SELF_REL);
     const tests = suiteTests(root, suites, suiteFor);
     const got = await recordsFor(tests);
+    mapped = got;
     if (got.error) warn(`NOTE: ${got.error}; --since keeps the old rules for every suite`);
     else {
       const blind = tests.filter((t) => got.records?.[t]?.status !== 'ok');
@@ -2300,8 +2441,15 @@ export async function main(argv, deps = {}) {
     print(`\n${chosen.length} mutations.`);
     return 0;
   }
-  const { results, baselines } = chosen.length ? await run(chosen, { root, suites, suiteFor, jobs: o.jobs, timeoutMs: o.timeoutMs, narrow: o.narrow, warn }) : { results: [] };
-  const s = summarise(results, chosen.length, { verbose: o.verbose, since: o.since, notRun });
+  // --cache: the records of the chosen mutations' suites (made again first), and the kills kept in their folder.
+  let cache = null;
+  if (o.cache && chosen.length) {
+    const got = mapped ?? (await recordsFor([...new Set(chosen.flatMap((m) => suiteOf(relPath(m[1]), { root, suites, suiteFor })))].sort()));
+    if (got.error) warn(`NOTE: ${got.error}; --cache reads and keeps nothing, so every chosen mutation runs`);
+    else cache = openCache(got.dir, got.records, { env });
+  }
+  const { results, baselines } = chosen.length ? await run(chosen, { root, suites, suiteFor, jobs: o.jobs, cache, timeoutMs: o.timeoutMs, narrow: o.narrow, warn }) : { results: [] };
+  const s = summarise(results, chosen.length, { verbose: o.verbose, since: o.since, notRun, cache: o.cache });
   for (const line of [...s.lines.slice(0, -1), ...leftoverLines(baselines), ...s.lines.slice(-1)]) print(line); // the last line stays last
   return s.code;
 }
