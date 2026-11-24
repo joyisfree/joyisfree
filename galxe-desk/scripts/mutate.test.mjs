@@ -1471,6 +1471,10 @@ test("a file's own suite beats its folder's, and a listed suite not yet written 
     'scripts/corpus/corpus.mjs': ['scripts/prove.test.mjs'],
     '.claude/settings.json': ['.claude/hooks/guard.test.mjs'],
     '.gitignore': ['.claude/hooks/guard.test.mjs'],
+    '.claude-plugin/marketplace.json': ['.claude/hooks/plugin.test.mjs'],
+    'plugins/joy-guard/.claude-plugin/plugin.json': ['.claude/hooks/plugin.test.mjs'],
+    'plugins/joy-guard/hooks/hooks.json': ['.claude/hooks/plugin.test.mjs'],
+    'plugins/joy-guard/hooks/guard.mjs': ['.claude/hooks/plugin.test.mjs'],
   });
   assert.equal(relPath('.gitignore'), '.gitignore', 'a dotfile is a root file, not a desk script');
   assert.equal(relPath('rank.mjs'), 'galxe-desk/scripts/rank.mjs');
