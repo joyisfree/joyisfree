@@ -84,7 +84,8 @@ const killedAll = async (batch) => ({ results: batch.map((m) => ({ name: m[0], s
 // Real git on the fixture, without any GIT_* variable of the outer process and without global hooks or signing.
 const GIT_ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_')));
 const fxGit = (args, o = {}) => gitRun(args, { ...o, env: GIT_ENV });
-const gitIn = (root, ...args) => execFileSync('git', ['-C', root, '-c', 'user.name=fixture', '-c', 'user.email=fixture@example.com', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', ...args], { encoding: 'utf8', env: GIT_ENV, stdio: ['ignore', 'pipe', 'pipe'] });
+// It runs in the fixture (cwd as well as -C), never in the repo this file sits in.
+const gitIn = (root, ...args) => execFileSync('git', ['-C', root, '-c', 'user.name=fixture', '-c', 'user.email=fixture@example.com', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', ...args], { cwd: root, encoding: 'utf8', env: GIT_ENV, stdio: ['ignore', 'pipe', 'pipe'] });
 function gitFixture() {
   const root = fixture();
   gitIn(root, 'init', '-q');
@@ -637,8 +638,7 @@ test('a READS entry ending in "/" covers every file under that folder, so a chan
   const reads = { 'other/scripts': ['cfg/agents/'] };
   assert.deepEqual(sel(['cfg/agents/reader.md'], { reads }), ['z one']);
   assert.deepEqual(sel(['cfg/agents-old/reader.md'], { reads }), []);
-  const real = selectSince(MUTATIONS, ['.claude/agents/galxe-reader.md'], { reads: READS }).selected;
-  assert.ok(real.some((m) => m[1] === 'agents.mjs'), 'the agents.mjs firewall guards are selected');
+  // The same against the real list is in mutate-list.test.mjs: it reads the whole repo, so it is in no suite.
 });
 
 test('a changed script in a suite folder that no mutation names is reported UNGUARDED', () => {
@@ -772,14 +772,16 @@ test("the verifier's case: one changed line in the real file's SUITES selects al
     ['READS', "  'galxe-desk/scripts': ['.claude/agents/'],"], ['relPath', 'export const relPath = '], ['SKIP', 'const SKIP = '],
   ];
   const own = MUTATIONS.filter((m) => relPath(m[1]) === SELF_REL).length;
+  // An empty import graph, so this reads mutate.mjs alone and never the files the list names (plan 20, step A0).
+  const graph = new Map();
   for (const [block, prefix] of cases) {
     const n = lineOf(prefix);
-    const r = selectSince(MUTATIONS, [SELF_REL], { selfDiff: hunk(`@@ -${n} +${n} @@`, `-${lines[n - 1]} // was`, `+${lines[n - 1]}`), selfSrc: real });
+    const r = selectSince(MUTATIONS, [SELF_REL], { graph, selfDiff: hunk(`@@ -${n} +${n} @@`, `-${lines[n - 1]} // was`, `+${lines[n - 1]}`), selfSrc: real });
     assert.equal(r.selected.length, MUTATIONS.length, `${block} via ${prefix}: ${r.selected.length} of ${MUTATIONS.length}, mutate.mjs's own ${own}`);
     assert.equal(r.everything, `${SELF_REL} changed ${block}, so every mutation is selected`);
   }
   const code = lineOf('export function classify(');
-  assert.equal(selectSince(MUTATIONS, [SELF_REL], { selfDiff: hunk(`@@ -${code} +${code} @@`, '-x', `+${lines[code - 1]}`), selfSrc: real }).selected.length, own);
+  assert.equal(selectSince(MUTATIONS, [SELF_REL], { graph, selfDiff: hunk(`@@ -${code} +${code} @@`, '-x', `+${lines[code - 1]}`), selfSrc: real }).selected.length, own);
   assert.deepEqual(configSpans(real).map((s) => s.name), ['SUITES', 'SUITE_FOR', 'READS', 'relPath', 'SKIP']);
 });
 
@@ -875,8 +877,8 @@ test('a line that is an existing guard under a new name is refused, so N of N ne
   assert.deepEqual(validateLines([GOOD], { ...VOPTS, mutations: [...HARNESS_LIST, ['stale', 'pkg/scripts/a.mjs', 'no longer here', 'y']] }), []);
 });
 
-test('no two listed mutations leave their file byte-identical, so killed N of N counts each guard once', () => {
-  assert.deepEqual(twinsOf(MUTATIONS), []);
+test('two mutations that leave their file byte-identical are found as a pair, so killed N of N counts each guard once', () => {
+  // twinsOf(MUTATIONS) on the real list is in mutate-list.test.mjs, which reads every file the list names.
   const wider = ['the same cut, spelt shorter', 'pkg/scripts/a.mjs', 'if (x < 0) return', 'if (false) return'];
   const list = [...HARNESS_LIST, GOOD, wider, ['z one, by a longer from', 'other/scripts/z.mjs', '(x ? 1 : 0);', '(x ? 0 : 0);'], LIST_FX[3], ['gone', 'pkg/scripts/none.mjs', 'a', 'b']];
   assert.deepEqual(twinsOf(list, { root: FX }), [['a refuses a negative', 'the same cut, spelt shorter'], ['z one, by a longer from', 'z one']]);
@@ -1046,21 +1048,6 @@ test("a file's own suite beats its folder's, and a listed suite not yet written 
   assert.equal(relPath('.gitignore'), '.gitignore', 'a dotfile is a root file, not a desk script');
   assert.equal(relPath('rank.mjs'), 'galxe-desk/scripts/rank.mjs');
   assert.ok(!SUITES['galxe-desk/scripts'].includes('mutate.test.mjs'), 'the desk suite never pays for this file');
-});
-
-test('every listed mutation is four strings with a unique name, a real change, one match and a suite', () => {
-  const names = new Set();
-  for (const m of MUTATIONS) {
-    assert.equal(m.length, 4, JSON.stringify(m));
-    assert.ok(m.every((x) => typeof x === 'string'), m[0]);
-    assert.ok(!names.has(m[0]), `${m[0]} is listed twice`);
-    names.add(m[0]);
-    assert.notEqual(m[2], m[3], m[0]);
-    // mutate.mjs's own lines are checked by the run itself: in a mutated copy of this file their match is gone.
-    if (relPath(m[1]) === SELF_REL) continue;
-    const p = prepare(m);
-    assert.equal(p.status, undefined, `${m[0]}: ${p.detail}`);
-  }
 });
 
 test("claude-setup's two boot.mjs guards run in the one pass, judged by its folder's suite", () => {
