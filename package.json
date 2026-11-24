@@ -8,7 +8,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test galxe-desk/scripts/*.test.mjs .claude/skills/joy-revise/scripts/*.test.mjs agency/scripts/*.test.mjs scripts/*.test.mjs claude-setup/skills/joy-boot/scripts/*.test.mjs claude-setup/skills/maxx/scripts/*.test.mjs .claude/hooks/*.test.mjs",
+    "test": "node --test galxe-desk/scripts/*.test.mjs .claude/skills/joy-revise/scripts/*.test.mjs agency/scripts/*.test.mjs scripts/*.test.mjs claude-setup/skills/joy-boot/scripts/*.test.mjs claude-setup/skills/maxx/scripts/*.test.mjs claude-setup/quests/*.test.mjs .claude/hooks/*.test.mjs",
     "worth-it": "node .claude/skills/joy-revise/scripts/worth-it.mjs",
     "claude-setup:mutate": "node claude-setup/skills/joy-boot/scripts/mutate.mjs",
     "desk:rank": "node galxe-desk/scripts/rank.mjs",

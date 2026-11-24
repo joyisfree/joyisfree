@@ -42,7 +42,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { MUTATIONS } from '../galxe-desk/scripts/mutate.mjs';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const TEST_DIRS = ['galxe-desk/scripts', 'agency/scripts', '.claude/skills/joy-revise/scripts', 'scripts', 'claude-setup/skills/joy-boot/scripts', 'claude-setup/skills/maxx/scripts', '.claude/hooks'];
+const TEST_DIRS = ['galxe-desk/scripts', 'agency/scripts', '.claude/skills/joy-revise/scripts', 'scripts', 'claude-setup/skills/joy-boot/scripts', 'claude-setup/skills/maxx/scripts', 'claude-setup/quests', '.claude/hooks'];
 const DAY = 86_400_000;
 const MAX_BUFFER = 256 * 1024 * 1024;
 
