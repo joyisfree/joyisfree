@@ -13,7 +13,14 @@
 //   node galxe-desk/scripts/mutate.mjs --add lines.json --group "<one line>"   # check, run, then write a batch
 //   node galxe-desk/scripts/mutate.mjs --list                 # just list them (after --only and --since)
 //   --jobs N (1 to 16, default 4 or fewer CPUs), --timeout-ms N (per suite run, default 120000), --verbose
-//   (every result in list order, so --jobs 1 and --jobs 4 print the same bytes)
+//   (every result in list order, so --jobs 1 and --jobs 4 print the same bytes), --no-narrow (see below)
+//
+// A mutation in a suite of two or more test files first runs, one file at a time, the files whose imports reach the
+// mutated file and that were green alone, its own test (the same stem) first, and stops at the first KILLED. When
+// none kills, or none reaches it, its whole suite runs and decides, exactly as --no-narrow runs every mutation; a
+// kill found only there is REACH_MISS on stderr, and a file left out because it is not green alone is
+// NOT_GREEN_ALONE. Each suite run gets its own TMPDIR inside its throwaway folder; what a baseline leaves there is
+// named on a LEFTOVER line.
 //
 // Each mutation is a single, exact string swap that neutralises one guard. `from` must occur once in its file.
 // It covers the whole repo, not only the desk: a bare file name means galxe-desk/scripts/<name>; anything with a
@@ -1196,6 +1203,27 @@ export const MUTATIONS = [
   ["a suite run's environment is laid over this one's","galxe-desk/scripts/mutate.mjs","    const env = { ...process.env, ...overlay };\n","    const env = { ...process.env };\n"],
   ["leftovers are reported","galxe-desk/scripts/mutate.mjs","  return baselines.filter((b) => b?.leftover?.length).map((b) => {\n","  return baselines.filter(() => false).map((b) => {\n"],
   ["LEFTOVER lines come before the last line","galxe-desk/scripts/mutate.mjs","  for (const line of [...s.lines.slice(0, -1), ...leftoverLines(baselines), ...s.lines.slice(-1)]) print(line); // the last line stays last\n","  for (const line of [...s.lines, ...leftoverLines(baselines)]) print(line); // the last line stays last\n"],
+  // galxe-desk/scripts/mutate.mjs — a mutation runs the test files that import its file first, its own test first, the whole suite as the fallback; --no-narrow (plan 20, step A1) (added by mutate --add)
+  ["narrowed: a narrowed run that does not kill falls back to the whole suite","galxe-desk/scripts/mutate.mjs","      if (classify(one) === 'KILLED') return describe(p.name, 'KILLED', one, deps); // the first kill decides\n","      return describe(p.name, classify(one), one, deps); // the first kill decides\n"],
+  ["narrowed: the run stops at the first KILLED","galxe-desk/scripts/mutate.mjs","      if (classify(one) === 'KILLED') return describe(p.name, 'KILLED', one, deps); // the first kill decides\n","      if (false) return describe(p.name, 'KILLED', one, deps); // the first kill decides\n"],
+  ["narrowed: a file no test imports has an empty narrowed set, so only its whole suite runs","galxe-desk/scripts/mutate.mjs","  const reach = p.suite.filter((t) => green?.has(t) && closure(graph, t).has(p.rel));\n","  const reach = p.suite.filter((t) => green?.has(t));\n"],
+  ["narrowed: a narrowed KILLED needs a green baseline of that file alone","galxe-desk/scripts/mutate.mjs","  const reach = p.suite.filter((t) => green?.has(t) && closure(graph, t).has(p.rel));\n","  const reach = p.suite.filter((t) => closure(graph, t).has(p.rel));\n"],
+  ["narrowed: a test file not green alone is never counted green","galxe-desk/scripts/mutate.mjs","    else green.add(t); // a file green on its own may decide a kill on its own\n","    green.add(t); // a file green on its own may decide a kill on its own\n"],
+  ["narrowed: a test file left out for not being green alone is named NOT_GREEN_ALONE","galxe-desk/scripts/mutate.mjs","    if (why) warn(`NOT_GREEN_ALONE: ${t} — ${why}`); // never run narrowed: its red alone would prove nothing\n","    if (why) ; // never run narrowed: its red alone would prove nothing\n"],
+  ["narrowed: the mutated file's own test file runs first","galxe-desk/scripts/mutate.mjs","  return [...reach.filter((t) => stemOf(t) === own), ...reach.filter((t) => stemOf(t) !== own)];\n","  return reach;\n"],
+  ["narrowed: a mutation that no longer parses is decided before any narrowed file runs","galxe-desk/scripts/mutate.mjs","      if (!one.ran) return describe(p.name, classify(one), one, deps); // decided before any test ran: it no longer parses\n","      // decided before any test ran: it no longer parses\n"],
+  ["narrowed: the first copy of a mutation checks it still parses","galxe-desk/scripts/mutate.mjs","      const one = await runSuite(root, [t], p, { ...deps, check: !checked });\n","      const one = await runSuite(root, [t], p, { ...deps, check: false });\n"],
+  ["narrowed: the whole suite checks the parse when no narrowed copy ran","galxe-desk/scripts/mutate.mjs","    const r = await runSuite(root, p.suite, p, { ...deps, check: !checked }); // the whole suite decides\n","    const r = await runSuite(root, p.suite, p, { ...deps, check: false }); // the whole suite decides\n"],
+  ["narrowed: a later copy of a mutation is mutated all the same","galxe-desk/scripts/mutate.mjs","      if (!check) writeFileSync(p, mutated); // a later copy of a mutation is mutated all the same\n","      // a later copy of a mutation is mutated all the same\n"],
+  ["narrowed: a result is marked as one that ran its tests","galxe-desk/scripts/mutate.mjs","    return { ...r, ran: true, leftover };\n","    return { ...r, leftover };\n"],
+  ["--no-narrow runs exactly the whole-suite path","galxe-desk/scripts/mutate.mjs","  const multi = new Set(narrow ? keys.filter((key) => key.includes('\\n')) : []); // the suites a mutation may narrow\n","  const multi = new Set(keys.filter((key) => key.includes('\\n'))); // the suites a mutation may narrow\n"],
+  ["narrowed: only a suite of two or more test files gets baselines alone","galxe-desk/scripts/mutate.mjs","keys.filter((key) => key.includes('\\n'))","keys.filter(() => true)"],
+  ["--no-narrow is read from the command line","galxe-desk/scripts/mutate.mjs","    else if (a === '--no-narrow') o.narrow = false; // every mutation runs its whole suite, as before plan 20\n","    else if (a === '--no-narrow') o.narrow = true; // every mutation runs its whole suite, as before plan 20\n"],
+  ["--no-narrow reaches the run","galxe-desk/scripts/mutate.mjs","timeoutMs: o.timeoutMs, narrow: o.narrow, warn }) : { results: [] };\n","timeoutMs: o.timeoutMs, warn }) : { results: [] };\n"],
+  ["narrowed: a kill only the whole suite found is printed as REACH_MISS","galxe-desk/scripts/mutate.mjs","  for (const line of missed) if (line) warn(line); // in list order, whatever finished first\n","  // in list order, whatever finished first\n"],
+  // galxe-desk/scripts/mutate.mjs — a LEFTOVER line prints the same bytes on every run of a leaking suite (plan 20, step D) (added by mutate --add)
+  ["a LEFTOVER line writes mkdtemp's six random characters as XXXXXX","galxe-desk/scripts/mutate.mjs","const template = (name) => { const m = MKDTEMP.exec(name); return m ? `${m[1]}XXXXXX` : name; };\n","const template = (name) => name;\n"],
+  ["a LEFTOVER line lists its entries in one order","galxe-desk/scripts/mutate.mjs","    const names = b.leftover.map(template).sort();\n","    const names = b.leftover.map(template);\n"],
 ];
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -1351,8 +1379,10 @@ export function parseBreak(rel, before, path, write) {
 
 // One run of `files` (test files, from the repo root) in a fresh throwaway folder that holds `repo`, the copy, and
 // `tmp`, the run's TMPDIR: whatever its tests leave in the temp folder stays inside, is listed as `leftover` and goes
-// when the folder does. The copy is unmutated when `m` is null (a baseline), else it has `m` applied.
-async function runSuite(root, files, m, { spawn: run, copy, timeoutMs, maxBuffer }) {
+// when the folder does. The copy is unmutated when `m` is null (a baseline), else it has `m` applied, checked to
+// still parse unless `check` is false (a first copy of the same mutation already showed it does). `ran` marks a
+// result that came from running the tests, not from a refusal before them.
+async function runSuite(root, files, m, { spawn: run, copy, timeoutMs, maxBuffer, check = true }) {
   const work = mkdtempSync(join(tmpdir(), 'mutate-'));
   const repo = join(work, 'repo');
   const tmp = join(work, 'tmp');
@@ -1365,24 +1395,31 @@ async function runSuite(root, files, m, { spawn: run, copy, timeoutMs, maxBuffer
       const at = findOnce(src, m.from);
       if (at.status) return { code: null, signal: null, detail: `${at.detail} in the copy of ${m.rel}` };
       const mutated = src.slice(0, at.i) + m.to + src.slice(at.i + m.from.length);
-      const broke = parseBreak(m.rel, src, p, () => { writeFileSync(p, mutated); return mutated; });
+      if (!check) writeFileSync(p, mutated); // a later copy of a mutation is mutated all the same
+      const broke = check && parseBreak(m.rel, src, p, () => { writeFileSync(p, mutated); return mutated; });
       if (broke) return { code: null, signal: null, unparseable: broke, detail: broke }; // never run as a kill
     }
     const r = await run(['--test', '--test-reporter=tap', ...files.map((f) => join(repo, f))], { cwd: repo, timeoutMs, maxBuffer, env: { TMPDIR: tmp } });
     let leftover;
     try { leftover = readdirSync(tmp).sort(); } catch (err) { leftover = [`(its temp folder could not be read: ${err.code ?? err.message})`]; }
-    return { ...r, leftover };
+    return { ...r, ran: true, leftover };
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
 }
+
+// A name as mkdtemp makes it, its six random characters written XXXXXX (mkdtemp's own template), so that a suite that
+// leaks prints the same LEFTOVER line on every run and --verbose output stays the same bytes from run to run.
+const MKDTEMP = /^(.*[^A-Za-z0-9])[A-Za-z0-9]{6}$/;
+const template = (name) => { const m = MKDTEMP.exec(name); return m ? `${m[1]}XXXXXX` : name; };
 
 // One line per baseline that left anything in its temp folder: a suite should clean up after itself (plan 20 counted
 // about 450 folders left in the machine's temp folder by each full proof before runs were contained).
 export function leftoverLines(baselines = []) {
   return baselines.filter((b) => b?.leftover?.length).map((b) => {
     const n = b.leftover.length;
-    const named = b.leftover.slice(0, 10).join(', ') + (n > 10 ? `, and ${n - 10} more` : '');
+    const names = b.leftover.map(template).sort();
+    const named = names.slice(0, 10).join(', ') + (n > 10 ? `, and ${n - 10} more` : '');
     const suite = b.suite.length === 1 ? b.suite[0] : `${[...new Set(b.suite.map(dirOf))].join(', ')} (${b.suite.length} test files)`;
     return `LEFTOVER: ${suite} left ${n} ${n === 1 ? 'entry' : 'entries'}: ${named}`;
   });
@@ -1423,27 +1460,69 @@ function describe(name, status, r, { timeoutMs, maxBuffer }) {
   return { name, status, detail: last ? `${why}: ${last.slice(0, 200)}` : why };
 }
 
+// A file's name up to its first dot: creator-pilot.mjs and creator-pilot.test.mjs share the stem creator-pilot.
+const stemOf = (rel) => { const b = rel.slice(rel.lastIndexOf('/') + 1); const dot = b.indexOf('.'); return dot > 0 ? b.slice(0, dot) : b; };
+
+/**
+ * The test files that may run `p` narrowed, in the order they run: those of its suite whose imports reach its file,
+ * however deep (`graph` is importGraph's), and that are in `green`, the files whose own baseline alone was green. The
+ * file's own test (the same stem) goes first, then suite order. Empty when none qualifies, or when no `green` is
+ * given: a file not shown green alone proves nothing alone, so the whole suite then decides.
+ */
+export function narrowFor(p, graph, { green } = {}) {
+  const reach = p.suite.filter((t) => green?.has(t) && closure(graph, t).has(p.rel));
+  const own = stemOf(p.rel);
+  return [...reach.filter((t) => stemOf(t) === own), ...reach.filter((t) => stemOf(t) !== own)];
+}
+
 // Run `list` with a pool of `jobs`: each involved suite once unmutated first, then each mutation in its own copy.
+// Narrowed (the default; `narrow: false` is --no-narrow, the whole-suite path alone): each test file of a suite of two
+// or more also gets a baseline alone, and a mutation first runs narrowFor's files one at a time, each in its own
+// mutated copy, stopping at the first KILLED. When none kills, or none qualifies, its whole suite runs exactly as
+// --no-narrow runs it, and that run's verdict is the result. A kill found only there is a REACH_MISS on `warn` (the
+// import map missed the killer: a slower run, never a different verdict), as is NOT_GREEN_ALONE for a file left out.
 export async function runAll(list, opts = {}) {
-  const { root = REPO, jobs = DEFAULT_JOBS, timeoutMs = DEFAULT_TIMEOUT_MS, maxBuffer = MAX_BUFFER, suites = SUITES, suiteFor = SUITE_FOR, spawn: run = spawnNode, copy = copyRepo, pool = runPool } = opts;
+  const { root = REPO, jobs = DEFAULT_JOBS, timeoutMs = DEFAULT_TIMEOUT_MS, maxBuffer = MAX_BUFFER, suites = SUITES, suiteFor = SUITE_FOR, spawn: run = spawnNode, copy = copyRepo, pool = runPool, narrow = true, warn = (s) => console.error(s) } = opts;
   const deps = { spawn: run, copy, timeoutMs, maxBuffer };
   const texts = new Map();
   const read = (p) => { if (!texts.has(p)) texts.set(p, readFileSync(p, 'utf8')); return texts.get(p); };
   const prepared = list.map((m) => prepare(m, { root, suites, suiteFor, read }));
   const keys = [...new Set(prepared.filter((p) => !p.status).map((p) => p.suite.join('\n')))];
-  const base = await pool(keys, jobs, (key) => runSuite(root, key.split('\n'), null, deps));
+  const multi = new Set(narrow ? keys.filter((key) => key.includes('\n')) : []); // the suites a mutation may narrow
+  const alone = [...new Set([...multi].flatMap((key) => key.split('\n')))];
+  const ran = await pool([...keys.map((key) => key.split('\n')), ...alone.map((t) => [t])], jobs, (files) => runSuite(root, files, null, deps));
+  const base = ran.slice(0, keys.length);
   const red = new Map();
   keys.forEach((key, i) => {
     const why = baselineProblem(base[i]);
     if (why) red.set(key, why); // the suite was not green before any mutation
   });
-  const results = await pool(prepared, jobs, async (p) => {
+  const green = new Set();
+  alone.forEach((t, i) => {
+    const why = baselineProblem(ran[keys.length + i]);
+    if (why) warn(`NOT_GREEN_ALONE: ${t} — ${why}`); // never run narrowed: its red alone would prove nothing
+    else green.add(t); // a file green on its own may decide a kill on its own
+  });
+  const graph = alone.length ? importGraph(root, suiteFolders(suites, suiteFor)) : new Map();
+  const missed = new Array(prepared.length).fill(null);
+  const results = await pool(prepared, jobs, async (p, at) => {
     if (p.status) return p;
     const key = p.suite.join('\n');
     if (red.has(key)) return { name: p.name, status: 'BASELINE_RED', detail: `its suite (${p.suite.length} test file${p.suite.length === 1 ? '' : 's'} in ${[...new Set(p.suite.map(dirOf))].join(', ')}) is not green before any mutation: ${red.get(key)}` };
-    const r = await runSuite(root, p.suite, p, deps);
-    return describe(p.name, classify(r), r, deps);
+    const tries = narrowFor(p, graph, { green });
+    let checked = false;
+    for (const t of tries) {
+      const one = await runSuite(root, [t], p, { ...deps, check: !checked });
+      checked = true;
+      if (!one.ran) return describe(p.name, classify(one), one, deps); // decided before any test ran: it no longer parses
+      if (classify(one) === 'KILLED') return describe(p.name, 'KILLED', one, deps); // the first kill decides
+    }
+    const r = await runSuite(root, p.suite, p, { ...deps, check: !checked }); // the whole suite decides
+    const status = classify(r);
+    if (status === 'KILLED' && multi.has(key)) missed[at] = `REACH_MISS: ${p.name} — only its whole suite killed it; ${tries.length ? `${tries.join(', ')} alone did not` : 'no test file both imports it and is green alone'}`;
+    return describe(p.name, status, r, deps);
   }, (p, err) => ({ name: p.name, status: 'CRASHED', detail: `the run threw: ${err?.message ?? err}` }));
+  for (const line of missed) if (line) warn(line); // in list order, whatever finished first
   return { results, missing: missingSlots(results, list.length), baselines: keys.map((key, i) => ({ suite: key.split('\n'), problem: red.get(key) ?? null, leftover: base[i]?.leftover ?? [] })) };
 }
 
@@ -1480,11 +1559,12 @@ const VALUED = new Set(['--only', '--jobs', '--timeout-ms', '--since', '--add', 
 
 // The command line, read strictly: an unknown argument, a bad number or a lone --group is an error, never a default.
 export function parseCli(argv) {
-  const o = { list: false, verbose: false, only: undefined, jobs: DEFAULT_JOBS, timeoutMs: DEFAULT_TIMEOUT_MS, since: undefined, add: undefined, group: undefined, errors: [] };
+  const o = { list: false, verbose: false, narrow: true, only: undefined, jobs: DEFAULT_JOBS, timeoutMs: DEFAULT_TIMEOUT_MS, since: undefined, add: undefined, group: undefined, errors: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--list') o.list = true;
     else if (a === '--verbose') o.verbose = true;
+    else if (a === '--no-narrow') o.narrow = false; // every mutation runs its whole suite, as before plan 20
     else if (VALUED.has(a)) {
       const v = argv[++i];
       if (v === undefined || v.startsWith('--')) o.errors.push(`${a} needs a value`);
@@ -1797,7 +1877,7 @@ const loadList = async (file) => (await import(`${pathToFileURL(file).href}?add=
 // file and put the old bytes back unless its list now ends with the batch.
 export async function addLines(batch, opts = {}) {
   const { group, root = REPO, target = join(root, SELF_REL), mutations = MUTATIONS, suites = SUITES, suiteFor = SUITE_FOR, load = loadList } = opts;
-  const run = opts.run ?? ((lines) => runAll(lines, { root, suites, suiteFor, jobs: opts.jobs, timeoutMs: opts.timeoutMs }));
+  const run = opts.run ?? ((lines) => runAll(lines, { root, suites, suiteFor, jobs: opts.jobs, timeoutMs: opts.timeoutMs, narrow: opts.narrow }));
   const before = readFileSync(target, 'utf8');
   const problems = validateLines(batch, { mutations, root, group, suites, suiteFor, target: posixRel(relative(root, target)), targetSrc: before });
   if (problems.length) return { ok: false, problems };
@@ -1832,7 +1912,7 @@ export async function main(argv, deps = {}) {
   if (o.add !== undefined) {
     let batch;
     try { batch = JSON.parse(readText(o.add)); } catch (err) { print(`refused: ${o.add} is not readable JSON (${err.message})`); return 1; }
-    const r = await add(batch, { group: o.group, root, mutations, jobs: o.jobs, timeoutMs: o.timeoutMs });
+    const r = await add(batch, { group: o.group, root, mutations, jobs: o.jobs, timeoutMs: o.timeoutMs, narrow: o.narrow });
     for (const p of r.problems) print(`refused: ${p}`);
     print(r.ok ? `added ${batch.length} mutation${batch.length === 1 ? '' : 's'} under "${o.group}", every one killed` : 'added nothing');
     return r.ok ? 0 : 1;
@@ -1875,7 +1955,7 @@ export async function main(argv, deps = {}) {
     print(`\n${chosen.length} mutations.`);
     return 0;
   }
-  const { results, baselines } = chosen.length ? await run(chosen, { root, suites, suiteFor, jobs: o.jobs, timeoutMs: o.timeoutMs, warn }) : { results: [] };
+  const { results, baselines } = chosen.length ? await run(chosen, { root, suites, suiteFor, jobs: o.jobs, timeoutMs: o.timeoutMs, narrow: o.narrow, warn }) : { results: [] };
   const s = summarise(results, chosen.length, { verbose: o.verbose, since: o.since, notRun });
   for (const line of [...s.lines.slice(0, -1), ...leftoverLines(baselines), ...s.lines.slice(-1)]) print(line); // the last line stays last
   return s.code;

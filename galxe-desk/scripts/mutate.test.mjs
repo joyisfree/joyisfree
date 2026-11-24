@@ -15,6 +15,8 @@ import {
   runAll, runPool, missingSlots, summarise, validateLines, insertLines, addLines, main, prepare, suiteOf,
   spawnNode, copyRepo, gitRun, relPath, configSpans, twinsOf, CONFIG,
 } from './mutate.mjs';
+// What plan 20 added is read through the namespace, so a test of a missing piece fails alone, not the whole file.
+import * as harness from './mutate.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MUTATE = join(HERE, 'mutate.mjs');
@@ -310,6 +312,164 @@ test('a LEFTOVER line says how many entries a baseline left and names at most te
   const code = await main([], { mutations: LIST_FX, ...FXO, run: (list, o) => runAll(list, { ...o, spawn }), print: (l) => out.push(l), warn: () => {} });
   assert.equal(code, 0, out.join('\n'));
   assert.deepEqual(out, ['LEFTOVER: pkg/scripts/a.test.mjs left 12 entries: e01, e02, e03, e04, e05, e06, e07, e08, e09, e10, and 2 more', 'killed 4 of 4 mutations (every guard bites)']);
+});
+
+test("a LEFTOVER line writes mkdtemp's six random characters as XXXXXX, so two runs of a leaking suite print the same bytes", () => {
+  const b = { suite: ['pkg/scripts/a.test.mjs'], leftover: ['rulebook-Zz09aB', 'rulebook-empty-0aZ9bY', 'e01', 'notes.md', 'has space-AbCdEf'] };
+  const again = { ...b, leftover: ['rulebook-q1W2e3', 'rulebook-empty-ZZZZZZ', 'e01', 'notes.md', 'has space-000000'] };
+  const want = ['LEFTOVER: pkg/scripts/a.test.mjs left 5 entries: e01, has space-XXXXXX, notes.md, rulebook-XXXXXX, rulebook-empty-XXXXXX'];
+  assert.deepEqual(harness.leftoverLines([b]), want);
+  assert.deepEqual(harness.leftoverLines([again]), want);
+  assert.deepEqual(harness.leftoverLines([{ suite: ['x.test.mjs'], leftover: [] }, { suite: ['y.test.mjs'] }]), []);
+});
+
+// ---- A1: a mutation runs the test files that reach it first, its whole suite as the fallback (plan 20) -------
+
+// A suite of three test files: core.test.mjs imports core.mjs (it is that file's own test), gate.test.mjs imports
+// gate.mjs, which imports core.mjs, and spawn.test.mjs imports nothing here, as a test that only starts cli.mjs would.
+const MSUITES = { 'm/scripts': ['gate.test.mjs', 'core.test.mjs', 'spawn.test.mjs'] };
+const MALL = MSUITES['m/scripts'].map((f) => `m/scripts/${f}`);
+const [MGATE, MCORE, MSPAWN] = MALL;
+const MLIST = [
+  ['core refuses', 'm/scripts/core.mjs', "x > 0 ? 'ok'", "x > -9 ? 'ok'"],
+  ['gate passes', 'm/scripts/gate.mjs', '=> core(x)', '=> core(-x)'],
+  ['cli bad flag', 'm/scripts/cli.mjs', '? 2 : 0', '? 0 : 0'],
+  ['core spacing', 'm/scripts/core.mjs', "'refused')", "'refused' )"],
+];
+function multiFixture() {
+  const root = mkdtempSync(join(tmpdir(), 'mutate-multi-'));
+  roots.push(root);
+  write(root, 'm/scripts/core.mjs', "export const core = (x) => (x > 0 ? 'ok' : 'refused');\n");
+  write(root, 'm/scripts/gate.mjs', "import { core } from './core.mjs';\nexport const gate = (x) => core(x);\n");
+  write(root, 'm/scripts/cli.mjs', "process.exitCode = process.argv[2] === '--bad' ? 2 : 0;\n");
+  write(root, MCORE, "import { test } from 'node:test';\nimport assert from 'node:assert/strict';\nimport { core } from './core.mjs';\ntest('core', () => assert.equal(core(-1), 'refused'));\n");
+  write(root, MGATE, "import { test } from 'node:test';\nimport assert from 'node:assert/strict';\nimport { gate } from './gate.mjs';\ntest('gate', () => assert.equal(gate(1), 'ok'));\n");
+  write(root, MSPAWN, "import { test } from 'node:test';\ntest('spawn', () => {});\n");
+  return root;
+}
+const MFX = multiFixture();
+const MFXO = { root: MFX, suites: MSUITES, suiteFor: {} };
+
+// A fake suite run on that fixture that records [mutation, test files] for every call it gets. `red(name, files)`
+// says which runs go red (`name` is 'baseline' for an unmutated copy); every other run is green. `wait` delays a
+// mutation's runs, so a pool of four finishes them out of order.
+function spyRuns(list, red, wait = {}) {
+  const calls = [];
+  const spawn = async (args, o) => {
+    const files = args.filter((a) => a.endsWith('.test.mjs')).map((a) => relative(o.cwd, a).split(sep).join('/'));
+    let name = 'baseline';
+    for (const [n, file, , to] of list) {
+      const now = readFileSync(join(o.cwd, file), 'utf8');
+      if (now !== readFileSync(join(MFX, file), 'utf8') && now.includes(to)) name = n;
+    }
+    calls.push([name, files]);
+    await delay(wait[name] ?? 0);
+    return red(name, files) ? RED : GREEN;
+  };
+  return { calls, spawn, of: (name) => calls.filter((c) => c[0] === name).map((c) => c[1]) };
+}
+const reachMisses = (warned) => warned.filter((l) => l.startsWith('REACH_MISS: '));
+
+test('narrowFor: the test files whose imports reach the mutated file and are green alone, its own test first; none without a green set', () => {
+  const graph = importGraph(MFX, ['m/scripts']);
+  const p = prepare(MLIST[0], MFXO);
+  assert.deepEqual(harness.narrowFor(p, graph, { green: new Set(MALL) }), [MCORE, MGATE]);
+  assert.deepEqual(harness.narrowFor(p, graph, { green: new Set([MGATE, MSPAWN]) }), [MGATE]);
+  assert.deepEqual(harness.narrowFor(p, graph), [], 'no file is green alone until its own baseline says so');
+  assert.deepEqual(harness.narrowFor(prepare(MLIST[2], MFXO), graph, { green: new Set(MALL) }), [], 'no test imports cli.mjs');
+});
+
+test('a narrowed file that does not kill while another file of its suite does still reports KILLED, through the whole suite, as REACH_MISS', async () => {
+  const s = spyRuns(MLIST, (name, files) => name === 'core refuses' && files.length === 3);
+  const warned = [];
+  const { results } = await runAll([MLIST[0]], { ...MFXO, jobs: 1, spawn: s.spawn, warn: (l) => warned.push(l) });
+  assert.deepEqual(results.map((r) => r.status), ['KILLED']);
+  assert.deepEqual(s.of('core refuses'), [[MCORE], [MGATE], MALL], 'its own test, then the other file that imports it, then the whole suite');
+  assert.equal(reachMisses(warned).length, 1, warned.join('\n'));
+  assert.match(reachMisses(warned)[0], /^REACH_MISS: core refuses — /);
+});
+
+test('nothing kills: SURVIVED, decided by the whole suite run after the narrowed files', async () => {
+  const s = spyRuns(MLIST, () => false);
+  const warned = [];
+  const { results } = await runAll([MLIST[0]], { ...MFXO, jobs: 1, spawn: s.spawn, warn: (l) => warned.push(l) });
+  assert.deepEqual(results, [{ name: 'core refuses', status: 'SURVIVED', detail: 'the suite stayed green with this guard removed' }]);
+  assert.deepEqual(s.of('core refuses'), [[MCORE], [MGATE], MALL]);
+  assert.deepEqual(warned, []);
+});
+
+test('a file no test imports has an empty narrowed set, so only its whole suite runs', async () => {
+  const s = spyRuns(MLIST, (name, files) => name === 'cli bad flag' && files.length === 3);
+  const warned = [];
+  const { results } = await runAll([MLIST[2]], { ...MFXO, jobs: 1, spawn: s.spawn, warn: (l) => warned.push(l) });
+  assert.deepEqual(results.map((r) => r.status), ['KILLED']);
+  assert.deepEqual(s.of('cli bad flag'), [MALL]);
+  assert.match(reachMisses(warned).join('\n'), /^REACH_MISS: cli bad flag — /);
+});
+
+test('a test file red alone while its suite is green is never used narrowed, and is named NOT_GREEN_ALONE', async () => {
+  const alone = (files) => files.length === 1 && files[0] === MCORE;
+  const s = spyRuns(MLIST, (name, files) => (name === 'baseline' || name === 'core refuses') && alone(files));
+  const warned = [];
+  const { results } = await runAll([MLIST[0]], { ...MFXO, jobs: 1, spawn: s.spawn, warn: (l) => warned.push(l) });
+  assert.deepEqual(results.map((r) => r.status), ['SURVIVED'], 'core.test.mjs alone goes red with or without the guard, so its red proves nothing');
+  assert.deepEqual(s.of('core refuses'), [[MGATE], MALL]);
+  assert.deepEqual(warned.filter((l) => l.startsWith('NOT_GREEN_ALONE: ')).map((l) => l.split(' — ')[0]), [`NOT_GREEN_ALONE: ${MCORE}`]);
+});
+
+test("the mutated file's own test file runs first, and the run stops at the first KILLED", async () => {
+  const s = spyRuns(MLIST, (name, files) => name !== 'baseline' && files.length === 1);
+  const warned = [];
+  const { results } = await runAll(MLIST.slice(0, 2), { ...MFXO, jobs: 1, spawn: s.spawn, warn: (l) => warned.push(l) });
+  assert.deepEqual(results.map((r) => r.status), ['KILLED', 'KILLED']);
+  assert.deepEqual(s.of('core refuses'), [[MCORE]], 'core.test.mjs is second in suite order but first for core.mjs');
+  assert.deepEqual(s.of('gate passes'), [[MGATE]]);
+  assert.deepEqual(warned, []);
+});
+
+test('--no-narrow makes exactly the calls of a run before narrowing: one baseline per suite, one whole-suite run per mutation', async () => {
+  const red = (name) => name !== 'baseline';
+  const plain = spyRuns(MLIST, red);
+  const warned = [];
+  await runAll(MLIST, { ...MFXO, jobs: 1, spawn: plain.spawn, narrow: false, warn: (l) => warned.push(l) });
+  assert.deepEqual(plain.calls, [['baseline', MALL], ...MLIST.map((m) => [m[0], MALL])]);
+  assert.deepEqual(warned, []);
+  const narrowed = spyRuns(MLIST, red);
+  await runAll(MLIST, { ...MFXO, jobs: 1, spawn: narrowed.spawn, warn: (l) => warned.push(l) });
+  assert.deepEqual(narrowed.of('baseline'), [MALL, [MGATE], [MCORE], [MSPAWN]], 'narrowed, each file of a suite of two or more also gets a baseline alone');
+  assert.equal(parseCli(['--no-narrow']).narrow, false);
+  assert.equal(parseCli([]).narrow, true);
+  for (const [argv, narrow] of [[['--no-narrow'], false], [[], true]]) {
+    let seen;
+    await main(argv, { mutations: LIST_FX, run: async (list, o) => { seen = o; return killedAll(list); }, print: () => {} });
+    assert.equal(seen.narrow, narrow, argv.join(' '));
+  }
+});
+
+test('narrowed and --no-narrow print the same verdicts, with --jobs 1 and --jobs 4, and narrowed runs fewer test files', async () => {
+  const red = (name, files) => (name === 'core refuses' && files.includes(MCORE)) || (name === 'gate passes' && files.includes(MGATE)) || (name === 'cli bad flag' && files.length === 3);
+  const wait = { 'core refuses': 40, 'gate passes': 25, 'cli bad flag': 10, 'core spacing': 0 };
+  const seen = [];
+  for (const narrow of [true, false]) {
+    for (const jobs of [1, 4]) {
+      const s = spyRuns(MLIST, red, wait);
+      const { results } = await runAll(MLIST, { ...MFXO, jobs, narrow, spawn: s.spawn, warn: () => {} });
+      const mutated = s.calls.filter((c) => c[0] !== 'baseline').reduce((n, c) => n + c[1].length, 0);
+      seen.push({ narrow, jobs, mutated, lines: summarise(results, MLIST.length, { verbose: true }).lines.join('\n') });
+    }
+  }
+  for (const s of seen) assert.equal(s.lines, seen[0].lines, `narrow ${s.narrow}, --jobs ${s.jobs}`);
+  assert.equal(seen[0].lines, ['KILLED: core refuses', 'KILLED: gate passes', 'KILLED: cli bad flag', 'SURVIVED: core spacing — the suite stayed green with this guard removed', 'killed 3 of 4 mutations, 1 not killed'].join('\n'));
+  assert.deepEqual(seen.map((s) => s.mutated), [10, 10, 12, 12], 'narrowed: 1 + 1 + 3 + (2 narrowed + 3 whole); --no-narrow: 4 x 3');
+});
+
+test('a mutation that stops its file parsing is UNPARSEABLE before any narrowed file runs', { timeout: 30000 }, async () => {
+  const list = [['core broken', 'm/scripts/core.mjs', "x > 0 ? 'ok'", "x > 0 ? 'ok"], MLIST[0]];
+  const s = spyRuns(list, (name) => name !== 'baseline');
+  const { results } = await runAll(list, { ...MFXO, jobs: 1, spawn: s.spawn, warn: () => {} });
+  assert.deepEqual(results.map((r) => r.status), ['UNPARSEABLE', 'KILLED']);
+  assert.deepEqual(s.of('core broken'), [], 'a file that no longer parses is never run, narrowed or whole');
+  assert.deepEqual(s.of('core refuses'), [[MCORE]]);
 });
 
 // ---- --jobs and the pool -----------------------------------------------------------------------------------
