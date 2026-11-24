@@ -9,6 +9,7 @@ import { tmpdir, availableParallelism } from 'node:os';
 import { join, dirname, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   MUTATIONS, SUITES, SUITE_FOR, READS, SELF_REL, MAX_BUFFER, DEFAULT_JOBS, DEFAULT_TIMEOUT_MS,
   parseCli, selectOnly, changedSince, selectSince, importGraph, closure, selfChanges, classify, baselineProblem,
@@ -80,6 +81,8 @@ const variant = (root, cwd) => {
 };
 const fakeSpawn = (decide) => async (args, o) => decide(o.cwd, args);
 const killedAll = async (batch) => ({ results: batch.map((m) => ({ name: m[0], status: 'KILLED' })) });
+// --since with no reach map: every suite keeps the rules from before plan 20, and nothing is recorded for real.
+const NO_REACH = { cacheDir: '/no/cache/used', reach: async () => ({ records: undefined, refreshed: [] }) };
 
 // Real git on the fixture, without any GIT_* variable of the outer process and without global hooks or signing.
 const GIT_ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_')));
@@ -584,14 +587,14 @@ test('a git failure is never "nothing changed": it refuses the run', async () =>
   let ran = false;
   const run = async () => { ran = true; return { results: [] }; };
   const out = [];
-  assert.equal(await main(['--since', 'HEAD'], { mutations: LIST_FX, ...FXO, git: failing('diff'), run, print: (l) => out.push(l) }), 1);
+  assert.equal(await main(['--since', 'HEAD'], { mutations: LIST_FX, ...FXO, git: failing('diff'), run, ...NO_REACH, print: (l) => out.push(l) }), 1);
   assert.doesNotMatch(out.join('\n'), /nothing to judge/);
   const selfFails = (args) => {
     if (args[0] === 'rev-parse') return { code: 0, stdout: `${sha}\n` };
     if (args[0] === 'diff' && args.includes('-U0')) return { code: 128, stdout: '' };
     return { code: 0, stdout: args[0] === 'diff' ? `${SELF_REL}\0` : '' };
   };
-  assert.equal(await main(['--since', 'HEAD'], { mutations: LIST_FX, ...FXO, git: selfFails, run, print: (l) => out.push(l) }), 1);
+  assert.equal(await main(['--since', 'HEAD'], { mutations: LIST_FX, ...FXO, git: selfFails, run, ...NO_REACH, print: (l) => out.push(l) }), 1);
   assert.equal(ran, false);
 });
 
@@ -795,7 +798,7 @@ test('main prints one NOTE saying why every mutation is selected, and runs them 
   let ran = null;
   const out = [];
   // FX holds no galxe-desk/scripts/mutate.mjs, so its config blocks cannot be found: every mutation is selected.
-  const code = await main(['--since', 'HEAD'], { mutations: LIST_FX, ...FXO, reads: {}, git, run: async (list) => { ran = list.map((m) => m[0]); return killedAll(list); }, print: (l) => out.push(l) });
+  const code = await main(['--since', 'HEAD'], { mutations: LIST_FX, ...FXO, reads: {}, git, ...NO_REACH, run: async (list) => { ran = list.map((m) => m[0]); return killedAll(list); }, print: (l) => out.push(l) });
   assert.equal(code, 0);
   assert.deepEqual(ran, LIST_FX.map((m) => m[0]));
   assert.equal(out.filter((l) => l.startsWith('NOTE: ')).length, 1);
@@ -808,7 +811,7 @@ test('nothing selected since a commit is the one honest 0 of 0, and a selection 
   let ran = null;
   const run = async (list) => { ran = list.map((m) => m[0]); return killedAll(list); };
   let out = [];
-  const opts = { mutations: LIST_FX, root, suites: SUITES_FX, suiteFor: {}, reads: {}, git: fxGit, run, print: (l) => out.push(l) };
+  const opts = { mutations: LIST_FX, root, suites: SUITES_FX, suiteFor: {}, reads: {}, git: fxGit, run, ...NO_REACH, print: (l) => out.push(l) };
   assert.equal(await main(['--since', 'HEAD'], opts), 0);
   assert.deepEqual(out, ['killed 0 of 0 selected since HEAD: nothing to judge']);
   assert.equal(ran, null);
@@ -818,6 +821,240 @@ test('nothing selected since a commit is the one honest 0 of 0, and a selection 
   assert.equal(await main(['--since', 'HEAD'], opts), 0);
   assert.deepEqual(ran, ['z one']);
   assert.deepEqual(out, ['UNGUARDED: pkg/scripts/unnamed.mjs changed and no mutation names it', 'killed 1 of 1 selected since HEAD, 3 not run (every selected guard bites)']);
+});
+
+// ---- A2: --since by what each test file reads, recorded (plan 20) ----------------------------------------------
+
+const sha = (s) => createHash('sha256').update(s).digest('hex');
+const cacheFolder = () => { const d = mkdtempSync(join(tmpdir(), 'mutate-cache-')); roots.push(d); return d; };
+// A record as the reach map holds one: `ok` unless `status` says otherwise, each path read as a file unless given.
+const rec = (paths, status = 'ok', reasons = []) => ({ status, reasons, paths: Object.fromEntries(paths.map((p) => (Array.isArray(p) ? [p[0], { k: p[1], s: 'x' }] : [p, { k: 'file', s: 'x' }]))) });
+const A_READS = ['pkg/scripts/a.test.mjs', 'pkg/scripts/a.mjs', 'pkg/scripts/b.mjs', 'pkg/lib/c.mjs', 'pkg/lib/d.mjs'];
+const Z_READS = ['other/scripts/z.test.mjs', 'other/scripts/z.mjs'];
+const ALL_RECORDED = { 'pkg/scripts/a.test.mjs': rec(A_READS), 'other/scripts/z.test.mjs': rec(Z_READS), 'harness/list.test.mjs': rec(['harness/list.test.mjs']) };
+
+test('a data file no test reads selects nothing from a suite wholly recorded, and still selects from one with an OPAQUE or unrecorded file', () => {
+  assert.deepEqual(sel(['pkg/RUNBOOK.md'], { records: ALL_RECORDED }), []);
+  assert.deepEqual(sel(['other/notes.md'], { records: ALL_RECORDED }), []);
+  const opaque = { ...ALL_RECORDED, 'other/scripts/z.test.mjs': rec(Z_READS, 'opaque', ['spawnSync: sh is not node']) };
+  assert.deepEqual(sel(['other/notes.md'], { records: opaque }), ['z one'], 'an OPAQUE file keeps the old data-file rule for its suite');
+  assert.deepEqual(sel(['pkg/RUNBOOK.md'], { records: opaque }), [], 'only for its own suite');
+  const { 'other/scripts/z.test.mjs': gone, ...unrecorded } = ALL_RECORDED;
+  assert.ok(gone);
+  assert.deepEqual(sel(['other/notes.md'], { records: unrecorded }), ['z one'], 'a file with no record keeps it too');
+  assert.deepEqual(sel(['pkg/RUNBOOK.md']), PKG, 'with no reach map every suite keeps it, as before plan 20');
+  // What imports reach and what READS lists still select, recorded or not.
+  assert.deepEqual(sel(['pkg/lib/d.mjs'], { records: ALL_RECORDED }), PKG);
+  assert.deepEqual(sel(['data/table.json'], { records: ALL_RECORDED, reads: { 'other/scripts': ['data/table.json'] } }), ['z one']);
+});
+
+test('a changed file that a test reading the mutated file read selects the mutation, and a folder or tree it read covers what is under it', () => {
+  const records = { ...ALL_RECORDED, 'pkg/scripts/a.test.mjs': rec([...A_READS, 'pkg/rules.json', ['data/folder', 'dir'], ['data/tree', 'tree']]) };
+  assert.deepEqual(sel(['pkg/rules.json'], { records }), ['a refuses a negative', 'a cosmetic change'], "cli.mjs's guard is not selected: no test that reads the rules reads cli.mjs");
+  assert.deepEqual(sel(['data/folder/new.json'], { records }), ['a refuses a negative', 'a cosmetic change']);
+  assert.deepEqual(sel(['data/tree/deep/x.md'], { records }), ['a refuses a negative', 'a cosmetic change']);
+  assert.deepEqual(sel(['data/folder2/x.json', 'data/tre'], { records }), []);
+  // An OPAQUE file's reads count for every mutation of its suite, whether its record holds the mutated file or not.
+  const opaque = { ...ALL_RECORDED, 'other/scripts/z.test.mjs': rec(['data/z.json'], 'opaque', ['why']) };
+  assert.deepEqual(sel(['data/z.json'], { records: opaque }), ['z one']);
+  assert.deepEqual(sel(['data/z.json'], { records: { ...ALL_RECORDED, 'other/scripts/z.test.mjs': rec(['data/z.json']) } }), [], 'a wholly recorded file that never reads z.mjs');
+  // A test that copied a whole folder holds every file under it, cli.mjs included.
+  const copied = { ...ALL_RECORDED, 'pkg/scripts/a.test.mjs': rec(['pkg/scripts/a.test.mjs', ['pkg/scripts', 'tree'], 'pkg/rules.json']) };
+  assert.deepEqual(sel(['pkg/rules.json'], { records: copied }), PKG);
+  // A mutation whose folder has no suite is never "wholly recorded": a data file nearby still selects it, to fail as NO_SUITE.
+  const loose = [['loose guard', 'loose/x.mjs', 'x = 1', 'x = 2']];
+  assert.equal(selectSince(loose, ['loose/notes.md'], { ...FXO, reads: {}, records: ALL_RECORDED }).selected.length, 1);
+});
+
+test('the cache folder: $MUTATE_CACHE_DIR, else one named by the sha256 of the git common dir; an unknown dir is an error', () => {
+  const calls = [];
+  const git = (out) => (args, o) => { calls.push([args, o?.cwd]); return out; };
+  assert.deepEqual(harness.cacheDirFor('/r', { env: { MUTATE_CACHE_DIR: '/x/y' }, git: git({ code: 0, stdout: '/r/.git\n' }) }), { dir: '/x/y' });
+  assert.deepEqual(calls, [], 'the variable wins without asking git');
+  assert.deepEqual(harness.cacheDirFor('/r', { env: {}, git: git({ code: 0, stdout: '/r/.git\n' }) }), { dir: join(tmpdir(), 'joyisfree-mutate', sha('/r/.git')) });
+  assert.deepEqual(calls, [[['rev-parse', '--path-format=absolute', '--git-common-dir'], '/r']]);
+  for (const out of [{ code: 128, stdout: '' }, { code: 0, stdout: '.git\n' }, { code: 0, stdout: '' }]) assert.match(harness.cacheDirFor('/r', { env: {}, git: git(out) }).error, /git rev-parse --git-common-dir failed/, JSON.stringify(out));
+  assert.match(harness.cacheDirFor(FX, { env: {}, git: fxGit }).error, /failed/, 'a folder that is not a repo');
+});
+
+test("suiteTests: every folder suite's and file suite's test files that exist, each once, sorted", () => {
+  const root = fixture();
+  write(root, 'loose/x.test.mjs', "import { test } from 'node:test';\ntest('x', () => {});\n");
+  assert.deepEqual(harness.suiteTests(root, SUITES_FX, { 'loose/x.mjs': ['loose/x.test.mjs', 'loose/none.test.mjs', 'pkg/scripts/a.test.mjs'] }), ['harness/list.test.mjs', 'loose/x.test.mjs', 'other/scripts/z.test.mjs', 'pkg/scripts/a.test.mjs']);
+});
+
+test('a hunk of mutate.mjs outside MUTATIONS counts as a change to mutate.mjs for what the tests read, and one inside does not', () => {
+  const records = { ...ALL_RECORDED, 'other/scripts/z.test.mjs': rec([...Z_READS, SELF_FX]) };
+  const pick = (diff) => selectSince(LIST_SELF, [SELF_FX], { ...FXO, reads: {}, self: SELF_FX, selfDiff: diff, selfSrc: SELF_SRC, records }).selected.map((m) => m[0]);
+  assert.deepEqual(pick(hunk('@@ -9 +9 @@', '-export function run() {}', '+export function run() { return 1; }')), ['z one', 'own guard']);
+  assert.deepEqual(pick(hunk('@@ -3,0 +4 @@', '+  ["\\"quoted\\" name", "pkg/scripts/a.mjs", "x", "y"],')), ['"quoted" name']);
+});
+
+test('pathState: a file by its bytes, a folder by its names, a tree by everything under it, absent, skipped, and a copy\'s mutated text', () => {
+  const root = fixture();
+  write(root, 'pkg/data/x.json', '1');
+  write(root, 'node_modules/m/i.js', '');
+  assert.equal(harness.pathState(root, 'pkg/data/x.json'), `file:${sha('1')}`);
+  assert.equal(harness.pathState(root, join(root, 'pkg/data/x.json')), `file:${sha('1')}`, 'an absolute path the same');
+  assert.equal(harness.pathState(root, 'pkg/none.json'), 'absent');
+  assert.equal(harness.pathState(root, 'pkg/data/x.json/inner'), 'absent');
+  assert.equal(harness.pathState(root, 'pkg/data', 'dir'), `dir:${sha('x.json')}`);
+  assert.ok(!harness.pathState(root, '', 'dir').includes('node_modules') && harness.pathState(root, '', 'dir') === `dir:${sha(['harness', 'loose', 'other', 'pkg'].join('\n'))}`, 'a folder SKIP keeps out of a copy is not a name');
+  assert.equal(harness.pathState(root, 'agency/pilot/p.json'), 'skip');
+  assert.equal(harness.pathState(root, 'pkg/data/x.json', 'file', { rel: 'pkg/data/x.json', text: '2' }), `file:${sha('2')}`);
+  assert.equal(harness.pathState(root, 'pkg/data'), 'folder', 'a folder only statted is a folder, whatever it holds');
+  assert.equal(harness.pathState(root, 'pkg/data', 'file'), 'folder');
+  const tree = harness.pathState(root, 'pkg', 'tree');
+  const dir = harness.pathState(root, 'pkg', 'dir');
+  write(root, 'pkg/data/x.json', '3');
+  assert.notEqual(harness.pathState(root, 'pkg', 'tree'), tree, 'a tree changes with a file deep under it');
+  assert.equal(harness.pathState(root, 'pkg', 'dir'), dir, 'a folder only with its names');
+  assert.equal(harness.pathState(root, 'pkg', 'tree', { rel: 'pkg/data/x.json', text: '1' }), tree, "a tree read with the copy's text");
+});
+
+// A fake suite run that, when its environment carries the recorder, writes the record reach.mjs would for each test
+// file it runs, reading `reads[t]` (repo-relative files); every run is green with `pass[recorded ? 1 : 0]` passes.
+const fakeRecorder = (reads, { calls = [], pass = [2, 2], opaque = {} } = {}) => async (args, o) => {
+  const files = args.filter((a) => a.endsWith('.test.mjs')).map((a) => relative(o.cwd, a).split(sep).join('/'));
+  const recorded = Boolean(o.env?.REACH_DIR);
+  calls.push([recorded ? 'recorded' : 'plain', files]);
+  if (recorded) {
+    for (const t of files) {
+      const lines = [{ start: 1, owner: t, pid: 1, node: process.version }, ...(reads[t] ?? []).map((p) => ({ p, k: 'file' })), ...(opaque[t] ?? []).map((why) => ({ opaque: why }))];
+      writeFileSync(join(o.env.REACH_DIR, `${encodeURIComponent(t)}.1-1.jsonl`), lines.map((l) => `${JSON.stringify(l)}\n`).join(''));
+    }
+  }
+  return { code: 0, signal: null, stdout: tap(pass[recorded ? 1 : 0], 0) };
+};
+
+test('refreshReach records each stale test file alone, plain and recorded, and keeps a record while all it read holds the same bytes', async () => {
+  const root = fixture();
+  const cacheDir = cacheFolder();
+  const tests = ['other/scripts/z.test.mjs', 'pkg/scripts/a.test.mjs'];
+  const reads = { [tests[0]]: Z_READS, [tests[1]]: [...A_READS, 'pkg/RUNBOOK.md'] };
+  const calls = [];
+  const opts = { root, cacheDir, jobs: 1, spawn: fakeRecorder(reads, { calls }), harness: 'h1', day: '2026-11-24' };
+  let r = await harness.refreshReach(tests, opts);
+  assert.deepEqual(r.refreshed, tests);
+  assert.deepEqual(calls, [['plain', [tests[0]]], ['recorded', [tests[0]]], ['plain', [tests[1]]], ['recorded', [tests[1]]]]);
+  const a = r.records[tests[1]];
+  assert.equal(a.status, 'ok', a.reasons.join('; '));
+  assert.deepEqual(Object.keys(a.paths), reads[tests[1]]);
+  assert.equal(a.paths['pkg/RUNBOOK.md'].s, `file:${sha('how to run it\n')}`);
+  assert.deepEqual(harness.readReachMap(cacheDir).files[tests[1]], a, 'the map on disk holds what this run made');
+  calls.length = 0;
+  r = await harness.refreshReach(tests, opts);
+  assert.deepEqual([r.refreshed, calls], [[], []], 'nothing changed, so nothing runs');
+  write(root, 'pkg/RUNBOOK.md', 'changed\n');
+  r = await harness.refreshReach(tests, opts);
+  assert.deepEqual(r.refreshed, [tests[1]], 'only the test file that read the changed file');
+  assert.equal(r.records[tests[1]].paths['pkg/RUNBOOK.md'].s, `file:${sha('changed\n')}`);
+  assert.deepEqual((await harness.refreshReach(tests, { ...opts, harness: 'h2' })).refreshed, tests, 'another harness');
+  assert.deepEqual((await harness.refreshReach(tests, { ...opts, harness: 'h2', node: 'v0.0.1' })).refreshed, tests, 'another node');
+  writeFileSync(join(cacheDir, 'reach.json'), '{ not json');
+  assert.deepEqual((await harness.refreshReach(tests, { ...opts, harness: 'h2', node: 'v0.0.1' })).refreshed, tests, 'a corrupt map is an empty one');
+});
+
+test('staleReason: no record, another harness or node, a path that holds something else now, or a failed run on an earlier day', () => {
+  const root = fixture();
+  const at = { root, harness: 'h', node: 'v1', day: '2026-11-24' };
+  const good = { harness: 'h', node: 'v1', day: '2026-11-23', retry: false, paths: { 'pkg/RUNBOOK.md': { k: 'file', s: harness.pathState(root, 'pkg/RUNBOOK.md') }, 'pkg/none.json': { k: 'file', s: 'absent' } } };
+  assert.equal(harness.staleReason(good, at), null, 'a record from an earlier day holds while what it read holds');
+  assert.match(harness.staleReason(undefined, at), /no record/);
+  assert.match(harness.staleReason({ ...good, paths: null }, at), /no record/);
+  assert.match(harness.staleReason({ ...good, harness: 'g' }, at), /harness changed/);
+  assert.match(harness.staleReason({ ...good, node: 'v0' }, at), /recorded under node v0/);
+  assert.match(harness.staleReason({ ...good, retry: true }, at), /failed on an earlier day/);
+  assert.equal(harness.staleReason({ ...good, retry: true, day: '2026-11-24' }, at), null, 'tried again only on a new day');
+  write(root, 'pkg/none.json', '{}');
+  assert.match(harness.staleReason(good, at), /^pkg\/none\.json changed/, 'a miss that now exists');
+});
+
+test('makeRecord: ok only when green alone, green recorded with the same passes, and recorded whole; else OPAQUE with why', () => {
+  const T = 'pkg/scripts/a.test.mjs';
+  const seen = (extra = {}) => ({ [T]: { processes: 1, paths: { [T]: { k: 'file', s: 'file:x' } }, opaque: [], ...extra } });
+  const plain = GREEN;
+  const make = (p, r) => harness.makeRecord(T, p, r, { harness: 'h', node: 'v1', day: 'd' });
+  assert.deepEqual(make(plain, { ...GREEN, reach: seen() }), { status: 'ok', reasons: [], retry: false, harness: 'h', node: 'v1', day: 'd', pass: 2, paths: { [T]: { k: 'file', s: 'file:x' } } });
+  const cases = [
+    [make(RED, { ...GREEN, reach: seen() }), /^it is not green alone: /, true],
+    [make(plain, { ...RED, reach: seen() }), /^it is not green under the recorder: /, true],
+    [make(plain, { code: 0, signal: null, stdout: tap(1, 0), reach: seen() }), /^under the recorder it passed 1 tests, alone 2$/, true],
+    [make(plain, { ...GREEN, reach: {} }), /^no record was written for it/, true],
+    [make(plain, { ...GREEN, reach: seen({ opaque: ['spawnSync: a node child started without the recorder'] }) }), /^spawnSync: a node child started without the recorder$/, false],
+  ];
+  for (const [r, why, retry] of cases) {
+    assert.equal(r.status, 'opaque', why.source);
+    assert.match(r.reasons.join(' | '), why);
+    assert.equal(r.retry, retry, why.source);
+  }
+});
+
+test('the real recorder, through refreshReach, gives each test file of a fixture a record of what it read', { timeout: 60000 }, async () => {
+  const root = fixture();
+  const cacheDir = cacheFolder();
+  const tests = ['other/scripts/z.test.mjs', 'pkg/scripts/a.test.mjs'];
+  const r = await harness.refreshReach(tests, { root, cacheDir, jobs: 4, harness: 'h', day: 'd' });
+  assert.deepEqual(r.refreshed, tests);
+  const a = r.records['pkg/scripts/a.test.mjs'];
+  assert.equal(a.status, 'ok', a.reasons.join('; '));
+  assert.equal(a.pass, 2);
+  assert.deepEqual(Object.keys(a.paths).sort(), [...A_READS].sort());
+  assert.equal(a.paths['pkg/lib/d.mjs'].s, harness.pathState(root, 'pkg/lib/d.mjs'));
+  assert.deepEqual(Object.keys(r.records['other/scripts/z.test.mjs'].paths).sort(), [...Z_READS].sort());
+});
+
+test('--since makes the records first and selects by them: a data file no test reads selects nothing unless its suite has an OPAQUE file', async () => {
+  const root = gitFixture();
+  write(root, 'other/notes.md', 'changed\n');
+  const calls = [];
+  let records = ALL_RECORDED;
+  const reach = async (tests, o) => { calls.push(['reach', tests, o.cacheDir]); return { records, refreshed: [] }; };
+  const run = async (list) => { calls.push(['run', list.map((m) => m[0])]); return killedAll(list); };
+  const out = [];
+  const warned = [];
+  const opts = { mutations: LIST_FX, root, suites: SUITES_FX, suiteFor: {}, reads: {}, git: fxGit, run, reach, cacheDir: '/the/cache', print: (l) => out.push(l), warn: (l) => warned.push(l) };
+  assert.equal(await main(['--since', 'HEAD'], opts), 0);
+  assert.deepEqual(out, ['killed 0 of 0 selected since HEAD: nothing to judge']);
+  assert.deepEqual(calls, [['reach', ['harness/list.test.mjs', 'other/scripts/z.test.mjs', 'pkg/scripts/a.test.mjs'], '/the/cache']]);
+  assert.deepEqual(warned, ['REACH: 0 of 3 test files recorded in this run']);
+  records = { ...ALL_RECORDED, 'other/scripts/z.test.mjs': rec(Z_READS, 'opaque', ['why']) };
+  calls.length = 0;
+  out.length = 0;
+  warned.length = 0;
+  assert.equal(await main(['--since', 'HEAD'], opts), 0);
+  assert.deepEqual(calls.map((c) => c[0]), ['reach', 'run'], 'the records are made before anything is selected or run');
+  assert.deepEqual(calls[1][1], ['z one']);
+  assert.deepEqual(warned, ['REACH: 0 of 3 test files recorded in this run; OPAQUE or unrecorded, so their suites keep the old data-file rule: other/scripts/z.test.mjs']);
+  // With no home for the map, every suite keeps the old rules, and the run says so.
+  calls.length = 0;
+  warned.length = 0;
+  const homeless = (args, o) => (args.includes('--git-common-dir') ? { code: 128, stdout: '' } : fxGit(args, o));
+  assert.equal(await main(['--since', 'HEAD', '--list'], { ...opts, cacheDir: undefined, env: {}, git: homeless }), 0);
+  assert.deepEqual(calls, [], 'no map, so nothing is recorded');
+  assert.match(warned.join('\n'), /^NOTE: git rev-parse --git-common-dir failed .*; --since keeps the old rules for every suite$/);
+  assert.match(out.join('\n'), /- z one \(other\/scripts\/z\.mjs\)/);
+});
+
+test('--reach prints every test file\'s record and fails when one has none; it takes no mutation flag', async () => {
+  const records = { 'pkg/scripts/a.test.mjs': rec(['pkg/scripts/a.test.mjs', '/abs/outside.txt']), 'other/scripts/z.test.mjs': rec([], 'opaque', ['a', 'b']) };
+  const out = [];
+  const code = await main(['--reach'], { ...FXO, reach: async (tests) => ({ records, refreshed: ['other/scripts/z.test.mjs'], tests }), cacheDir: '/the/cache', print: (l) => out.push(l) });
+  assert.equal(code, 1, 'a test file with no record');
+  assert.deepEqual(out, [
+    'MISSING: harness/list.test.mjs has no record',
+    'OPAQUE: other/scripts/z.test.mjs — a; b, recorded in this run',
+    'RECORDED: pkg/scripts/a.test.mjs read 2 paths (1 outside the repo)',
+    '  file /abs/outside.txt',
+    '  file pkg/scripts/a.test.mjs',
+    'reach: 3 test files, 1 wholly recorded, 1 OPAQUE, 1 with no record, 1 recorded in this run (/the/cache/reach.json)',
+  ]);
+  const all = { ...records, 'harness/list.test.mjs': rec(['harness/list.test.mjs']) };
+  assert.equal(await main(['--reach'], { ...FXO, reach: async () => ({ records: all, refreshed: [] }), cacheDir: '/the/cache', print: () => {} }), 0);
+  for (const argv of [['--reach', '--since', 'HEAD'], ['--reach', '--only', 'a'], ['--reach', '--list'], ['--reach', '--try', 'x.json'], ['--reach', '--add', 'x.json', '--group', 'g'], ['--reach', '--verbose']]) {
+    assert.match(parseCli(argv).errors.join(' | '), /--reach records and prints what each test file reads, and runs no mutation/, argv.join(' '));
+  }
+  assert.equal(parseCli(['--reach', '--jobs', '2']).errors.length, 0);
 });
 
 // ---- --add -------------------------------------------------------------------------------------------------
@@ -1038,6 +1275,7 @@ test("a file's own suite beats its folder's, and a listed suite not yet written 
   assert.equal(prepare(LIST_FX[0], { ...FXO, suiteFor }).status, 'NO_SUITE');
   assert.deepEqual(SUITE_FOR, {
     'galxe-desk/scripts/mutate.mjs': ['galxe-desk/scripts/mutate.test.mjs'],
+    'galxe-desk/scripts/reach.mjs': ['galxe-desk/scripts/reach.test.mjs'],
     '.claude/hooks/guard.mjs': ['.claude/hooks/guard.test.mjs'],
     '.claude/workflows/fix-verify.js': ['scripts/workflows.test.mjs'],
     '.claude/workflows/review-3x.js': ['scripts/workflows.test.mjs'],

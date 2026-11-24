@@ -14,8 +14,18 @@
 //   node galxe-desk/scripts/mutate.mjs --try lines.json       # the same checks and run, each line's status, and
 //                                                             # nothing written; exit 0 only when every line is KILLED
 //   node galxe-desk/scripts/mutate.mjs --list                 # just list them (after --only and --since)
+//   node galxe-desk/scripts/mutate.mjs --reach                # what each test file reads, recorded (see below)
 //   --jobs N (1 to 16, default 4 or fewer CPUs), --timeout-ms N (per suite run, default 120000), --verbose
 //   (every result in list order, so --jobs 1 and --jobs 4 print the same bytes), --no-narrow (see below)
+//
+// --since selects by reach (plan 20, step A2): each test file of every suite is run once alone under reach.mjs, a
+// preload passed through NODE_OPTIONS, which records what it and every process it starts loads, reads, stats, lists
+// and copies. The records live outside the repo, in reach.json in the cache folder ($MUTATE_CACHE_DIR, or
+// <tmp>/joyisfree-mutate/<sha256 of the git common dir>), and a record is made again whenever a path it holds no
+// longer holds what it did, or the harness (this file and reach.mjs) or node changed. A mutation of F is then
+// selected when F changed, when a test file of its suite that read F (or whose record is OPAQUE) read a path that
+// changed, or by the old rules (imports, READS and this file's own); the old data-file rule (any non-.mjs file under
+// F's top-level folder) is kept only for a suite with a test file that is OPAQUE or has no record.
 //
 // A mutation in a suite of two or more test files first runs, one file at a time, the files whose imports reach the
 // mutated file and that were green alone, its own test (the same stem) first, and stops at the first KILLED. When
@@ -46,6 +56,7 @@ import { join, dirname, basename, resolve, relative, sep, isAbsolute, posix } fr
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { readRecords, recorderEnv } from './reach.mjs';
 
 const DIR = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(DIR, '..', '..');
@@ -66,6 +77,7 @@ export const SUITES = {
 // does not exist yet is skipped, and a file whose suite is then empty is NO_SUITE, never its folder's suite.
 export const SUITE_FOR = {
   'galxe-desk/scripts/mutate.mjs': ['galxe-desk/scripts/mutate.test.mjs'],
+  'galxe-desk/scripts/reach.mjs': ['galxe-desk/scripts/reach.test.mjs'],
   '.claude/hooks/guard.mjs': ['.claude/hooks/guard.test.mjs'],
   '.claude/workflows/fix-verify.js': ['scripts/workflows.test.mjs'],
   '.claude/workflows/review-3x.js': ['scripts/workflows.test.mjs'],
@@ -1232,6 +1244,92 @@ export const MUTATIONS = [
   ["--try and --add run nothing for a batch with a bad line","galxe-desk/scripts/mutate.mjs","  if (problems.length) return { ok: false, problems };\n","\n"],
   ["--try takes no --add, --only, --since or --list","galxe-desk/scripts/mutate.mjs","  if (o.try !== undefined && (o.add !== undefined || o.only || o.since !== undefined || o.list)) o.errors.push('--try runs its own batch only; drop --add, --only, --since and --list');\n","  if (false) o.errors.push('--try runs its own batch only; drop --add, --only, --since and --list');\n"],
   ["--try names a result that never came back","galxe-desk/scripts/mutate.mjs","      print(typeof res?.status === 'string' ? `${res.status}: ${name}${res.detail ? ` — ${res.detail}` : ''}` : `MISSING: ${name} — its result never came back`);\n","      print(`${res?.status}: ${name}${res?.detail ? ` — ${res.detail}` : ''}`);\n"],
+  // galxe-desk/scripts/reach.mjs and mutate.mjs — --since selects by what each test file reads, recorded by a preload; --reach prints the records (plan 20, step A2) (added by mutate --add)
+  ["reach: a test file's own process names itself the owner","galxe-desk/scripts/reach.mjs","if (env.NODE_TEST_CONTEXT && !env.REACH_OWNER) env.REACH_OWNER =","if (false) env.REACH_OWNER ="],
+  ["reach: a process a test file starts keeps that test file as its owner","galxe-desk/scripts/reach.mjs","&& !env.REACH_OWNER) env.REACH_OWNER =",") env.REACH_OWNER ="],
+  ["reach: every module a process loads is recorded","galxe-desk/scripts/reach.mjs","          note(url);\n",""],
+  ["reach: a .js file's package.json files are recorded","galxe-desk/scripts/reach.mjs","          if (url.endsWith('.js')) scopes(fileURLToPath(url));\n",""],
+  ["reach: an import that resolves to nothing records the path it looked for","galxe-desk/scripts/reach.mjs","note(new URL(specifier, context.parentURL));","void 0;"],
+  ["reach: an ESM named import of fs gets the wrapped function","galxe-desk/scripts/reach.mjs","  module.syncBuiltinESMExports();","  void 0;"],
+  ["reach: a call is recorded before it runs, so one that throws or never returns is recorded","galxe-desk/scripts/reach.mjs","      try { record(args); } catch { /* recording never changes what the call does */ }\n      return orig.apply(this, args);\n","      const out = orig.apply(this, args);\n      try { record(args); } catch { /* recording never changes what the call does */ }\n      return out;\n"],
+  ["reach: a folder listing is recorded as a folder","galxe-desk/scripts/reach.mjs","args[1].recursive ? 'tree' : 'dir');","args[1].recursive ? 'tree' : 'file');"],
+  ["reach: a recursive listing is recorded as a tree","galxe-desk/scripts/reach.mjs","args[1].recursive ? 'tree' : 'dir');","args[1].recursive ? 'dir' : 'dir');"],
+  ["reach: a recursive copy is recorded as a tree","galxe-desk/scripts/reach.mjs","args[2].recursive ? 'tree' : 'file');","args[2].recursive ? 'file' : 'file');"],
+  ["reach: fs.promises reads are recorded","galxe-desk/scripts/reach.mjs","for (const n of P_FILE) wrap(P, n, first('file'));","for (const n of []) wrap(P, n, first('file'));"],
+  ["reach: a node child started without the recorder is OPAQUE","galxe-desk/scripts/reach.mjs","      opaque(`${how}: a node child started without the recorder`);\n",""],
+  ["reach: a node child that carries the recorder is not OPAQUE","galxe-desk/scripts/reach.mjs","if (RECORDER_VARS.every((k) => vars[k] === env[k]) && imports.includes(PRELOAD_URL)) return;","if (false) return;"],
+  ["reach: a node child with a recorder of its own is OPAQUE when it reaches the repo","galxe-desk/scripts/reach.mjs","        if (why) opaque(`${how}: a node child with a recorder of its own","        if (false) opaque(`${how}: a node child with a recorder of its own"],
+  ["reach: a node child with a recorder of its own has its preload recorded","galxe-desk/scripts/reach.mjs","        for (const u of imports) note(u);\n",""],
+  ["reach: a child that is not node and reaches the repo is OPAQUE","galxe-desk/scripts/reach.mjs","    if (why) opaque(`${how}: ${String(file).trim().split(/\\s+/)[0]} is not node","    if (false) opaque(`${how}: ${String(file).trim().split(/\\s+/)[0]} is not node"],
+  ["reach: a child's working folder counts","galxe-desk/scripts/reach.mjs","    if (has(resolve(cwd))) return `working folder","    if (false) return `working folder"],
+  ["reach: a child's arguments count","galxe-desk/scripts/reach.mjs","    if (arg !== undefined) return `arguments","    if (false) return `arguments"],
+  ["reach: a child's variables count","galxe-desk/scripts/reach.mjs","if (!ours(k, v) && has(v)) return `variable ${k}`;","if (false) return `variable ${k}`;"],
+  ["reach: the recorder's own variables are not a child reaching the repo","galxe-desk/scripts/reach.mjs","if (!ours(k, v) && has(v)) return","if (has(v)) return"],
+  ["reach: a forked child is checked as a node child","galxe-desk/scripts/reach.mjs","    check('fork', exe, [String(path), ...args.map(String)], o, isNode(exe));","    check('fork', exe, [String(path), ...args.map(String)], o, false);"],
+  ["reach: a child named node is node","galxe-desk/scripts/reach.mjs","/^node(\\.exe)?$/i.test(basename(cmd))","false"],
+  ["reach: a shell command is checked as a child that is not node","galxe-desk/scripts/reach.mjs","for (const n of ['exec', 'execSync']) wrap(childProcess, n,","for (const n of []) wrap(childProcess, n,"],
+  ["reach: a path outside the copy is kept absolute","galxe-desk/scripts/reach.mjs","    for (const d of DROP) if (inside(abs, d)) return null;\n    return abs;\n","    for (const d of DROP) if (inside(abs, d)) return null;\n    return null;\n"],
+  ["reach: a path in the run's own temp folder is dropped","galxe-desk/scripts/reach.mjs","...bases(env.REACH_TMP), ",""],
+  ["reach: a path in the run's throwaway folder is dropped","galxe-desk/scripts/reach.mjs",", ...bases(env.REACH_WORK)];","];"],
+  ["reach: no module hooks is OPAQUE","galxe-desk/scripts/reach.mjs","    opaque('no module hooks: module.registerHooks needs Node 22.15 or later');\n",""],
+  ["reach: with no module hooks nothing else is recorded","galxe-desk/scripts/reach.mjs","    return; // no wrappers either","    // no wrappers either"],
+  ["reach: a worker thread is OPAQUE","galxe-desk/scripts/reach.mjs","          try { opaque('a worker thread, which this recorder does not follow'); } catch { /* never */ }\n",""],
+  ["reach: a glob is OPAQUE","galxe-desk/scripts/reach.mjs","for (const n of ['globSync', 'glob']) wrap(fs, n,","for (const n of []) wrap(fs, n,"],
+  ["reach: a record that cannot be written turns the run red","galxe-desk/scripts/reach.mjs","catch { process.exitCode = 70; }","catch { /* lost */ }"],
+  ["reach: imported as a library it installs nothing","galxe-desk/scripts/reach.mjs","  if (!importsOf(env.NODE_OPTIONS).includes(PRELOAD_URL)) return; // imported as a library","  // imported as a library"],
+  ["reach: loaded twice it records once","galxe-desk/scripts/reach.mjs"," || globalThis[INSTALLED]) return;",") return;"],
+  ["reach: a torn last line of a record is ignored","galxe-desk/scripts/reach.mjs","const lines = text.split('\\n').slice(0, -1);","const lines = text.split('\\n');"],
+  ["reach: a record file with no start line is no record","galxe-desk/scripts/reach.mjs","if (!o || o.start !== 1 || typeof o.owner !== 'string' || !o.owner) break;","if (!o) break;"],
+  ["reach: a line of a record that cannot be read makes its owner OPAQUE","galxe-desk/scripts/reach.mjs","} else if (!rec.opaque.includes('a line of its record could not be read')) rec.opaque.push(","} else if (false) rec.opaque.push("],
+  ["reach: a wider kind outranks a narrower one for one path","galxe-desk/scripts/reach.mjs","KIND_RANK[o.k] > KIND_RANK[rec.paths[o.p]]","KIND_RANK[o.k] < KIND_RANK[rec.paths[o.p]]"],
+  ["reach: an earlier reach preload is dropped from NODE_OPTIONS","galxe-desk/scripts/reach.mjs","    if (t[i].startsWith('--import=') && isReachPreload(unquote(t[i].slice('--import='.length)))) continue;\n",""],
+  ["reach: a recorded run's owner starts empty","galxe-desk/scripts/reach.mjs","REACH_WORK: work, REACH_OWNER: '' };","REACH_WORK: work };"],
+  ["reach: importsOf reads --import with a space","galxe-desk/scripts/reach.mjs","    else if (t[i] === '--import' && i + 1 < t.length) out.push(unquote(t[++i]));\n",""],
+  ["--since: a suite wholly recorded drops the old data-file rule","galxe-desk/scripts/mutate.mjs","    if (!complete(tests) && nearby(rel)) return true; // a suite not wholly recorded keeps the old data-file rule\n","    if (nearby(rel)) return true; // a suite not wholly recorded keeps the old data-file rule\n"],
+  ["--since: a suite not wholly recorded keeps the old data-file rule","galxe-desk/scripts/mutate.mjs","    if (!complete(tests) && nearby(rel)) return true; // a suite not wholly recorded keeps the old data-file rule\n","    if (false) return true; // a suite not wholly recorded keeps the old data-file rule\n"],
+  ["--since: an OPAQUE file means its suite is not wholly recorded","galxe-desk/scripts/mutate.mjs","  const complete = (tests) => tests.length > 0 && tests.every((t) => records?.[t]?.status === 'ok');\n","  const complete = (tests) => tests.length > 0 && tests.every((t) => records?.[t]);\n"],
+  ["--since: a suite with no test file is never wholly recorded","galxe-desk/scripts/mutate.mjs","  const complete = (tests) => tests.length > 0 && tests.every((t) => records?.[t]?.status === 'ok');\n","  const complete = (tests) => tests.every((t) => records?.[t]?.status === 'ok');\n"],
+  ["--since: a recorded read of a changed path selects","galxe-desk/scripts/mutate.mjs","    if (recorded(rel, tests)) return true; // a test that reads it read a path that changed\n","    // a test that reads it read a path that changed\n"],
+  ["--since: only a test whose record holds the mutated file, or is OPAQUE, counts","galxe-desk/scripts/mutate.mjs","    return !!r && (r.status !== 'ok' || holds(r, rel)) && Object.entries(r.paths ?? {}).some(([p, v]) => hit(p, v?.k));\n","    return !!r && Object.entries(r.paths ?? {}).some(([p, v]) => hit(p, v?.k));\n"],
+  ["--since: an OPAQUE file's reads count for every mutation of its suite","galxe-desk/scripts/mutate.mjs","    return !!r && (r.status !== 'ok' || holds(r, rel)) && Object.entries(r.paths ?? {}).some(([p, v]) => hit(p, v?.k));\n","    return !!r && holds(r, rel) && Object.entries(r.paths ?? {}).some(([p, v]) => hit(p, v?.k));\n"],
+  ["--since: a folder a test read covers what is under it","galxe-desk/scripts/mutate.mjs","  const hit = (p, k) => (k === 'file' ? altered.has(p) : [...altered].some((c) => under(p, c))); // a folder covers what is under it\n","  const hit = (p, k) => altered.has(p); // a folder covers what is under it\n"],
+  ["--since: a tree a test read holds every file under it","galxe-desk/scripts/mutate.mjs","  const holds = (r, rel) => Object.entries(r.paths ?? {}).some(([p, v]) => p === rel || (v?.k === 'tree' && under(p, rel)));\n","  const holds = (r, rel) => Object.entries(r.paths ?? {}).some(([p]) => p === rel);\n"],
+  ["--since: a code hunk in mutate.mjs counts as a change to it for what the tests read","galxe-desk/scripts/mutate.mjs","  const altered = own.outside ? new Set([...changed, self]) : changed;\n","  const altered = changed;\n"],
+  ["--since: the selection reads the reach map","galxe-desk/scripts/mutate.mjs","    const sel = selectSince(mutations, ch.files, { root, suites, suiteFor, reads, records: got.records, selfDiff, selfSrc: existsSync(selfPath) ? readFileSync(selfPath, 'utf8') : '' });\n","    const sel = selectSince(mutations, ch.files, { root, suites, suiteFor, reads, selfDiff, selfSrc: existsSync(selfPath) ? readFileSync(selfPath, 'utf8') : '' });\n"],
+  ["--since: with no home for the reach map every suite keeps the old rules, and it says so","galxe-desk/scripts/mutate.mjs","    if (got.error) warn(`NOTE: ${got.error}; --since keeps the old rules for every suite`);\n","    if (got.error) ;\n"],
+  ["the reach map: a record is made again when a path it read holds something else","galxe-desk/scripts/mutate.mjs","  for (const [p, v] of Object.entries(rec.paths)) if (pathState(root, p, v?.k) !== v?.s) return `${p} changed since it was recorded`;\n",""],
+  ["the reach map: a record from another harness is made again","galxe-desk/scripts/mutate.mjs","  if (rec.harness !== harness) return 'the harness changed since it was recorded';\n",""],
+  ["the reach map: a record from another node is made again","galxe-desk/scripts/mutate.mjs","  if (rec.node !== node) return `it was recorded under node ${rec.node}`;\n",""],
+  ["the reach map: a failed run is tried again on a new day","galxe-desk/scripts/mutate.mjs","  if (rec.retry && rec.day !== day) return 'its run failed on an earlier day';\n",""],
+  ["the reach map: no record, or one with no paths, is stale","galxe-desk/scripts/mutate.mjs","  if (!rec || typeof rec !== 'object' || !rec.paths || typeof rec.paths !== 'object') return 'it has no record';\n","  if (!rec) return 'it has no record';\n"],
+  ["the reach map: a test file red alone is OPAQUE","galxe-desk/scripts/mutate.mjs","  if (why) failed.push(`it is not green alone: ${why}`);\n","  if (false) failed.push(`it is not green alone: ${why}`);\n"],
+  ["the reach map: a test file red under the recorder is OPAQUE","galxe-desk/scripts/mutate.mjs","  else if (under) failed.push(`it is not green under the recorder: ${under}`);\n","  else if (false) failed.push(`it is not green under the recorder: ${under}`);\n"],
+  ["the reach map: the recorder must not change the pass count","galxe-desk/scripts/mutate.mjs","  else if (passOf(recorded) !== passOf(plain)) failed.push(`under the recorder it passed ${passOf(recorded)} tests, alone ${passOf(plain)}`);\n","  else if (false) failed.push(`under the recorder it passed ${passOf(recorded)} tests, alone ${passOf(plain)}`);\n"],
+  ["the reach map: no record written is OPAQUE","galxe-desk/scripts/mutate.mjs","  if (!got) failed.push('no record was written for it, so the recorder did not run in its test process');\n",""],
+  ["the reach map: what the recorder could not see makes the record OPAQUE","galxe-desk/scripts/mutate.mjs","  const reasons = [...failed, ...(got?.opaque ?? [])];\n","  const reasons = [...failed];\n"],
+  ["the reach map: a failed run is marked to be tried again","galxe-desk/scripts/mutate.mjs","  return { status: reasons.length ? 'opaque' : 'ok', reasons, retry: failed.length > 0, harness, node, day, pass: passOf(plain), paths: got?.paths ?? {} };\n","  return { status: reasons.length ? 'opaque' : 'ok', reasons, retry: false, harness, node, day, pass: passOf(plain), paths: got?.paths ?? {} };\n"],
+  ["the reach map: each stale test file runs once plain and once recorded","galxe-desk/scripts/mutate.mjs","    const runs = await pool(stale.flatMap((t) => [[t, null], [t, () => true]]), jobs, ([t, record]) => runSuite(root, [t], null, { ...deps, record }));\n","    const runs = await pool(stale.flatMap((t) => [[t, null], [t, null]]), jobs, ([t, record]) => runSuite(root, [t], null, { ...deps, record }));\n"],
+  ["the reach map: only a stale record is made again","galxe-desk/scripts/mutate.mjs","  const stale = tests.filter((t) => staleReason(files[t], { root, harness, node, day }) !== null);\n","  const stale = [...tests];\n"],
+  ["the reach map: what a run made is written down","galxe-desk/scripts/mutate.mjs","    try { writeReachMap(cacheDir, made); } catch (err) { warn(`NOTE: the reach map could not be written to ${cacheDir} (${err.code ?? err.message}); this run still uses what it recorded`); }\n","\n"],
+  ["a recorded run gets the recorder in its environment","galxe-desk/scripts/mutate.mjs","  const go = recorded ? (args, o) => run(args, { ...o, env: { ...o?.env, ...recorderEnv({ dir: seen, root: repo, tmp, work }) } }) : run;\n","  const go = run;\n"],
+  ["a recorded run returns what each test file read","galxe-desk/scripts/mutate.mjs","    if (recorded) r = { ...r, reach: statesOf(readRecords(seen), repo) };\n",""],
+  ["pathState: a folder SKIP keeps out of a copy is skipped","galxe-desk/scripts/mutate.mjs","  if (rel !== null && skipped(rel)) return 'skip';\n",""],
+  ["pathState: a copy's mutated text stands for its file","galxe-desk/scripts/mutate.mjs","  if (rel !== null && over && over.rel === rel) return `file:${sha256(over.text)}`;\n",""],
+  ["pathState: a tree is hashed whole","galxe-desk/scripts/mutate.mjs","      if (kind === 'tree') return `tree:${treeHash(full, rel, over)}`;\n",""],
+  ["pathState: a folder only statted is a folder, not its names","galxe-desk/scripts/mutate.mjs","      if (kind !== 'dir') return 'folder'; // a stat or a read of a folder sees that it is one, not what it holds\n",""],
+  ["pathState: a folder's names leave out what SKIP keeps out of a copy","galxe-desk/scripts/mutate.mjs","      const names = readdirSync(full).sort().filter((n) => rel === null || !skipped(rel ? `${rel}/${n}` : n));\n","      const names = readdirSync(full).sort();\n"],
+  ["pathState: a missing path is absent","galxe-desk/scripts/mutate.mjs","  try { st = statSync(full); } catch (err) { return err.code === 'ENOENT' || err.code === 'ENOTDIR' ? 'absent' : `error:${err.code ?? 'unknown'}`; }\n","  try { st = statSync(full); } catch (err) { return `error:${err.code ?? 'unknown'}`; }\n"],
+  ["pathState: a tree holds the bytes of each file under it","galxe-desk/scripts/mutate.mjs","        h.update(`f ${e.name} ${sha256(text)}\\n`);\n","        h.update(`f ${e.name}\\n`);\n"],
+  ["pathState: a tree is read with the copy's mutated text","galxe-desk/scripts/mutate.mjs","        try { text = over && sub === over.rel ? over.text : readFileSync(path); } catch (err) { text = `! ${err.code}`; }\n","        try { text = readFileSync(path); } catch (err) { text = `! ${err.code}`; }\n"],
+  ["the cache folder: $MUTATE_CACHE_DIR names it","galxe-desk/scripts/mutate.mjs","  if (env.MUTATE_CACHE_DIR) return { dir: resolve(env.MUTATE_CACHE_DIR) };\n",""],
+  ["the cache folder: an unknown git common dir is an error, never a guess","galxe-desk/scripts/mutate.mjs","  if (r?.code !== 0 || !isAbsolute(common)) return { error: `git rev-parse --git-common-dir failed (exit ${r?.code}), so where the reach map lives is unknown` };\n","  if (false) return { error: `git rev-parse --git-common-dir failed (exit ${r?.code}), so where the reach map lives is unknown` };\n"],
+  ["the reach map covers every folder suite's test files","galxe-desk/scripts/mutate.mjs","  [...new Set([...Object.entries(suites).flatMap(([d, fs]) => fs.map((f) => (d ? `${d}/${f}` : f))), ...Object.values(suiteFor).flat()])].filter((f) => existsSync(join(root, f))).sort();\n","  [...new Set([...Object.values(suiteFor).flat()])].filter((f) => existsSync(join(root, f))).sort();\n"],
+  ["the reach map covers every file suite's test files","galxe-desk/scripts/mutate.mjs","  [...new Set([...Object.entries(suites).flatMap(([d, fs]) => fs.map((f) => (d ? `${d}/${f}` : f))), ...Object.values(suiteFor).flat()])].filter((f) => existsSync(join(root, f))).sort();\n","  [...new Set([...Object.entries(suites).flatMap(([d, fs]) => fs.map((f) => (d ? `${d}/${f}` : f)))])].filter((f) => existsSync(join(root, f))).sort();\n"],
+  ["the reach map holds only test files that exist","galxe-desk/scripts/mutate.mjs","  [...new Set([...Object.entries(suites).flatMap(([d, fs]) => fs.map((f) => (d ? `${d}/${f}` : f))), ...Object.values(suiteFor).flat()])].filter((f) => existsSync(join(root, f))).sort();\n","  [...new Set([...Object.entries(suites).flatMap(([d, fs]) => fs.map((f) => (d ? `${d}/${f}` : f))), ...Object.values(suiteFor).flat()])].sort();\n"],
+  ["--reach: a test file with no record fails the run","galxe-desk/scripts/mutate.mjs","    return missing ? 1 : 0;\n","    return 0;\n"],
+  ["--reach is read from the command line","galxe-desk/scripts/mutate.mjs","    else if (a === '--reach') o.reach = true; // record what each test file reads, and print it\n","    // record what each test file reads, and print it\n"],
+  ["--reach takes no mutation flag","galxe-desk/scripts/mutate.mjs","  if (o.reach && (o.add !== undefined || o.try !== undefined || o.only || o.since !== undefined || o.list || o.verbose)) o.errors.push('--reach records and prints what each test file reads, and runs no mutation; drop --add, --try, --only, --since, --list and --verbose');\n","  if (false) o.errors.push('--reach records and prints what each test file reads, and runs no mutation; drop --add, --try, --only, --since, --list and --verbose');\n"],
+  ["reach.mjs is judged by its own suite","galxe-desk/scripts/mutate.mjs","  'galxe-desk/scripts/reach.mjs': ['galxe-desk/scripts/reach.test.mjs'],\n",""],
 ];
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -1389,14 +1487,20 @@ export function parseBreak(rel, before, path, write) {
 // `tmp`, the run's TMPDIR: whatever its tests leave in the temp folder stays inside, is listed as `leftover` and goes
 // when the folder does. The copy is unmutated when `m` is null (a baseline), else it has `m` applied, checked to
 // still parse unless `check` is false (a first copy of the same mutation already showed it does). `ran` marks a
-// result that came from running the tests, not from a refusal before them.
-async function runSuite(root, files, m, { spawn: run, copy, timeoutMs, maxBuffer, check = true }) {
+// result that came from running the tests, not from a refusal before them. When `record(files)` says so, the run is
+// recorded: reach.mjs and where to record go into its environment (only there), and `reach` comes back, each test
+// file's record with what each path it read held in the copy once the run was over.
+async function runSuite(root, files, m, { spawn: run, copy, timeoutMs, maxBuffer, check = true, record = null }) {
   const work = mkdtempSync(join(tmpdir(), 'mutate-'));
   const repo = join(work, 'repo');
   const tmp = join(work, 'tmp');
+  const seen = join(work, 'reach');
+  const recorded = typeof record === 'function' && record(files) === true;
+  const go = recorded ? (args, o) => run(args, { ...o, env: { ...o?.env, ...recorderEnv({ dir: seen, root: repo, tmp, work }) } }) : run;
   try {
     copy(root, repo);
     mkdirSync(tmp);
+    if (recorded) mkdirSync(seen);
     if (m) {
       const p = join(repo, m.rel);
       const src = readFileSync(p, 'utf8');
@@ -1407,9 +1511,10 @@ async function runSuite(root, files, m, { spawn: run, copy, timeoutMs, maxBuffer
       const broke = check && parseBreak(m.rel, src, p, () => { writeFileSync(p, mutated); return mutated; });
       if (broke) return { code: null, signal: null, unparseable: broke, detail: broke }; // never run as a kill
     }
-    const r = await run(['--test', '--test-reporter=tap', ...files.map((f) => join(repo, f))], { cwd: repo, timeoutMs, maxBuffer, env: { TMPDIR: tmp } });
+    let r = await go(['--test', '--test-reporter=tap', ...files.map((f) => join(repo, f))], { cwd: repo, timeoutMs, maxBuffer, env: { TMPDIR: tmp } });
     let leftover;
     try { leftover = readdirSync(tmp).sort(); } catch (err) { leftover = [`(its temp folder could not be read: ${err.code ?? err.message})`]; }
+    if (recorded) r = { ...r, reach: statesOf(readRecords(seen), repo) };
     return { ...r, ran: true, leftover };
   } finally {
     rmSync(work, { recursive: true, force: true });
@@ -1567,12 +1672,13 @@ const VALUED = new Set(['--only', '--jobs', '--timeout-ms', '--since', '--add', 
 
 // The command line, read strictly: an unknown argument, a bad number or a lone --group is an error, never a default.
 export function parseCli(argv) {
-  const o = { list: false, verbose: false, narrow: true, only: undefined, jobs: DEFAULT_JOBS, timeoutMs: DEFAULT_TIMEOUT_MS, since: undefined, add: undefined, group: undefined, try: undefined, errors: [] };
+  const o = { list: false, verbose: false, narrow: true, reach: false, only: undefined, jobs: DEFAULT_JOBS, timeoutMs: DEFAULT_TIMEOUT_MS, since: undefined, add: undefined, group: undefined, try: undefined, errors: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--list') o.list = true;
     else if (a === '--verbose') o.verbose = true;
     else if (a === '--no-narrow') o.narrow = false; // every mutation runs its whole suite, as before plan 20
+    else if (a === '--reach') o.reach = true; // record what each test file reads, and print it
     else if (VALUED.has(a)) {
       const v = argv[++i];
       if (v === undefined || v.startsWith('--')) o.errors.push(`${a} needs a value`);
@@ -1596,6 +1702,7 @@ export function parseCli(argv) {
   if (o.group !== undefined && o.add === undefined) o.errors.push('--group goes with --add');
   if (o.add !== undefined && (o.only || o.since !== undefined || o.list)) o.errors.push('--add runs its own batch only; drop --only, --since and --list');
   if (o.try !== undefined && (o.add !== undefined || o.only || o.since !== undefined || o.list)) o.errors.push('--try runs its own batch only; drop --add, --only, --since and --list');
+  if (o.reach && (o.add !== undefined || o.try !== undefined || o.only || o.since !== undefined || o.list || o.verbose)) o.errors.push('--reach records and prints what each test file reads, and runs no mutation; drop --add, --try, --only, --since, --list and --verbose');
   return o;
 }
 
@@ -1675,6 +1782,156 @@ export function closure(graph, start) {
   return seen;
 }
 
+// ---------------------------------------------------------------------------------------------------- the reach map
+// What each test file reads, recorded by reach.mjs (plan 20, step A2), kept outside the repo in <cache>/reach.json.
+
+const sha256 = (data) => createHash('sha256').update(data).digest('hex');
+const SKIP_REL = SKIP.map(posixRel);
+const skipped = (rel) => SKIP_REL.some((s) => rel === s || rel.startsWith(`${s}/`));
+const byName = (a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+
+// Everything under `full`, as one hash of each name, folder and file content in order (a folder SKIP names left out).
+function treeHash(full, rel, over) {
+  const h = createHash('sha256');
+  let n = 0;
+  const walk = (abs, at) => {
+    let entries;
+    try { entries = readdirSync(abs, { withFileTypes: true }).sort(byName); } catch (err) { h.update(`! ${err.code ?? 'unreadable'}\n`); return; }
+    for (const e of entries) {
+      const sub = at === null ? null : at ? `${at}/${e.name}` : e.name;
+      if (sub !== null && skipped(sub)) continue;
+      if (++n > 100_000) { h.update('! too many\n'); return; }
+      const path = join(abs, e.name);
+      if (e.isDirectory()) { h.update(`d ${e.name}\n`); walk(path, sub); h.update('u\n'); } else if (e.isFile()) {
+        let text;
+        try { text = over && sub === over.rel ? over.text : readFileSync(path); } catch (err) { text = `! ${err.code}`; }
+        h.update(`f ${e.name} ${sha256(text)}\n`);
+      } else h.update(`o ${e.name}\n`);
+    }
+  };
+  walk(full, rel);
+  return h.digest('hex');
+}
+
+/**
+ * What path `p` holds now, as one string: `file:<sha256>`; for a folder, `dir:<hash of its sorted names>` when it was
+ * listed, a hash of everything under it for a `tree`, and `folder` when it was only statted or read; `absent`; `skip`
+ * for a folder SKIP keeps out of every copy (a test in a copy always finds it absent); `other:<kind>`; `error:<code>`. `p` is repo-relative (in `root`) or absolute. `over` is { rel, text }:
+ * that file as `text`, the mutated text a copy held.
+ */
+export function pathState(root, p, kind = 'file', over = null) {
+  const rel = isAbsolute(p) ? null : p;
+  if (rel !== null && skipped(rel)) return 'skip';
+  if (rel !== null && over && over.rel === rel) return `file:${sha256(over.text)}`;
+  const full = rel === null ? p : join(root, rel);
+  let st;
+  try { st = statSync(full); } catch (err) { return err.code === 'ENOENT' || err.code === 'ENOTDIR' ? 'absent' : `error:${err.code ?? 'unknown'}`; }
+  try {
+    if (st.isDirectory()) {
+      if (kind === 'tree') return `tree:${treeHash(full, rel, over)}`;
+      if (kind !== 'dir') return 'folder'; // a stat or a read of a folder sees that it is one, not what it holds
+      const names = readdirSync(full).sort().filter((n) => rel === null || !skipped(rel ? `${rel}/${n}` : n));
+      return `dir:${sha256(names.join('\n'))}`;
+    }
+    if (st.isFile()) return `file:${sha256(readFileSync(full))}`;
+  } catch (err) {
+    return `error:${err.code ?? 'unknown'}`;
+  }
+  return `other:${st.isFIFO() ? 'fifo' : st.isSocket() ? 'socket' : st.isCharacterDevice() ? 'character device' : st.isBlockDevice() ? 'block device' : 'unknown'}`;
+}
+
+// Each owner's record from a run, with what each of its paths held in `base` (the copy) once the run was over.
+const statesOf = (records, base) => Object.fromEntries(Object.entries(records).map(([owner, r]) => [owner, { ...r, paths: Object.fromEntries(Object.entries(r.paths).map(([p, k]) => [p, { k, s: pathState(base, p, k) }])) }]));
+
+/** The calendar day in Sydney, YYYY-MM-DD: a record made after a failed run is tried again on a new day. */
+export const sydneyDay = (now = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+
+/** The hash of the harness: this file and the recorder, beside it. A record made by another harness is made again. */
+export const harnessHash = (dir = DIR) => sha256(`${readFileSync(join(dir, 'mutate.mjs'), 'utf8')}\0${readFileSync(join(dir, 'reach.mjs'), 'utf8')}`);
+
+/**
+ * Where the reach map and the result cache live: $MUTATE_CACHE_DIR, else <tmp>/joyisfree-mutate/<sha256 of the git
+ * common dir>, outside the repo, so every worktree of one repo shares it (a record says what it read, so a record made
+ * in one checkout holds in another only while those files hold the same bytes). { dir }, or { error } when unknown.
+ */
+export function cacheDirFor(root = REPO, { git = gitRun, env = process.env } = {}) {
+  if (env.MUTATE_CACHE_DIR) return { dir: resolve(env.MUTATE_CACHE_DIR) };
+  const r = git(['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: root });
+  const common = String(r?.stdout ?? '').trim();
+  if (r?.code !== 0 || !isAbsolute(common)) return { error: `git rev-parse --git-common-dir failed (exit ${r?.code}), so where the reach map lives is unknown` };
+  return { dir: join(tmpdir(), 'joyisfree-mutate', sha256(common)) };
+}
+
+const REACH_FILE = 'reach.json';
+/** The reach map in `dir`; a missing or unreadable one is empty, so every test file is recorded again. */
+export function readReachMap(dir) {
+  try {
+    const map = JSON.parse(readFileSync(join(dir, REACH_FILE), 'utf8'));
+    if (map?.version === 1 && map.files && typeof map.files === 'object' && !Array.isArray(map.files)) return map;
+  } catch { /* missing or corrupt */ }
+  return { version: 1, files: {} };
+}
+function writeReachMap(dir, files) {
+  mkdirSync(dir, { recursive: true });
+  writeAtomic(join(dir, REACH_FILE), `${JSON.stringify({ version: 1, files: { ...readReachMap(dir).files, ...files } })}\n`);
+}
+
+/** The test files of every suite that exist in `root`, from the repo root, sorted. */
+export const suiteTests = (root = REPO, suites = SUITES, suiteFor = SUITE_FOR) =>
+  [...new Set([...Object.entries(suites).flatMap(([d, fs]) => fs.map((f) => (d ? `${d}/${f}` : f))), ...Object.values(suiteFor).flat()])].filter((f) => existsSync(join(root, f))).sort();
+
+/**
+ * Why test file `t`'s record must be made again, or null while it holds: there is none; another harness or node made
+ * it; a path it read no longer holds what it did; or it was OPAQUE because its run failed and the day has changed.
+ */
+export function staleReason(rec, { root = REPO, harness, node = process.version, day = sydneyDay() } = {}) {
+  if (!rec || typeof rec !== 'object' || !rec.paths || typeof rec.paths !== 'object') return 'it has no record';
+  if (rec.harness !== harness) return 'the harness changed since it was recorded';
+  if (rec.node !== node) return `it was recorded under node ${rec.node}`;
+  if (rec.retry && rec.day !== day) return 'its run failed on an earlier day';
+  for (const [p, v] of Object.entries(rec.paths)) if (pathState(root, p, v?.k) !== v?.s) return `${p} changed since it was recorded`;
+  return null;
+}
+
+const passOf = (r) => Number((/^# pass (\d+)/m.exec(String(r?.stdout ?? '')) || [])[1] ?? NaN);
+
+/**
+ * Test file `t`'s record from its two runs alone, plain and recorded: `ok` only when the plain run is green, the
+ * recorded run is green with the same `# pass` count (the recorder changed nothing), and the recorder wrote a record
+ * with nothing it could not see. Otherwise `opaque`, with why; a record whose run failed is tried again on a new day.
+ */
+export function makeRecord(t, plain, recorded, { harness, node = process.version, day = sydneyDay() } = {}) {
+  const got = recorded?.reach?.[t];
+  const failed = [];
+  const why = baselineProblem(plain);
+  const under = baselineProblem(recorded);
+  if (why) failed.push(`it is not green alone: ${why}`);
+  else if (under) failed.push(`it is not green under the recorder: ${under}`);
+  else if (passOf(recorded) !== passOf(plain)) failed.push(`under the recorder it passed ${passOf(recorded)} tests, alone ${passOf(plain)}`);
+  if (!got) failed.push('no record was written for it, so the recorder did not run in its test process');
+  const reasons = [...failed, ...(got?.opaque ?? [])];
+  return { status: reasons.length ? 'opaque' : 'ok', reasons, retry: failed.length > 0, harness, node, day, pass: passOf(plain), paths: got?.paths ?? {} };
+}
+
+/**
+ * Make every stale record among `tests` again (one plain and one recorded run of each alone, each on a fresh copy),
+ * write the map, and return { records: { [t]: record }, refreshed: [t, ...] }.
+ */
+export async function refreshReach(tests, opts = {}) {
+  const { root = REPO, cacheDir, jobs = DEFAULT_JOBS, timeoutMs = DEFAULT_TIMEOUT_MS, maxBuffer = MAX_BUFFER, spawn: run = spawnNode, copy = copyRepo, pool = runPool, harness = harnessHash(), node = process.version, day = sydneyDay(), warn = () => {} } = opts;
+  const files = { ...readReachMap(cacheDir).files };
+  const stale = tests.filter((t) => staleReason(files[t], { root, harness, node, day }) !== null);
+  if (stale.length) {
+    const deps = { spawn: run, copy, timeoutMs, maxBuffer };
+    const runs = await pool(stale.flatMap((t) => [[t, null], [t, () => true]]), jobs, ([t, record]) => runSuite(root, [t], null, { ...deps, record }));
+    const made = {};
+    stale.forEach((t, i) => { made[t] = makeRecord(t, runs[2 * i], runs[2 * i + 1], { harness, node, day }); });
+    Object.assign(files, made);
+    try { writeReachMap(cacheDir, made); } catch (err) { warn(`NOTE: the reach map could not be written to ${cacheDir} (${err.code ?? err.message}); this run still uses what it recorded`); }
+  }
+  return { records: Object.fromEntries(tests.map((t) => [t, files[t]])), refreshed: stale };
+}
+
 // The blocks of this file that decide how every other file's guards are run: which tests judge a folder or a file
 // (SUITES, SUITE_FOR), what a folder's tests read (READS), which file a bare name means (relPath) and what a
 // mutation's copy leaves out (SKIP). A change to one of them can turn any guard's verdict, so --since runs them all.
@@ -1737,13 +1994,16 @@ export const suiteFolders = (suites = SUITES, suiteFor = SUITE_FOR) =>
   [...new Set([...Object.keys(suites), ...Object.keys(suiteFor).map(dirOf), ...Object.values(suiteFor).flat().map(dirOf)])].sort();
 
 // Which mutations a change can reach. A mutation of file F (folder D) is selected when anything F or its suite's
-// tests import, however deep, changed (F and the tests themselves included); a non-.mjs file under D's top-level
-// folder changed; a file READS lists for D changed; or, for mutate.mjs itself, its line changed (by name) or a hunk
-// fell outside MUTATIONS (its own guards). Every mutation is selected when mutate.mjs changed with no hunk to say
-// how, or changed a config block (CONFIG), and `everything` then says why. `unguarded` lists changed scripts in a
-// suite folder no mutation names.
+// tests import, however deep, changed (F and the tests themselves included); a test file of its suite whose record
+// holds F, or is OPAQUE, read a path that changed (`records`, the reach map: a folder or tree it read counts for what
+// is under it, and a hunk of mutate.mjs outside MUTATIONS counts mutate.mjs as changed); a non-.mjs file under D's
+// top-level folder changed, but only when a test file of that suite is OPAQUE or has no record (with no `records`
+// that is every suite, as before plan 20); a file READS lists for D changed; or, for mutate.mjs itself, its line
+// changed (by name) or a hunk fell outside MUTATIONS (its own guards). Every mutation is selected when mutate.mjs
+// changed with no hunk to say how, or changed a config block (CONFIG), and `everything` then says why. `unguarded`
+// lists changed scripts in a suite folder no mutation names.
 export function selectSince(list, files, opts = {}) {
-  const { root = REPO, suites = SUITES, suiteFor = SUITE_FOR, reads = READS, self = SELF_REL, selfDiff = '', selfSrc = '' } = opts;
+  const { root = REPO, suites = SUITES, suiteFor = SUITE_FOR, reads = READS, self = SELF_REL, selfDiff = '', selfSrc = '', records } = opts;
   const changed = new Set(files);
   const selfChanged = changed.delete(self); // mutate.mjs is judged by its diff, not as one changed file
   const folders = suiteFolders(suites, suiteFor);
@@ -1763,12 +2023,27 @@ export function selectSince(list, files, opts = {}) {
   const readChanged = (f) => (f.endsWith('/') ? [...changed].some((c) => c.startsWith(f)) : changed.has(f)); // a folder entry covers what is under it
   const reached = new Map();
   const reach = (start) => { if (!reached.has(start)) reached.set(start, closure(graph, start)); return reached.get(start); };
+  // For what the tests read, a hunk of mutate.mjs outside MUTATIONS is a change to mutate.mjs: prove.test.mjs loads it.
+  const altered = own.outside ? new Set([...changed, self]) : changed;
+  const under = (p, c) => p === '' || c === p || c.startsWith(`${p}/`);
+  const hit = (p, k) => (k === 'file' ? altered.has(p) : [...altered].some((c) => under(p, c))); // a folder covers what is under it
+  const holds = (r, rel) => Object.entries(r.paths ?? {}).some(([p, v]) => p === rel || (v?.k === 'tree' && under(p, rel)));
+  const recorded = (rel, tests) => tests.some((t) => {
+    const r = records?.[t];
+    return !!r && (r.status !== 'ok' || holds(r, rel)) && Object.entries(r.paths ?? {}).some(([p, v]) => hit(p, v?.k));
+  });
+  const complete = (tests) => tests.length > 0 && tests.every((t) => records?.[t]?.status === 'ok');
+  const nearby = (rel) => {
+    const top = rel.split('/')[0];
+    for (const c of changed) if (!c.endsWith('.mjs') && c.startsWith(`${top}/`)) return true; // a data file nearby
+    return false;
+  };
   const touches = (rel) => {
     if (rel === self && own.outside) return true;
     const tests = suiteListed(rel, { suites, suiteFor });
     for (const start of [rel, ...tests]) for (const f of reach(start)) if (changed.has(f)) return true;
-    const top = rel.split('/')[0];
-    for (const c of changed) if (!c.endsWith('.mjs') && c.startsWith(`${top}/`)) return true; // a data file nearby
+    if (recorded(rel, tests)) return true; // a test that reads it read a path that changed
+    if (!complete(tests) && nearby(rel)) return true; // a suite not wholly recorded keeps the old data-file rule
     return (reads[dirOf(rel)] ?? []).some(readChanged);
   };
   const selected = list.filter((m, i) => everything || byLine.has(i) || touches(relPath(m[1])));
@@ -1918,10 +2193,39 @@ export async function addLines(batch, opts = {}) {
 // The command. Returns the exit code; `print` receives each line of the report.
 export async function main(argv, deps = {}) {
   const { mutations = MUTATIONS, root = REPO, suites = SUITES, suiteFor = SUITE_FOR, reads = READS, git = gitRun, run = runAll, add = addLines, print = (s) => console.log(s), warn = (s) => console.error(s), readText = (f) => readFileSync(f, 'utf8') } = deps;
+  const { reach = refreshReach, cacheDir, env = process.env } = deps;
   const o = parseCli(argv);
   if (o.errors.length) {
     for (const e of o.errors) print(`refused: ${e}`);
     return 1;
+  }
+  // The reach map, its stale records made again first: { records, refreshed, dir }, or { error } when it has no home.
+  const recordsFor = async (tests) => {
+    const where = cacheDir ? { dir: cacheDir } : cacheDirFor(root, { git, env });
+    if (where.error) return { error: where.error, refreshed: [] };
+    return { ...(await reach(tests, { root, cacheDir: where.dir, suites, suiteFor, jobs: o.jobs, timeoutMs: o.timeoutMs, warn })), dir: where.dir };
+  };
+  if (o.reach) {
+    const tests = suiteTests(root, suites, suiteFor);
+    const got = await recordsFor(tests);
+    if (got.error) {
+      print(`refused: ${got.error}`);
+      return 1;
+    }
+    let opaque = 0;
+    let missing = 0;
+    for (const t of tests) {
+      const r = got.records?.[t];
+      const now = got.refreshed.includes(t) ? ', recorded in this run' : '';
+      if (!r) { missing++; print(`MISSING: ${t} has no record`); continue; }
+      const paths = Object.entries(r.paths ?? {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+      const outside = paths.filter(([p]) => isAbsolute(p)).length;
+      if (r.status === 'ok') print(`RECORDED: ${t} read ${paths.length} path${paths.length === 1 ? '' : 's'} (${outside} outside the repo)${now}`);
+      else { opaque++; print(`OPAQUE: ${t} — ${(r.reasons ?? []).join('; ') || 'no reason was written'}${now}`); }
+      for (const [p, v] of paths) print(`  ${v?.k ?? '?'} ${p}`);
+    }
+    print(`reach: ${tests.length} test files, ${tests.length - opaque - missing} wholly recorded, ${opaque} OPAQUE, ${missing} with no record, ${got.refreshed.length} recorded in this run (${join(got.dir, REACH_FILE)})`);
+    return missing ? 1 : 0;
   }
   if (o.add !== undefined) {
     let batch;
@@ -1977,7 +2281,14 @@ export async function main(argv, deps = {}) {
       selfDiff = d.stdout;
     }
     const selfPath = join(root, SELF_REL);
-    const sel = selectSince(mutations, ch.files, { root, suites, suiteFor, reads, selfDiff, selfSrc: existsSync(selfPath) ? readFileSync(selfPath, 'utf8') : '' });
+    const tests = suiteTests(root, suites, suiteFor);
+    const got = await recordsFor(tests);
+    if (got.error) warn(`NOTE: ${got.error}; --since keeps the old rules for every suite`);
+    else {
+      const blind = tests.filter((t) => got.records?.[t]?.status !== 'ok');
+      warn(`REACH: ${got.refreshed.length} of ${tests.length} test files recorded in this run${blind.length ? `; OPAQUE or unrecorded, so their suites keep the old data-file rule: ${blind.join(', ')}` : ''}`);
+    }
+    const sel = selectSince(mutations, ch.files, { root, suites, suiteFor, reads, records: got.records, selfDiff, selfSrc: existsSync(selfPath) ? readFileSync(selfPath, 'utf8') : '' });
     for (const f of sel.unguarded) print(`UNGUARDED: ${f} changed and no mutation names it`);
     if (sel.everything) print(`NOTE: ${sel.everything}`);
     const keep = new Set(sel.selected);

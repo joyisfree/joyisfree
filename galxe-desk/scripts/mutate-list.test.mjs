@@ -5,7 +5,24 @@
 // guards. npm test and prove's tests row still run this file (its folder's *.test.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MUTATIONS, READS, SELF_REL, prepare, relPath, selectSince, twinsOf } from './mutate.mjs';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { isAbsolute, join } from 'node:path';
+import { MUTATIONS, READS, SELF_REL, prepare, relPath, selectSince, twinsOf, refreshReach } from './mutate.mjs';
+
+test("mutate.test.mjs, mutate.mjs's own suite, reads nothing of the repo but the harness and itself", { timeout: 300000 }, async () => {
+  // Recorded for real, as --since records it. A whole-list test moved back into it would show up here as the files
+  // the list names, and every desk, guard and prove change would then rerun mutate.mjs's own guards (plan 20, A0).
+  const cacheDir = mkdtempSync(join(tmpdir(), 'mutate-list-'));
+  try {
+    const t = 'galxe-desk/scripts/mutate.test.mjs';
+    const r = (await refreshReach([t], { cacheDir, harness: 'mutate-list.test.mjs', day: 'today' })).records[t];
+    assert.equal(r.status, 'ok', r.reasons.join('; '));
+    assert.deepEqual(Object.keys(r.paths).filter((p) => !isAbsolute(p)).sort(), ['galxe-desk/scripts/mutate.mjs', 'galxe-desk/scripts/mutate.test.mjs', 'galxe-desk/scripts/reach.mjs']);
+  } finally {
+    rmSync(cacheDir, { recursive: true, force: true });
+  }
+});
 
 test('every listed mutation is four strings with a unique name, a real change, one match and a suite', () => {
   const names = new Set();
