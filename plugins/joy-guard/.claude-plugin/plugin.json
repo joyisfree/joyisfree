@@ -1,0 +1,8 @@
+{
+  "name": "joy-guard",
+  "description": "The destructive-command guard from .claude/hooks/guard.mjs, as a PreToolUse hook on every Bash call, so a session that does not load this repository's own settings still runs it",
+  "author": {
+    "name": "Joyisfree"
+  },
+  "repository": "https://github.com/joyisfree/joyisfree"
+}

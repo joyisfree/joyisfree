@@ -495,3 +495,14 @@ test('settings: the hook command in settings.json blocks a refusal and a crash, 
   assert.equal(sh(PROJECT, 'git reset --hard').status, 2);
   assert.equal(sh(join(PROJECT, 'no-such-folder'), 'git status').status, 2); // node cannot start the guard: blocked
 });
+
+test('settings: the guard is also served as the joy-guard plugin, from this repository at the work branch', () => {
+  // A session opened above this folder, such as a cloud session with several repositories, reads only these two keys
+  // from this file, never the hook above (code.claude.com/docs/en/settings, "Settings in cloud sessions"); the plugin
+  // carries the same hook. Its own files are judged by .claude/hooks/plugin.test.mjs.
+  const s = settings();
+  assert.deepEqual(s.enabledPlugins, { 'joy-guard@joyisfree': true });
+  assert.deepEqual(s.extraKnownMarketplaces, {
+    joyisfree: { source: { source: 'github', repo: 'joyisfree/joyisfree', ref: 'claude/galxe-automation-strategy-770t1f' } },
+  });
+});

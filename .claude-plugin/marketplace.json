@@ -1,0 +1,14 @@
+{
+  "name": "joyisfree",
+  "description": "Joyisfree's own Claude Code plugins, served from this repository",
+  "owner": {
+    "name": "Joyisfree"
+  },
+  "plugins": [
+    {
+      "name": "joy-guard",
+      "source": "./plugins/joy-guard",
+      "description": "The destructive-command guard: blocks force pushes, hard resets, git clean -f, history rewrites and rm -rf outside the temp folder on every Bash call"
+    }
+  ]
+}

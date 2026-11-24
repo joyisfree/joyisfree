@@ -11,6 +11,18 @@
   "worktree": {
     "baseRef": "head"
   },
+  "extraKnownMarketplaces": {
+    "joyisfree": {
+      "source": {
+        "source": "github",
+        "repo": "joyisfree/joyisfree",
+        "ref": "claude/galxe-automation-strategy-770t1f"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "joy-guard@joyisfree": true
+  },
   "hooks": {
     "SessionStart": [
       {
